@@ -615,3 +615,27 @@ kbd {
   color: var(--accent-red);
 }
 
+/* Quick Action Chips in Composer */
+.action-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 3px 9px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: all var(--trans-fast);
+}
+
+.action-chip:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary-bright);
+  border-color: var(--border-focus);
+  transform: translateY(-1px);
+}
+
