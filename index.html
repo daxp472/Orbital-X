@@ -542,6 +542,22 @@
 
         <!-- Agent Composer (Matches exact Cursor/Antigravity bottom box) -->
         <div class="agent-composer">
+          <!-- Developer Action Chips -->
+          <div class="composer-chips-bar" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none;">
+            <button class="action-chip" id="chip-explain" title="Explain workspace architecture & entrypoints">
+              <span style="color: var(--accent-cyan);">⚡</span> Architecture
+            </button>
+            <button class="action-chip" id="chip-validate" title="Run tests and validate project health">
+              <span style="color: var(--accent-green);">🧪</span> Run Tests
+            </button>
+            <button class="action-chip" id="chip-review" title="Review recent file diffs">
+              <span style="color: var(--accent-orange);">🔍</span> Review Diff
+            </button>
+            <button class="action-chip" id="chip-undo" title="Rollback last AI modification">
+              <span style="color: var(--accent-purple);">↩️</span> Undo
+            </button>
+          </div>
+
           <div class="composer-box">
             <textarea class="composer-textarea" id="agent-input" placeholder="Ask Orbital X to edit, test, or explain..." rows="2"></textarea>
             <div class="composer-bottom-bar">
@@ -585,7 +601,7 @@
             <circle cx="6" cy="18" r="3"></circle>
             <path d="M18 9a9 9 0 0 1-9 9"></path>
           </svg>
-          <span>master*</span>
+          <span id="sb-git-branch">main</span>
         </div>
         <!-- Sync -->
         <div class="status-item" title="Synchronize Changes">
