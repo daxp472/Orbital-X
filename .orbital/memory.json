@@ -5,5 +5,12 @@
     "category": "architecture",
     "title": "Project Structure Overview",
     "content": "The project integrates a Vite-based frontend (JavaScript/TypeScript), a Tauri Rust backend, and a C++ native module. Key components:\n1. Frontend: Located in root with vite.config.js, package.json, and JS files for web interface.\n2. Tauri Backend: src-tauri/ directory contains Rust code for desktop integration and IPC communication.\n3. C++ Module: src/ directory holds .cpp/.h files for native functionality (e.g., system operations, GPU tasks).\n4. Build Tools: npm for frontend, Cargo for Rust, and compiler-specific tools for C++.\n5. Integration: C++ library must be compiled and linked to Tauri; frontend communicates via Tauri IPC. Potential challenges include dependency conflicts and cross-language communication."
+  },
+  {
+    "id": "2ec8f435-2e82-436e-9536-61bd149d5c65",
+    "timestamp": "2026-10-15T09:43:20.758925100+00:00",
+    "category": "architecture",
+    "title": "Project Structure & Architecture",
+    "content": "The `.gitignore` file appears **well-structured and comprehensive** for a project involving Vite (frontend), Tauri (Rust backend), and C++ modules. Here's why:"
   }
 ]
