@@ -26,3 +26,4 @@ Orbital X is designed with a defense-in-depth approach:
 - **Credential Protection:** API keys are stored locally, masked in the UI, and are never transmitted except to the explicitly configured provider endpoint.
 - **No Telemetry:** Orbital X does not phone home. All data stays on your machine.
 - **WebView Isolation:** The frontend WebView cannot access native OS resources directly — all sensitive operations must go through the audited Rust IPC layer.
+
