@@ -36,6 +36,10 @@ export function initAgent() {
     handleSend();
   });
 
+  document.getElementById('chip-review')?.addEventListener('click', () => {
+    document.getElementById('btn-review-changes')?.click();
+  });
+
   document.getElementById('chip-undo')?.addEventListener('click', async () => {
     try {
       const res = await invoke('undo_agent_change');
@@ -67,6 +71,12 @@ export function initAgent() {
         e.preventDefault();
         handleSend();
       }
+    });
+
+    // Auto-expand textarea based on content up to 180px
+    inputElem.addEventListener('input', () => {
+      inputElem.style.height = 'auto';
+      inputElem.style.height = Math.min(inputElem.scrollHeight, 180) + 'px';
     });
   }
 
@@ -139,6 +149,7 @@ async function handleSend() {
   if (!promptText) return;
 
   inputElem.value = '';
+  inputElem.style.height = 'auto';
   appendTimelineCard('user', promptText);
 
   state.conversation.push({
@@ -475,10 +486,20 @@ export function appendTimelineCard(role, text) {
 }
 
 function formatMarkdown(text) {
-  // Simple clean markdown parser for text and code blocks
   return text
-    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    .replace(/`([^`]+)`/g, '<code style="background: var(--bg-activity); padding: 1px 4px; border-radius: 3px; font-family: monospace;">$1</code>')
+    .replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      const displayLang = lang || 'code';
+      const cleanCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<div class="code-block-wrapper" style="margin: 8px 0; background: var(--bg-activity); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg-surface); font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); border-bottom: 1px solid var(--border-subtle);">
+          <span>${displayLang}</span>
+          <button class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 10px; height: 20px;" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(code)}')); this.textContent='Copied!'; setTimeout(() => this.textContent='Copy', 1500);">Copy</button>
+        </div>
+        <pre style="margin: 0; padding: 8px; font-family: var(--font-mono); font-size: 11px; overflow-x: auto; background: transparent; border: none;"><code>${cleanCode}</code></pre>
+      </div>`;
+    })
+    .replace(/```([\s\S]*?)```/g, '<pre style="background: var(--bg-activity); padding: 8px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; overflow-x: auto;"><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code style="background: var(--bg-activity); padding: 2px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan); border: 1px solid var(--border-subtle);">$1</code>')
     .replace(/\n/g, '<br>');
 }
 
