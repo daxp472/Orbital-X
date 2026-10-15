@@ -4,6 +4,7 @@ node_modules/
 # Production build outputs
 dist/
 dist-ssr/
+release/*.exe
 
 # Tauri & Rust build artifacts
 target/

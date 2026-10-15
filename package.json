@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:tauri": "node scripts/dev-runner.js",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri"

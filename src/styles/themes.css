@@ -1,76 +1,84 @@
 /* ==========================================================================
-   Orbital X — Themes (themes.css)
+   Orbital X — Modern IDE Themes (themes.css)
    ========================================================================== */
 
-/* 1. Orbit Dark (Default) */
+/* 1. Orbit Dark (Default — Matches Antigravity / Cursor / VS Code exact palette) */
 [data-theme="orbit-dark"], :root {
-  --bg-app: #0d1117;
-  --bg-sidebar: #161b22;
-  --bg-activity: #0b0e14;
-  --bg-editor: #0d1117;
-  --bg-panel: #161b22;
-  --bg-surface: #21262d;
-  --bg-hover: rgba(255, 255, 255, 0.06);
-  --bg-active: rgba(255, 255, 255, 0.1);
-  --bg-input: #0b0e14;
-  --bg-card: #1c2128;
+  --bg-app: #181818;
+  --bg-sidebar: #181818;
+  --bg-activity: #181818;
+  --bg-editor: #1f1f1f;
+  --bg-tabs: #181818;
+  --bg-tab-active: #1f1f1f;
+  --bg-tab-inactive: #181818;
+  --bg-panel: #181818;
+  --bg-surface: #252526;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.09);
+  --bg-input: #1f1f1f;
+  --bg-card: #222222;
 
-  --border-color: #30363d;
-  --border-subtle: #21262d;
-  --border-focus: #58a6ff;
+  --border-color: #2b2b2b;
+  --border-subtle: #232323;
+  --border-focus: #0078d4;
 
-  --text-primary: #f0f6fc;
-  --text-secondary: #8b949e;
+  --text-primary: #cccccc;
+  --text-primary-bright: #ffffff;
+  --text-secondary: #969696;
   --text-muted: #6e7681;
-  --text-link: #58a6ff;
+  --text-link: #3794ff;
 
+  --accent-blue: #0078d4;
   --accent-cyan: #39c5bb;
   --accent-purple: #bc8cff;
-  --accent-blue: #58a6ff;
-  --accent-orange: #f0883e;
-  --accent-green: #3fb950;
-  --accent-red: #f85149;
+  --accent-orange: #d18616;
+  --accent-green: #388a34;
+  --accent-red: #f14c4c;
 
   --agent-pro-color: #bc8cff;
   --agent-dev-color: #39c5bb;
-  --agent-user-color: #f0883e;
+  --agent-user-color: #d18616;
 
-  --diff-add-bg: rgba(63, 185, 80, 0.15);
-  --diff-add-border: #3fb950;
-  --diff-del-bg: rgba(248, 81, 73, 0.15);
-  --diff-del-border: #f85149;
+  --diff-add-bg: rgba(56, 138, 52, 0.2);
+  --diff-add-border: #388a34;
+  --diff-del-bg: rgba(241, 76, 76, 0.2);
+  --diff-del-border: #f14c4c;
 
-  --scrollbar-thumb: #30363d;
-  --scrollbar-thumb-hover: #484f58;
+  --scrollbar-thumb: #333333;
+  --scrollbar-thumb-hover: #4f4f4f;
 
   --monaco-theme: "vs-dark";
 }
 
 /* 2. Nebula Light */
 [data-theme="nebula-light"] {
-  --bg-app: #f6f8fa;
-  --bg-sidebar: #f0f2f5;
-  --bg-activity: #e6ebf1;
+  --bg-app: #f3f3f3;
+  --bg-sidebar: #f8f8f8;
+  --bg-activity: #2c2c2c;
   --bg-editor: #ffffff;
-  --bg-panel: #f6f8fa;
-  --bg-surface: #eaeef2;
+  --bg-tabs: #f3f3f3;
+  --bg-tab-active: #ffffff;
+  --bg-tab-inactive: #ececec;
+  --bg-panel: #f8f8f8;
+  --bg-surface: #ffffff;
   --bg-hover: rgba(0, 0, 0, 0.05);
   --bg-active: rgba(0, 0, 0, 0.09);
   --bg-input: #ffffff;
   --bg-card: #ffffff;
 
-  --border-color: #d0d7de;
-  --border-subtle: #e1e4e8;
-  --border-focus: #0969da;
+  --border-color: #e5e5e5;
+  --border-subtle: #eeeeee;
+  --border-focus: #0078d4;
 
-  --text-primary: #1f2328;
-  --text-secondary: #57606a;
-  --text-muted: #8c959f;
-  --text-link: #0969da;
+  --text-primary: #3b3b3b;
+  --text-primary-bright: #1f1f1f;
+  --text-secondary: #616161;
+  --text-muted: #8c8c8c;
+  --text-link: #0066b8;
 
+  --accent-blue: #0078d4;
   --accent-cyan: #059669;
   --accent-purple: #8250df;
-  --accent-blue: #0969da;
   --accent-orange: #bc4c00;
   --accent-green: #1a7f37;
   --accent-red: #cf222e;
@@ -79,57 +87,61 @@
   --agent-dev-color: #059669;
   --agent-user-color: #bc4c00;
 
-  --diff-add-bg: rgba(26, 127, 55, 0.12);
+  --diff-add-bg: rgba(26, 127, 55, 0.15);
   --diff-add-border: #1a7f37;
-  --diff-del-bg: rgba(207, 34, 46, 0.12);
+  --diff-del-bg: rgba(207, 34, 46, 0.15);
   --diff-del-border: #cf222e;
 
-  --scrollbar-thumb: #d0d7de;
-  --scrollbar-thumb-hover: #afb8c1;
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-thumb-hover: #a6a6a6;
 
   --monaco-theme: "vs";
 }
 
 /* 3. Midnight Blue */
 [data-theme="midnight-blue"] {
-  --bg-app: #080d1a;
-  --bg-sidebar: #0f172a;
-  --bg-activity: #090e1d;
-  --bg-editor: #0b1120;
-  --bg-panel: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-hover: rgba(255, 255, 255, 0.07);
-  --bg-active: rgba(255, 255, 255, 0.12);
-  --bg-input: #080d1a;
-  --bg-card: #162036;
+  --bg-app: #0d1117;
+  --bg-sidebar: #0d1117;
+  --bg-activity: #090d16;
+  --bg-editor: #161b22;
+  --bg-tabs: #0d1117;
+  --bg-tab-active: #161b22;
+  --bg-tab-inactive: #0d1117;
+  --bg-panel: #0d1117;
+  --bg-surface: #21262d;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-input: #0d1117;
+  --bg-card: #161b22;
 
-  --border-color: #1e293b;
-  --border-subtle: #172238;
-  --border-focus: #38bdf8;
+  --border-color: #30363d;
+  --border-subtle: #21262d;
+  --border-focus: #58a6ff;
 
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-link: #38bdf8;
+  --text-primary: #c9d1d9;
+  --text-primary-bright: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #6e7681;
+  --text-link: #58a6ff;
 
-  --accent-cyan: #06b6d4;
-  --accent-purple: #a855f7;
-  --accent-blue: #38bdf8;
-  --accent-orange: #fb923c;
-  --accent-green: #34d399;
-  --accent-red: #f87171;
+  --accent-blue: #58a6ff;
+  --accent-cyan: #39c5bb;
+  --accent-purple: #bc8cff;
+  --accent-orange: #f0883e;
+  --accent-green: #3fb950;
+  --accent-red: #f85149;
 
-  --agent-pro-color: #c084fc;
-  --agent-dev-color: #22d3ee;
-  --agent-user-color: #fb923c;
+  --agent-pro-color: #bc8cff;
+  --agent-dev-color: #39c5bb;
+  --agent-user-color: #f0883e;
 
-  --diff-add-bg: rgba(52, 211, 153, 0.15);
-  --diff-add-border: #34d399;
-  --diff-del-bg: rgba(248, 113, 113, 0.15);
-  --diff-del-border: #f87171;
+  --diff-add-bg: rgba(63, 185, 80, 0.18);
+  --diff-add-border: #3fb950;
+  --diff-del-bg: rgba(248, 81, 73, 0.18);
+  --diff-del-border: #f85149;
 
-  --scrollbar-thumb: #1e293b;
-  --scrollbar-thumb-hover: #334155;
+  --scrollbar-thumb: #30363d;
+  --scrollbar-thumb-hover: #484f58;
 
   --monaco-theme: "vs-dark";
 }

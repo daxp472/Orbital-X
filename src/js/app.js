@@ -36,7 +36,44 @@ document.addEventListener('DOMContentLoaded', async () => {
   initResizers();
   initGlobalShortcuts();
 
-  // 4. Check for current open workspace
+  // 4. Panel Layout Toggles (Matching screenshot buttons)
+  const sidebarEl = document.getElementById('sidebar');
+  const bottomPanelEl = document.getElementById('bottom-panel');
+  const agentPanelEl = document.getElementById('agent-panel');
+
+  const btnToggleSidebar = document.getElementById('btn-toggle-sidebar');
+  const btnToggleBottom = document.getElementById('btn-toggle-bottom');
+  const btnToggleAgent = document.getElementById('btn-toggle-agent');
+
+  btnToggleSidebar?.addEventListener('click', () => {
+    sidebarEl?.classList.toggle('hidden');
+    btnToggleSidebar.classList.toggle('active', !sidebarEl?.classList.contains('hidden'));
+  });
+
+  btnToggleBottom?.addEventListener('click', () => {
+    bottomPanelEl?.classList.toggle('collapsed');
+    btnToggleBottom.classList.toggle('active', !bottomPanelEl?.classList.contains('collapsed'));
+  });
+
+  btnToggleAgent?.addEventListener('click', () => {
+    agentPanelEl?.classList.toggle('hidden');
+    btnToggleAgent.classList.toggle('active', !agentPanelEl?.classList.contains('hidden'));
+  });
+
+  document.getElementById('btn-close-agent-panel')?.addEventListener('click', () => {
+    agentPanelEl?.classList.add('hidden');
+    btnToggleAgent?.classList.remove('active');
+  });
+
+  document.getElementById('btn-new-chat')?.addEventListener('click', () => {
+    document.getElementById('btn-clear-chat')?.click();
+  });
+
+  document.getElementById('sb-settings-link')?.addEventListener('click', () => {
+    document.getElementById('btn-open-settings')?.click();
+  });
+
+  // 5. Check for current open workspace
   try {
     const meta = await invoke('get_workspace_meta');
     if (meta && meta.root_path) {
