@@ -1,0 +1,32 @@
+Orbital X End User License Agreement (EULA) and Agent Permissions Policy
+================================================================================
+
+Please read the following terms and permission grants before installing Orbital X.
+
+1. LICENSE GRANT
+Orbital X is provided to you as a high-performance, desktop AI coding environment.
+You are granted a non-exclusive, personal license to install, use, and customize Orbital X.
+
+2. AGENT EXECUTION MODES & PERMISSION POLICIES
+Orbital X provides three distinct operational modes that govern AI agent autonomy:
+- Agent Pro Mode:
+  Permits automated multi-file edits, project memory indexing, and background terminal commands.
+  All destructive file operations and system-altering commands require sandbox safety checks.
+- Dev Mode:
+  Permits real-time diff previews and code suggestions. Edits and commands require your approval
+  before applying to your workspace files.
+- User Mode:
+  Operates as a high-speed manual code editor with read-only AI recommendations. No files or
+  terminal commands may be executed automatically.
+
+3. PRIVACY & LOCAL MODEL SUPPORT
+Orbital X supports local LLM inference through Ollama and compatible local endpoints.
+When utilizing local models, your code, context, and completions remain 100% on your machine.
+When connecting external cloud provider keys (Anthropic, OpenAI, Google Gemini), prompts
+are transmitted directly to your configured provider endpoint without telemetry.
+
+4. USER RESPONSIBILITY
+You retain full ownership and responsibility for code generated, modified, or executed
+via Orbital X and its integrated agents.
+
+By clicking "I Agree" or proceeding with installation, you acknowledge and accept these terms.
