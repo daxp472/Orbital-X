@@ -103,8 +103,10 @@ export function initMonaco(containerElement) {
   editorInstance = monaco.editor.create(containerElement, {
     theme: 'orbital-dark-theme',
     fontSize: state.editor.fontSize || 13,
-    fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace",
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+    fontLigatures: true,
     lineNumbers: 'on',
+    lineHeight: 22,
     roundedSelection: true,
     scrollBeyondLastLine: false,
     readOnly: false,
@@ -113,6 +115,11 @@ export function initMonaco(containerElement) {
     tabSize: 2,
     wordWrap: 'on',
     renderLineHighlight: 'all',
+    cursorBlinking: 'smooth',
+    cursorSmoothCaretAnimation: 'on',
+    smoothScrolling: true,
+    bracketPairColorization: { enabled: true },
+    guides: { bracketPairs: true, indentation: true },
   });
 
   // Track cursor position
