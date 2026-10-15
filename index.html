@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="orbit-dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbital X — AI Coding IDE</title>
+  <link rel="stylesheet" href="./src/styles/tokens.css" />
+  <link rel="stylesheet" href="./src/styles/themes.css" />
+  <link rel="stylesheet" href="./src/styles/layout.css" />
+  <link rel="stylesheet" href="./src/styles/components.css" />
+  <!-- Google Fonts: Inter and JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Titlebar -->
+    <header class="titlebar">
+      <div class="titlebar-left">
+        <div class="titlebar-logo">
+          <!-- Orbital X Original Vector Logo -->
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" stroke="url(#logo_grad)" stroke-width="2" stroke-dasharray="70 20" />
+            <ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-30 16 16)" stroke="var(--accent-cyan)" stroke-width="1.5" opacity="0.8" />
+            <path d="M11 11L21 21M21 11L11 21" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+            <circle cx="16" cy="16" r="2.5" fill="var(--accent-purple)" />
+            <defs>
+              <linearGradient id="logo_grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#39c5bb" />
+                <stop offset="1" stop-color="#bc8cff" />
+              </linearGradient>
+            </defs>
+          </svg>
+          <span>ORBITAL X</span>
+        </div>
+
+        <nav class="titlebar-menus">
+          <div class="menu-item" id="menu-file">File</div>
+          <div class="menu-item" id="menu-edit">Edit</div>
+          <div class="menu-item" id="menu-view">View</div>
+          <div class="menu-item" id="menu-agent">Agent</div>
+          <div class="menu-item" id="menu-terminal">Terminal</div>
+          <div class="menu-item" id="menu-settings">Settings</div>
+          <div class="menu-item" id="menu-help">Help</div>
+        </nav>
+      </div>
+
+      <div class="titlebar-center">
+        <div class="workspace-badge" id="btn-open-workspace" title="Click to open or change workspace directory">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span id="header-workspace-name">No Workspace Open</span>
+          <span style="font-size: 10px; opacity: 0.6;">(Ctrl+O)</span>
+        </div>
+      </div>
+
+      <div class="titlebar-right">
+        <!-- Quick Mode Pill in Header -->
+        <div class="mode-pill dev" id="header-mode-pill" title="Click to cycle Agent Operating Mode">
+          <span class="mode-dot"></span>
+          <span id="header-mode-text">DEV MODE</span>
+        </div>
+
+        <!-- Quick Theme Toggle -->
+        <button class="icon-btn" id="btn-theme-toggle" title="Cycle Theme: Orbit Dark / Nebula Light / Midnight Blue">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+
+        <!-- Quick Settings -->
+        <button class="icon-btn" id="btn-open-settings" title="Open Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="main-container">
+      <!-- Activity Rail -->
+      <aside class="activity-rail">
+        <div class="rail-group">
+          <div class="rail-btn active" id="rail-explorer" title="Explorer (Ctrl+Shift+E)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+          </div>
+          <div class="rail-btn" id="rail-search" title="Search in Workspace (Ctrl+Shift+F)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <div class="rail-btn" id="rail-memory" title="Project Memory & Rules (Ctrl+Shift+M)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div class="rail-btn" id="rail-agent" title="AI Agent Dock (Ctrl+Shift+A)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </div>
+        </div>
+
+        <div class="rail-group">
+          <div class="rail-btn" id="rail-settings" title="Settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Sidebar -->
+      <section class="sidebar" id="sidebar">
+        <!-- Explorer View -->
+        <div id="view-explorer" class="sidebar-subview" style="display: flex; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Explorer</span>
+            <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-new-file" title="New File">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <line x1="12" y1="18" x2="12" y2="12"></line>
+                  <line x1="9" y1="15" x2="15" y2="15"></line>
+                </svg>
+              </button>
+              <button class="icon-btn" id="btn-refresh-files" title="Refresh Tree">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-content" id="file-tree-container">
+            <div style="padding: 16px; color: var(--text-muted); font-size: 12px; text-align: center;">
+              No folder opened.<br><br>
+              <button class="btn btn-secondary btn-sm" id="btn-open-folder-inline">Open Folder</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search View -->
+        <div id="view-search" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Search in Files</span>
+          </div>
+          <div style="padding: 8px;">
+            <input type="text" class="input-text" id="search-input" placeholder="Search workspace..." style="width: 100%;" />
+          </div>
+          <div class="sidebar-content" id="search-results-container" style="padding: 8px;">
+            <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">
+              Type a term to search across all files.
+            </div>
+          </div>
+        </div>
+
+        <!-- Memory View -->
+        <div id="view-memory" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Project Memory</span>
+            <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-add-memory" title="Add Memory Rule">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-content" id="memory-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">
+              No durable memories yet.<br>Click '+' to record an architectural rule or setup instruction.
+            </div>
+          </div>
+        </div>
+
+        <div class="resizer-x" id="resizer-sidebar"></div>
+      </section>
+
+      <!-- Center Work Area (Editor + Bottom Panel) -->
+      <main class="center-work-area">
+        <!-- Editor Region -->
+        <div class="editor-region">
+          <div class="editor-tabs-bar" id="tabs-bar">
+            <!-- Tabs dynamically rendered here -->
+          </div>
+
+          <div class="editor-viewport">
+            <!-- Monaco Editor Container -->
+            <div id="monaco-container"></div>
+
+            <!-- Empty State Screen when no file is active -->
+            <div class="empty-state" id="editor-empty-state">
+              <svg class="empty-logo" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="14" stroke="url(#logo_grad_lg)" stroke-width="1.5" stroke-dasharray="70 20" />
+                <ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-30 16 16)" stroke="var(--accent-cyan)" stroke-width="1.2" opacity="0.8" />
+                <path d="M11 11L21 21M21 11L11 21" stroke="#ffffff" stroke-width="2" stroke-linecap="round" />
+                <circle cx="16" cy="16" r="2.5" fill="var(--accent-purple)" />
+                <defs>
+                  <linearGradient id="logo_grad_lg" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#39c5bb" />
+                    <stop offset="1" stop-color="#bc8cff" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div class="empty-title">Orbital X</div>
+              <div class="empty-desc">
+                High-autonomy, memory-conscious AI coding environment.<br>
+                Empowering developers with Agent Pro, Dev, and User modes.
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button class="btn btn-primary" id="btn-welcome-open-folder">Open Workspace Folder</button>
+                <button class="btn btn-secondary" id="btn-welcome-onboarding">Run Setup Wizard</button>
+              </div>
+
+              <div class="shortcut-grid">
+                <div class="shortcut-item"><span>Open Folder</span> <kbd>Ctrl+O</kbd></div>
+                <div class="shortcut-item"><span>Save File</span> <kbd>Ctrl+S</kbd></div>
+                <div class="shortcut-item"><span>Quick Find</span> <kbd>Ctrl+F</kbd></div>
+                <div class="shortcut-item"><span>Toggle Agent</span> <kbd>Ctrl+Shift+A</kbd></div>
+                <div class="shortcut-item"><span>Run Tests</span> <kbd>Ctrl+Shift+T</kbd></div>
+                <div class="shortcut-item"><span>Cycle Mode</span> <kbd>Alt+M</kbd></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="resizer-y" id="resizer-bottom"></div>
+
+        <!-- Bottom Panel (Terminal, Validation, Logs) -->
+        <section class="bottom-panel" id="bottom-panel">
+          <div class="panel-header">
+            <div class="panel-tabs">
+              <div class="panel-tab active" data-tab="terminal">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="4 17 10 11 4 5"></polyline>
+                  <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                Terminal / Runner
+              </div>
+              <div class="panel-tab" data-tab="validation">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                Validation Suite
+              </div>
+              <div class="panel-tab" data-tab="logs">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Agent Audit Log
+              </div>
+            </div>
+
+            <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-clear-terminal" title="Clear Output">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                </svg>
+              </button>
+              <button class="icon-btn" id="btn-collapse-panel" title="Minimize Panel">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-body">
+            <!-- Terminal Tab Body -->
+            <div id="tab-content-terminal" style="display: flex; flex-direction: column; height: 100%;">
+              <div class="terminal-view" id="terminal-stdout">Orbital X Terminal Runner initialized. Ready for commands.</div>
+              <div class="terminal-prompt-bar">
+                <span style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold;">&gt;</span>
+                <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type a command (e.g., cargo check, npm test, git status)..." />
+                <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Execute</button>
+              </div>
+            </div>
+
+            <!-- Validation Tab Body -->
+            <div id="tab-content-validation" style="display: none; padding: 12px; overflow-y: auto;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="font-weight: 600; font-size: 13px;">Automated Workspace Diagnostics</div>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn btn-primary btn-sm" id="btn-run-all-tests">Run Tests</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-run-linter">Run Build Check</button>
+                </div>
+              </div>
+              <div id="validation-report-card" style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px;">
+                <div style="color: var(--text-secondary);">No validation checks executed yet. Click "Run Tests" or ask the Agent.</div>
+              </div>
+            </div>
+
+            <!-- Audit Logs Tab Body -->
+            <div id="tab-content-logs" style="display: none; padding: 12px; overflow-y: auto; font-family: var(--font-mono); font-size: 11px;" id="agent-audit-logs">
+              <div style="color: var(--text-muted);">[Session Start] Audit logging active. Secret tokens redacted.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="resizer-x" id="resizer-agent"></div>
+
+      <!-- Agent Dock / Panel (Right) -->
+      <aside class="agent-panel" id="agent-panel">
+        <div class="agent-header">
+          <div class="agent-header-row">
+            <div class="agent-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+              <span>Orbital Agent</span>
+            </div>
+
+            <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-clear-chat" title="Clear Conversation">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Mode Selector Segmented Controls -->
+          <div style="display: flex; gap: 4px; background: var(--bg-surface); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <button class="btn btn-sm" id="btn-mode-pro" style="flex: 1; font-size: 11px;">Pro</button>
+            <button class="btn btn-sm btn-primary" id="btn-mode-dev" style="flex: 1; font-size: 11px;">Dev</button>
+            <button class="btn btn-sm" id="btn-mode-user" style="flex: 1; font-size: 11px;">User</button>
+          </div>
+
+          <!-- Model Selector Row -->
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <select class="select-input" id="agent-provider-select" style="flex: 1; font-size: 11px; padding: 4px 6px;">
+              <option value="ollama">Ollama (Local)</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+            <input type="text" class="input-text" id="agent-model-input" placeholder="Model name..." value="llama3" style="flex: 1; font-size: 11px; padding: 4px 6px;" />
+          </div>
+        </div>
+
+        <!-- Agent Timeline / Chat Area -->
+        <div class="agent-timeline" id="agent-timeline">
+          <div class="timeline-card assistant-msg">
+            <div class="timeline-card-header">
+              <span>Orbital Agent</span>
+              <span style="font-size: 10px; color: var(--text-muted);">Ready</span>
+            </div>
+            <div class="timeline-card-body">
+              Hello! I am Orbital X, your AI pair programmer.
+              I can inspect your workspace, read files, propose diffs, run build/test validation, and record durable project memories.
+              <br><br>
+              Operating in <strong>Dev Mode</strong>: Reads and searches are automatic; edits, commands, and consequential actions will be presented for your review.
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Composer -->
+        <div class="agent-composer">
+          <!-- Fast Action Chips -->
+          <div style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px;">
+            <button class="btn btn-secondary btn-sm" id="chip-explain" style="font-size: 10px; padding: 2px 6px;">Explain Structure</button>
+            <button class="btn btn-secondary btn-sm" id="chip-validate" style="font-size: 10px; padding: 2px 6px;">Run Tests</button>
+            <button class="btn btn-secondary btn-sm" id="chip-undo" style="font-size: 10px; padding: 2px 6px;">Undo Edit</button>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: flex-end;">
+            <textarea class="input-text" id="agent-input" rows="2" placeholder="Ask Orbital X to inspect, code, test, or refactor (Enter to send, Shift+Enter for newline)..." style="flex: 1; resize: none; font-family: var(--font-sans); line-height: 1.4;"></textarea>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <button class="btn btn-primary" id="btn-agent-send" style="height: 34px; padding: 0 12px;">Send</button>
+              <button class="btn btn-danger btn-sm" id="btn-agent-stop" style="display: none; height: 26px;">Stop</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Status Bar -->
+    <footer class="statusbar">
+      <div class="statusbar-left">
+        <div class="status-item" id="status-workspace">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span id="sb-workspace-text">No Workspace</span>
+        </div>
+        <div class="status-item" id="status-git">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="6" y1="3" x2="6" y2="15"></line>
+            <circle cx="18" cy="6" r="3"></circle>
+            <circle cx="6" cy="18" r="3"></circle>
+            <path d="M18 9a9 9 0 0 1-9 9"></path>
+          </svg>
+          <span>main</span>
+        </div>
+        <div class="status-item" id="status-mode">
+          <span class="mode-dot" style="background-color: var(--accent-cyan);"></span>
+          <span id="sb-mode-text">Dev Mode</span>
+        </div>
+      </div>
+
+      <div class="statusbar-right">
+        <div class="status-item" id="status-model-indicator">
+          <span class="mode-dot" id="sb-model-dot" style="background-color: var(--accent-green);"></span>
+          <span id="sb-model-text">Ollama (Local)</span>
+        </div>
+        <div class="status-item" id="status-cursor">Ln 1, Col 1</div>
+        <div class="status-item" id="status-encoding">UTF-8</div>
+        <div class="status-item" id="status-language">Plain Text</div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Modal: Settings Dialog -->
+  <div class="modal-backdrop" id="modal-settings" style="display: none;">
+    <div class="modal-container" style="max-width: 680px;">
+      <div class="modal-header">
+        <span>Settings & Preferences</span>
+        <button class="icon-btn" id="btn-close-settings">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Settings Tabs Navigation -->
+        <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+          <button class="btn btn-secondary btn-sm active" id="stab-providers">AI Models & Keys</button>
+          <button class="btn btn-secondary btn-sm" id="stab-appearance">Appearance</button>
+          <button class="btn btn-secondary btn-sm" id="stab-agent">Agent Policy</button>
+          <button class="btn btn-secondary btn-sm" id="stab-importexport">Import / Export</button>
+        </div>
+
+        <!-- Tab 1: AI Providers & Keys -->
+        <div id="spane-providers" class="settings-pane" style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="font-size: 12px; color: var(--text-secondary);">
+            Configure your AI model providers. API keys are safely held locally and never exported.
+          </div>
+
+          <!-- Anthropic -->
+          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong>Anthropic Claude</strong>
+              <button class="btn btn-secondary btn-sm" id="btn-test-anthropic">Test Connection</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <label class="form-label">API Key</label>
+              <input type="password" class="input-text" id="cfg-anthropic-key" placeholder="sk-ant-api..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Model</label>
+              <input type="text" class="input-text" id="cfg-anthropic-model" value="claude-3-5-sonnet-20241022" />
+            </div>
+          </div>
+
+          <!-- OpenAI -->
+          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong>OpenAI</strong>
+              <button class="btn btn-secondary btn-sm" id="btn-test-openai">Test Connection</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <label class="form-label">API Key</label>
+              <input type="password" class="input-text" id="cfg-openai-key" placeholder="sk-..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Model</label>
+              <input type="text" class="input-text" id="cfg-openai-model" value="gpt-4o" />
+            </div>
+          </div>
+
+          <!-- Google Gemini -->
+          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong>Google Gemini</strong>
+              <button class="btn btn-secondary btn-sm" id="btn-test-gemini">Test Connection</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <label class="form-label">API Key</label>
+              <input type="password" class="input-text" id="cfg-gemini-key" placeholder="AIzaSy..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Model</label>
+              <input type="text" class="input-text" id="cfg-gemini-model" value="gemini-2.0-flash" />
+            </div>
+          </div>
+
+          <!-- Ollama (Local) -->
+          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong>Ollama (Local Models)</strong>
+              <button class="btn btn-secondary btn-sm" id="btn-test-ollama">Test Connection</button>
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <label class="form-label">Endpoint URL</label>
+              <input type="text" class="input-text" id="cfg-ollama-url" value="http://localhost:11434" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Model</label>
+              <input type="text" class="input-text" id="cfg-ollama-model" value="llama3" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Appearance -->
+        <div id="spane-appearance" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
+          <div class="form-group">
+            <label class="form-label">IDE Color Theme</label>
+            <select class="select-input" id="cfg-theme-select">
+              <option value="orbit-dark">Orbit Dark (Default Charcoal & Cyan/Violet)</option>
+              <option value="nebula-light">Nebula Light (Clean Accessible Slate)</option>
+              <option value="midnight-blue">Midnight Blue (Cosmic Deep Navy)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Editor Font Size</label>
+            <input type="number" class="input-text" id="cfg-font-size" value="13" min="10" max="24" />
+          </div>
+        </div>
+
+        <!-- Tab 3: Agent Policy -->
+        <div id="spane-agent" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
+          <div class="form-group">
+            <label class="form-label">Default Operating Mode on Launch</label>
+            <select class="select-input" id="cfg-default-mode">
+              <option value="dev">Dev Mode (Balanced: routine auto, approval for edits/commands)</option>
+              <option value="agent_pro">Agent Pro Mode (High autonomy within workspace)</option>
+              <option value="user">User Mode (Explicit approval for every read/write/cmd)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Command Timeout (seconds)</label>
+            <input type="number" class="input-text" id="cfg-cmd-timeout" value="30" min="5" max="300" />
+          </div>
+        </div>
+
+        <!-- Tab 4: Import / Export -->
+        <div id="spane-importexport" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
+          <div style="font-size: 12px; color: var(--text-secondary);">
+            Export your settings to a portable JSON file. Sensitive API keys are never included.
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" id="btn-export-settings">Export Settings JSON</button>
+            <button class="btn btn-secondary" id="btn-import-settings">Import Settings JSON</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btn-save-settings">Save & Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: First-Run Onboarding Wizard -->
+  <div class="modal-backdrop" id="modal-onboarding" style="display: none;">
+    <div class="modal-container" style="max-width: 580px;">
+      <div class="modal-header">
+        <span>Orbital X — Guided Setup</span>
+        <button class="icon-btn" id="btn-skip-onboarding">✕</button>
+      </div>
+      <div class="modal-body" id="onboarding-step-body">
+        <!-- Rendered dynamically by onboarding.js -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-onboarding-prev" style="display: none;">Back</button>
+        <button class="btn btn-primary" id="btn-onboarding-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Diff Review & Acceptance Dialog -->
+  <div class="modal-backdrop" id="modal-diff-review" style="display: none;">
+    <div class="modal-container" style="max-width: 820px; height: 75vh;">
+      <div class="modal-header">
+        <span id="diff-modal-title">Review Proposed File Changes</span>
+        <button class="icon-btn" id="btn-close-diff-modal">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 0; flex: 1; position: relative;">
+        <div id="diff-editor-container" style="width: 100%; height: 100%;"></div>
+      </div>
+      <div class="modal-footer">
+        <div style="margin-right: auto; font-size: 12px; color: var(--text-secondary);" id="diff-stats-text">
+          +0 / -0
+        </div>
+        <button class="btn btn-danger" id="btn-reject-diff">Reject Changes</button>
+        <button class="btn btn-primary" id="btn-accept-diff">Accept & Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main JavaScript App Entrypoint -->
+  <script type="module" src="./src/js/app.js"></script>
+</body>
+</html>
