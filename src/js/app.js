@@ -1,8 +1,4 @@
-// ==========================================================================
-// Orbital X — Main Application Coordinator (app.js)
-// ==========================================================================
-
-import { state, loadPersistedState, persistState } from './state/store.js';
+import { state, loadPersistedState, persistState, setActiveModel } from './state/store.js';
 import { initMonaco, saveActiveFile } from './editor/monaco.js';
 import { loadWorkspace, refreshFileTree } from './components/file-tree.js';
 import { initAgent, switchMode } from './components/agent.js';
@@ -10,6 +6,9 @@ import { initTerminal } from './components/terminal.js';
 import { initMemory, refreshMemories } from './components/memory.js';
 import { initSettings, cycleTheme, applyTheme } from './components/settings.js';
 import { initOnboarding } from './onboarding/wizard.js';
+import { initModelPicker } from './components/model-picker.js';
+import { initSourceControl, refreshGitStatus } from './components/source-control.js';
+import { initExtensions } from './components/extensions.js';
 import { pickFolder, invoke } from './services/tauri.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -19,6 +18,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadPersistedState();
   applyTheme(state.theme);
   switchMode(state.agentMode);
+
+  // Set initial model display on composer pill & statusbar
+  const initialModel = state.ai.model || state.ai.defaultModels[state.ai.provider] || 'llama3';
+  setActiveModel(state.ai.provider, initialModel);
 
   // 2. Initialize Monaco Editor in container
   const monacoContainer = document.getElementById('monaco-container');
@@ -32,6 +35,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   initMemory();
   initSettings();
   initOnboarding();
+  initModelPicker();
+  initSourceControl();
+  initExtensions();
   initActivityRail();
   initResizers();
   initGlobalShortcuts();
@@ -125,6 +131,9 @@ function initActivityRail() {
   const rails = [
     { id: 'rail-explorer', view: 'view-explorer' },
     { id: 'rail-search', view: 'view-search' },
+    { id: 'rail-source-control', view: 'view-source-control' },
+    { id: 'rail-debug', view: 'view-debug' },
+    { id: 'rail-extensions', view: 'view-extensions' },
     { id: 'rail-memory', view: 'view-memory' },
   ];
 
@@ -147,6 +156,7 @@ function initActivityRail() {
         const viewElem = document.getElementById(item.view);
         if (viewElem) viewElem.style.display = 'flex';
         if (item.id === 'rail-memory') refreshMemories();
+        if (item.id === 'rail-source-control') refreshGitStatus();
       }
     });
   });
@@ -163,6 +173,11 @@ function initActivityRail() {
 
   document.getElementById('rail-settings')?.addEventListener('click', () => {
     document.getElementById('btn-open-settings')?.click();
+  });
+
+  // Review changes button
+  document.getElementById('btn-review-changes')?.addEventListener('click', () => {
+    document.getElementById('rail-source-control')?.click();
   });
 }
 
@@ -239,6 +254,41 @@ function initGlobalShortcuts() {
     else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
       e.preventDefault();
       document.getElementById('rail-agent')?.click();
+    }
+    // Ctrl + Shift + G: Source Control (Git)
+    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'g') {
+      e.preventDefault();
+      document.getElementById('rail-source-control')?.click();
+    }
+    // Ctrl + Shift + X: Extensions
+    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'x') {
+      e.preventDefault();
+      document.getElementById('rail-extensions')?.click();
+    }
+    // Ctrl + Shift + D: Run & Debug
+    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      document.getElementById('rail-debug')?.click();
+    }
+    // Ctrl + Shift + E: Explorer
+    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') {
+      e.preventDefault();
+      document.getElementById('rail-explorer')?.click();
+    }
+    // Ctrl + Shift + F: Search in Workspace
+    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault();
+      document.getElementById('rail-search')?.click();
+    }
+    // Ctrl + J: Toggle Bottom Panel
+    else if (e.ctrlKey && e.key.toLowerCase() === 'j') {
+      e.preventDefault();
+      document.getElementById('btn-toggle-bottom')?.click();
+    }
+    // Ctrl + B: Toggle Sidebar
+    else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      document.getElementById('btn-toggle-sidebar')?.click();
     }
   });
 }

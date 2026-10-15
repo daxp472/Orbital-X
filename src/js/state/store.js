@@ -92,6 +92,15 @@ export function loadPersistedState() {
     const savedModel = localStorage.getItem('orbital_model');
     if (savedModel) state.ai.model = savedModel;
 
+    const savedEndpoint = localStorage.getItem('orbital_endpoint');
+    if (savedEndpoint) state.ai.endpoint = savedEndpoint;
+
+    const savedDefaultModels = localStorage.getItem('orbital_default_models');
+    if (savedDefaultModels) {
+      const parsed = JSON.parse(savedDefaultModels);
+      state.ai.defaultModels = { ...state.ai.defaultModels, ...parsed };
+    }
+
     const savedKeys = localStorage.getItem('orbital_keys');
     if (savedKeys) {
       const parsed = JSON.parse(savedKeys);
@@ -108,8 +117,38 @@ export function persistState() {
     localStorage.setItem('orbital_mode', state.agentMode);
     localStorage.setItem('orbital_provider', state.ai.provider);
     localStorage.setItem('orbital_model', state.ai.model);
+    localStorage.setItem('orbital_endpoint', state.ai.endpoint);
+    localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
   } catch (e) {
     console.warn("Could not persist state:", e);
   }
+}
+
+export function setActiveModel(provider, model) {
+  state.ai.provider = provider;
+  state.ai.model = model;
+  if (state.ai.defaultModels[provider]) {
+    state.ai.defaultModels[provider] = model;
+  }
+  persistState();
+
+  // Update Composer pill and Statusbar
+  const composerModelName = document.getElementById('composer-model-name');
+  if (composerModelName) {
+    const displayName = provider === 'ollama' ? `Ollama (${model})` :
+      provider === 'anthropic' ? `Claude (${model})` :
+      provider === 'openai' ? `OpenAI (${model})` : `Gemini (${model})`;
+    composerModelName.textContent = displayName;
+  }
+
+  const sbModelText = document.getElementById('sb-model-text');
+  if (sbModelText) {
+    const displayName = provider === 'ollama' ? `Ollama (${model})` :
+      provider === 'anthropic' ? `Claude (${model})` :
+      provider === 'openai' ? `OpenAI (${model})` : `Gemini (${model})`;
+    sbModelText.textContent = displayName;
+  }
+
+  notify('modelChanged', { provider, model });
 }

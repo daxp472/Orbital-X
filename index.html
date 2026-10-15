@@ -272,6 +272,64 @@
           </div>
         </div>
 
+        <!-- Source Control / Git View (Ctrl+Shift+G) -->
+        <div id="view-source-control" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Source Control</span>
+            <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-git-refresh" title="Refresh Git Status">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Commit Area -->
+          <div style="padding: 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-subtle);">
+            <div style="font-size: 11px; color: var(--accent-cyan); font-weight: 600;" id="git-branch-display">Branch: main</div>
+            <textarea class="input-text" id="git-commit-message" placeholder="Message (Ctrl+Enter to commit)..." rows="2" style="resize: none; font-size: 11px; line-height: 1.4;"></textarea>
+            <button class="btn btn-primary btn-sm" id="btn-git-commit" style="width: 100%;">Commit Changes</button>
+          </div>
+
+          <!-- Changes List -->
+          <div class="sidebar-content" id="git-changes-list" style="padding: 8px;">
+            <div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 11px;">
+              Loading Git status...
+            </div>
+          </div>
+        </div>
+
+        <!-- Extensions View (Ctrl+Shift+X) -->
+        <div id="view-extensions" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Extensions</span>
+          </div>
+          <div style="padding: 8px;">
+            <input type="text" class="input-text" id="extensions-search-input" placeholder="Search extensions in marketplace..." style="width: 100%; font-size: 11px;" />
+          </div>
+          <div class="sidebar-content" id="extensions-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <!-- Rendered by extensions.js -->
+          </div>
+        </div>
+
+        <!-- Run and Debug View (Ctrl+Shift+D) -->
+        <div id="view-debug" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Run and Debug</span>
+          </div>
+          <div style="padding: 14px; display: flex; flex-direction: column; gap: 10px; font-size: 12px;">
+            <div style="color: var(--text-secondary);">Run and debug active workspace processes or tests.</div>
+            <button class="btn btn-primary btn-sm" id="btn-start-debug">Run Active File (Debug)</button>
+            <div style="border-top: 1px solid var(--border-subtle); padding-top: 10px; color: var(--text-muted); font-size: 11px;">
+              <div>• Breakpoints (0)</div>
+              <div>• Call Stack (Idle)</div>
+              <div>• Variables (Empty)</div>
+            </div>
+          </div>
+        </div>
+
         <div class="resizer-x" id="resizer-sidebar"></div>
       </section>
 

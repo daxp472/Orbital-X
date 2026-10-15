@@ -287,6 +287,135 @@ fn delete_memory(id: String, state: State<'_, AppState>) -> Result<bool, String>
     MemoryService::delete_memory(&root, &id)
 }
 
+#[derive(serde::Serialize)]
+pub struct GitFileChange {
+    pub status: String,
+    pub path: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct GitStatusResult {
+    pub is_repo: bool,
+    pub branch: String,
+    pub changes: Vec<GitFileChange>,
+}
+
+#[tauri::command]
+async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, String> {
+    let cwd = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        match ws.get_root() {
+            Some(r) => r.to_string_lossy().to_string(),
+            None => return Ok(GitStatusResult {
+                is_repo: false,
+                branch: "No Workspace".into(),
+                changes: vec![],
+            }),
+        }
+    };
+
+    let res = TerminalService::run_command("git status --porcelain=v1 -b", &cwd, 10).await?;
+    if !res.success {
+        return Ok(GitStatusResult {
+            is_repo: false,
+            branch: "Not a git repository".into(),
+            changes: vec![],
+        });
+    }
+
+    let mut branch = "main".to_string();
+    let mut changes = Vec::new();
+
+    for line in res.stdout.lines() {
+        if line.starts_with("##") {
+            let branch_line = line.trim_start_matches("##").trim();
+            branch = branch_line.split("...").next().unwrap_or(branch_line).trim().to_string();
+        } else if line.len() >= 3 {
+            let status = line[0..2].trim().to_string();
+            let path = line[3..].trim().to_string();
+            changes.push(GitFileChange { status, path });
+        }
+    }
+
+    Ok(GitStatusResult {
+        is_repo: true,
+        branch,
+        changes,
+    })
+}
+
+#[tauri::command]
+async fn git_stage_and_commit(message: String, state: State<'_, AppState>) -> Result<String, String> {
+    let cwd = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
+    };
+
+    if message.trim().is_empty() {
+        return Err("Commit message cannot be empty".into());
+    }
+
+    let add_res = TerminalService::run_command("git add .", &cwd, 15).await?;
+    if !add_res.success {
+        return Err(format!("git add failed: {}", add_res.stderr));
+    }
+
+    let escaped_msg = message.replace('"', "\\\"");
+    let commit_cmd = format!("git commit -m \"{}\"", escaped_msg);
+    let commit_res = TerminalService::run_command(&commit_cmd, &cwd, 15).await?;
+
+    if !commit_res.success {
+        return Err(format!("git commit failed: {}", commit_res.stderr));
+    }
+
+    Ok(commit_res.stdout)
+}
+
+#[tauri::command]
+async fn get_git_diff(path: Option<String>, state: State<'_, AppState>) -> Result<String, String> {
+    let cwd = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
+    };
+
+    let cmd = match path {
+        Some(p) => format!("git diff \"{}\"", p),
+        None => "git diff".to_string(),
+    };
+
+    let res = TerminalService::run_command(&cmd, &cwd, 15).await?;
+    Ok(res.stdout)
+}
+
+#[tauri::command]
+async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, String> {
+    let url = endpoint.unwrap_or_else(|| "http://localhost:11434".into());
+    let tags_endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&tags_endpoint).send().await.map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let mut models = Vec::new();
+
+    if let Some(arr) = json.get("models").and_then(|m| m.as_array()) {
+        for m in arr {
+            if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
+                models.push(name.to_string());
+            }
+        }
+    }
+
+    Ok(models)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState {
@@ -319,7 +448,11 @@ pub fn run() {
             execute_tool,
             save_memory_entry,
             list_memories,
-            delete_memory
+            delete_memory,
+            get_git_status,
+            git_stage_and_commit,
+            get_git_diff,
+            get_ollama_models
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -45,6 +45,21 @@ export function initAgent() {
     }
   });
 
+  // Context button (@)
+  document.getElementById('btn-composer-context')?.addEventListener('click', () => {
+    const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
+    if (activeTab) {
+      inputElem.value = `@${activeTab.name} ` + inputElem.value;
+      inputElem.focus();
+    } else {
+      const filename = prompt("Enter file name or symbol to attach to prompt (e.g. src/main.rs):");
+      if (filename) {
+        inputElem.value = `@${filename} ` + inputElem.value;
+        inputElem.focus();
+      }
+    }
+  });
+
   if (sendBtn && inputElem) {
     sendBtn.addEventListener('click', handleSend);
     inputElem.addEventListener('keydown', (e) => {
@@ -356,9 +371,12 @@ function appendTimelineCard(role, text) {
   const card = document.createElement('div');
   card.className = `timeline-card ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
 
+  const headerTitle = role === 'user' ? 'You' :
+    `Orbital Agent <span style="font-size: 10px; opacity: 0.7; font-weight: normal; margin-left: 6px;">• ${state.ai.provider} (${state.ai.model || 'default'})</span>`;
+
   card.innerHTML = `
     <div class="timeline-card-header">
-      <span>${role === 'user' ? 'You' : 'Orbital Agent'}</span>
+      <span>${headerTitle}</span>
       <span style="font-size: 10px; color: var(--text-muted);">${new Date().toLocaleTimeString()}</span>
     </div>
     <div class="timeline-card-body">${formatMarkdown(text)}</div>

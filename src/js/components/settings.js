@@ -86,16 +86,27 @@ export function closeSettings() {
 
 function saveAndClose() {
   state.ai.keys.anthropic = document.getElementById('cfg-anthropic-key').value.trim();
-  state.ai.defaultModels.anthropic = document.getElementById('cfg-anthropic-model').value.trim();
+  state.ai.defaultModels.anthropic = document.getElementById('cfg-anthropic-model').value.trim() || 'claude-3-5-sonnet-20241022';
 
   state.ai.keys.openai = document.getElementById('cfg-openai-key').value.trim();
-  state.ai.defaultModels.openai = document.getElementById('cfg-openai-model').value.trim();
+  state.ai.defaultModels.openai = document.getElementById('cfg-openai-model').value.trim() || 'gpt-4o';
 
   state.ai.keys.gemini = document.getElementById('cfg-gemini-key').value.trim();
-  state.ai.defaultModels.gemini = document.getElementById('cfg-gemini-model').value.trim();
+  state.ai.defaultModels.gemini = document.getElementById('cfg-gemini-model').value.trim() || 'gemini-2.0-flash';
 
-  state.ai.endpoint = document.getElementById('cfg-ollama-url').value.trim();
-  state.ai.defaultModels.ollama = document.getElementById('cfg-ollama-model').value.trim();
+  state.ai.endpoint = document.getElementById('cfg-ollama-url').value.trim() || 'http://localhost:11434';
+  const newOllamaModel = document.getElementById('cfg-ollama-model').value.trim() || 'llama3';
+  state.ai.defaultModels.ollama = newOllamaModel;
+
+  // If current active provider is ollama (or whichever), update active model
+  const activeModel = state.ai.provider === 'ollama' ? newOllamaModel :
+    state.ai.provider === 'anthropic' ? state.ai.defaultModels.anthropic :
+    state.ai.provider === 'openai' ? state.ai.defaultModels.openai :
+    state.ai.defaultModels.gemini;
+
+  import('../state/store.js').then(({ setActiveModel }) => {
+    setActiveModel(state.ai.provider, activeModel);
+  });
 
   const selectedTheme = document.getElementById('cfg-theme-select').value;
   applyTheme(selectedTheme);
