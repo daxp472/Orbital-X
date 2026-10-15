@@ -604,11 +604,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: border-color var(--trans-fast);
+  transition: all var(--trans-fast);
 }
 
 .composer-box:focus-within {
-  border-color: var(--border-focus);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 1px rgba(57, 197, 187, 0.25), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .composer-textarea {
@@ -616,12 +617,14 @@ body {
   background: transparent;
   border: none;
   color: var(--text-primary);
-  font-size: 12px;
+  font-size: 13px;
   font-family: inherit;
   resize: none;
   outline: none;
   line-height: 1.5;
   min-height: 48px;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .composer-bottom-bar {
@@ -754,8 +757,8 @@ body {
 
 /* Scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -764,6 +767,7 @@ body {
 
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
