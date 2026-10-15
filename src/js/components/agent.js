@@ -146,32 +146,60 @@ async function handleSend() {
     content: promptText,
   });
 
+  // Sync to active chat session
+  import('./chat-sessions.js').then(m => m.saveActiveSession());
+
   isLoopRunning = true;
   setAgentBusy(true);
 
   try {
-    await runAgentLoop();
+    await runAgentLoop(promptText);
   } catch (err) {
     console.error("Agent error:", err);
     appendTimelineCard('assistant', `❌ Error: ${err}`);
   } finally {
     isLoopRunning = false;
     setAgentBusy(false);
+    import('./chat-sessions.js').then(m => m.saveActiveSession());
   }
 }
 
-async function runAgentLoop() {
+async function runAgentLoop(initialUserPrompt) {
   let iteration = 0;
   const maxIterations = 6;
+  let hasSavedMemoryThisTurn = false;
 
-  // System instructions including current mode constraints
-  const systemPrompt = `You are Orbital X, an autonomous, memory-conscious desktop AI pair programmer.
+  // 1. Automated Context Management: Load durable project memories
+  let memoryContext = '';
+  try {
+    const mems = await invoke('list_memories');
+    if (mems && mems.length > 0) {
+      memoryContext = '\n\n## Durable Project Knowledge & Architecture Memory:\n' +
+        mems.map(m => `• [${m.category.toUpperCase()}] ${m.title}:\n  ${m.content}`).join('\n');
+    }
+  } catch (e) {
+    console.warn("Could not load memories for context:", e);
+  }
+
+  // 2. Automated Context Management: Focused editor tab context
+  let activeEditorContext = '';
+  const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
+  if (activeTab) {
+    activeEditorContext = `\n\n## Focused Editor Context:\nActive file: ${activeTab.path || activeTab.name}`;
+  }
+
+  // System instructions including current mode constraints and automatic memory management
+  const systemPrompt = `You are Orbital X, an autonomous, memory-conscious desktop AI pair programmer inspired by Cursor and Antigravity.
 Current Operating Mode: ${state.agentMode.toUpperCase()}.
-Workspace Root: ${state.workspace.rootPath || "No open workspace"}.
-Instructions:
-1. In Agent Pro Mode, you can inspect, search, edit files, and run tests autonomously.
-2. In Dev Mode, inspect/search is automatic, but file changes and commands will be confirmed by the user.
-3. In User Mode, every tool execution requires explicit approval.
+Workspace Root: ${state.workspace.rootPath || "No open workspace"}.${activeEditorContext}${memoryContext}
+
+Operating Directives:
+1. Context Awareness: You have direct access to durable project memories and active files above. Use them naturally to assist accurately.
+2. Memory Management: Whenever you discover core project architecture, entrypoints, build commands, or key developer conventions, use the save_project_memory tool to upsert it into project memory. Deduplication is handled automatically.
+3. Execution Policy:
+   - In Agent Pro Mode: You have full autonomy to read/edit files and run commands.
+   - In Dev Mode: Read operations are automatic; file modifications and commands will prompt user approval.
+   - In User Mode: Every action requires explicit user approval.
 Always explain your intent clearly and use available tools to perform real tasks.`;
 
   while (isLoopRunning && iteration < maxIterations) {
@@ -204,22 +232,35 @@ Always explain your intent clearly and use available tools to perform real tasks
       removeThinkingIndicator(spinnerId);
     }
 
+    let lastAssistantContent = '';
     if (resp.content && resp.content.trim()) {
+      lastAssistantContent = resp.content;
       appendTimelineCard('assistant', resp.content);
       state.conversation.push({
         role: 'assistant',
         content: resp.content,
       });
+      import('./chat-sessions.js').then(m => m.saveActiveSession());
     }
 
     // Check if tools were proposed
     if (!resp.tool_calls || resp.tool_calls.length === 0) {
+      // 3. Automated Post-Turn Memory Extraction:
+      // If the turn discussed architecture or project structure and didn't explicitly call save_project_memory,
+      // automatically capture and persist high-level architecture into memory!
+      if (!hasSavedMemoryThisTurn && lastAssistantContent && initialUserPrompt) {
+        checkAndAutoExtractMemory(initialUserPrompt, lastAssistantContent);
+      }
       break; // No further tools, agent is done
     }
 
     // Process each tool call according to active policy mode
     for (const toolCall of resp.tool_calls) {
       if (!isLoopRunning) break;
+
+      if (toolCall.name === 'save_project_memory') {
+        hasSavedMemoryThisTurn = true;
+      }
 
       const toolResult = await processToolCallWithPolicy(toolCall);
 
@@ -228,6 +269,29 @@ Always explain your intent clearly and use available tools to perform real tasks
         tool_call_id: toolCall.id,
         content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
       });
+
+      import('./chat-sessions.js').then(m => m.saveActiveSession());
+    }
+  }
+}
+
+// Background automated memory extraction when user asks about architecture/structure
+async function checkAndAutoExtractMemory(prompt, response) {
+  const pLower = prompt.toLowerCase();
+  const isArchQuestion = pLower.includes('architecture') || pLower.includes('structure') || pLower.includes('explain') || pLower.includes('overview') || pLower.includes('convention') || pLower.includes('stack');
+
+  if (isArchQuestion && response.length > 100) {
+    try {
+      // Create concise clean summary of first 400 chars of response
+      const snippet = response.split('\n\n')[0] || response.substring(0, 300);
+      await invoke('save_memory_entry', {
+        category: 'architecture',
+        title: 'Project Structure & Architecture',
+        content: snippet.trim(),
+      });
+      import('./memory.js').then(m => m.refreshMemories());
+    } catch (e) {
+      console.warn("Auto-memory extraction skipped:", e);
     }
   }
 }
@@ -286,6 +350,11 @@ async function processToolCallWithPolicy(toolCall) {
     });
 
     updateToolBoxStatus(toolBoxId, 'Success', 'success');
+
+    // If saving project memory succeeded, immediately refresh memory cards
+    if (name === 'save_project_memory' || name === 'delete_project_memory') {
+      import('./memory.js').then(m => m.refreshMemories());
+    }
 
     // If writing a file succeeded, open or refresh it in Monaco
     if (name === 'write_file' && args.path) {
@@ -364,7 +433,26 @@ function requestUserApproval(approvalData) {
   });
 }
 
-function appendTimelineCard(role, text) {
+export function renderFullTimeline(messages = []) {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+  timeline.innerHTML = '';
+
+  if (!messages || messages.length === 0) {
+    appendTimelineCard('assistant', `Orbital Agent ready. Active Mode: <strong>${state.agentMode.toUpperCase()}</strong>.`);
+    return;
+  }
+
+  messages.forEach(msg => {
+    if (msg.role === 'user') {
+      appendTimelineCard('user', msg.content);
+    } else if (msg.role === 'assistant' && msg.content) {
+      appendTimelineCard('assistant', msg.content);
+    }
+  });
+}
+
+export function appendTimelineCard(role, text) {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return;
 

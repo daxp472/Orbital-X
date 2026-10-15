@@ -9,6 +9,7 @@ import { initOnboarding } from './onboarding/wizard.js';
 import { initModelPicker } from './components/model-picker.js';
 import { initSourceControl, refreshGitStatus } from './components/source-control.js';
 import { initExtensions } from './components/extensions.js';
+import { initChatSessions } from './components/chat-sessions.js';
 import { pickFolder, invoke } from './services/tauri.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -31,6 +32,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 3. Initialize UI Subsystems
   initAgent();
+  initChatSessions();
   initTerminal();
   initMemory();
   initSettings();
@@ -71,9 +73,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnToggleAgent?.classList.remove('active');
   });
 
-  document.getElementById('btn-new-chat')?.addEventListener('click', () => {
-    document.getElementById('btn-clear-chat')?.click();
-  });
+
 
   document.getElementById('sb-settings-link')?.addEventListener('click', () => {
     document.getElementById('btn-open-settings')?.click();
@@ -280,10 +280,18 @@ function initGlobalShortcuts() {
       e.preventDefault();
       document.getElementById('rail-search')?.click();
     }
-    // Ctrl + J: Toggle Bottom Panel
-    else if (e.ctrlKey && e.key.toLowerCase() === 'j') {
+    // Ctrl + ` (backtick) or Ctrl + J: Toggle Terminal Panel & Focus Terminal Input
+    else if (e.ctrlKey && (e.key === '`' || e.key.toLowerCase() === 'j')) {
       e.preventDefault();
-      document.getElementById('btn-toggle-bottom')?.click();
+      const bottom = document.getElementById('bottom-panel');
+      const isCollapsed = bottom?.classList.contains('collapsed');
+      if (isCollapsed) {
+        bottom?.classList.remove('collapsed');
+        document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
+        document.getElementById('terminal-command-input')?.focus();
+      } else {
+        bottom?.classList.add('collapsed');
+      }
     }
     // Ctrl + B: Toggle Sidebar
     else if (e.ctrlKey && e.key.toLowerCase() === 'b') {

@@ -397,24 +397,24 @@
             </div>
 
             <div class="sidebar-actions">
+              <!-- Terminal Instance Tabs Container -->
+              <div class="terminal-tabs-container" id="terminal-instance-tabs"></div>
               <!-- New Terminal + -->
-              <button class="icon-btn" id="btn-new-terminal" title="New Terminal">
+              <button class="icon-btn" id="btn-new-terminal" title="New Terminal (PowerShell)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
-              <!-- Powershell pill -->
-              <span style="font-size: 11px; padding: 2px 6px; background: var(--bg-surface); border-radius: 4px; color: var(--text-secondary); font-family: var(--font-mono);">powershell</span>
               <!-- Clear output -->
-              <button class="icon-btn" id="btn-clear-terminal" title="Clear Terminal">
+              <button class="icon-btn" id="btn-clear-terminal" title="Clear Terminal (cls)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </button>
               <!-- Close panel -->
-              <button class="icon-btn" id="btn-collapse-panel" title="Close Panel">
+              <button class="icon-btn" id="btn-collapse-panel" title="Close Panel (Ctrl+`)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="18" y1="6" x2="6" y2="18"></line>
                   <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -428,9 +428,9 @@
             <div id="tab-content-terminal" style="display: flex; flex-direction: column; height: 100%;">
               <div class="terminal-view" id="terminal-stdout">PS D:\1work\YT\Orbital X> ready for workspace commands...</div>
               <div class="terminal-prompt-bar">
-                <span style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold;">PS D:\1work\YT\Orbital X&gt;</span>
-                <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command (e.g. cargo check, npm test, git status)..." />
-                <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Execute</button>
+                <span id="terminal-prompt-label" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS D:\1work\YT\Orbital X&gt;</span>
+                <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command (e.g. npm test, cargo check, git status) and press Enter..." />
+                <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Run</button>
               </div>
             </div>
 
@@ -460,9 +460,12 @@
       <!-- Agent Dock / Panel (Right - Matches Cursor / Antigravity from screenshot) -->
       <aside class="agent-panel" id="agent-panel">
         <div class="agent-header">
-          <div class="agent-header-row">
-            <div class="agent-title">
-              <span>Orbital X IDE Development</span>
+          <div class="agent-header-row" style="position: relative;">
+            <div class="agent-title" id="btn-toggle-session-dropdown" style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Click to view recent chats">
+              <span id="agent-session-title">Orbital X IDE Development</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </div>
 
             <div class="sidebar-actions">
@@ -473,8 +476,8 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
-              <!-- More actions -->
-              <button class="icon-btn" title="More Actions">
+              <!-- More actions / Chat History -->
+              <button class="icon-btn" id="btn-chat-history" title="Recent Chats & History">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="12" cy="12" r="2"></circle>
                   <circle cx="19" cy="12" r="2"></circle>
@@ -488,6 +491,16 @@
                   <line x1="6" y1="6" x2="18" y2="18"></line>
                 </svg>
               </button>
+            </div>
+
+            <!-- Chat History Popover Dropdown -->
+            <div class="chat-history-dropdown" id="chat-history-dropdown">
+              <div class="chat-history-header">
+                <span>Recent Chats</span>
+              </div>
+              <div class="chat-history-list" id="chat-history-list">
+                <!-- Dynamically rendered by chat-sessions.js -->
+              </div>
             </div>
           </div>
 

@@ -1,18 +1,45 @@
 // ==========================================================================
-// Orbital X — Terminal & Validation Panel (terminal.js)
+// Orbital X — Integrated Terminal Subsystem (terminal.js)
+// Real developer terminal modeled after VS Code, Antigravity, and Cursor.
 // ==========================================================================
 
 import { invoke } from '../services/tauri.js';
+import { state } from '../state/store.js';
+
+let terminalInstances = [];
+let activeTerminalId = 1;
+
+class TerminalSession {
+  constructor(id, name = 'powershell') {
+    this.id = id;
+    this.name = name;
+    this.cwd = state.workspace.rootPath || 'D:\\1work\\YT\\Orbital X';
+    this.history = [];
+    this.historyIndex = -1;
+    this.buffer = '';
+    this.isRunning = false;
+  }
+
+  getPromptText() {
+    return `PS ${this.cwd}> `;
+  }
+}
 
 export function initTerminal() {
-  const stdoutElem = document.getElementById('terminal-stdout');
+  // Initialize with at least one active terminal instance
+  if (terminalInstances.length === 0) {
+    terminalInstances.push(new TerminalSession(1, 'powershell'));
+    activeTerminalId = 1;
+  }
+
   const inputElem = document.getElementById('terminal-command-input');
   const runBtn = document.getElementById('btn-run-terminal-command');
   const clearBtn = document.getElementById('btn-clear-terminal');
   const collapseBtn = document.getElementById('btn-collapse-panel');
+  const newTerminalBtn = document.getElementById('btn-new-terminal');
   const bottomPanel = document.getElementById('bottom-panel');
 
-  // Tab switching
+  // Bottom panel tab switching
   const tabs = document.querySelectorAll('.panel-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -20,52 +47,225 @@ export function initTerminal() {
       tab.classList.add('active');
 
       const target = tab.dataset.tab;
-      document.getElementById('tab-content-terminal').style.display = target === 'terminal' ? 'flex' : 'none';
-      document.getElementById('tab-content-validation').style.display = target === 'validation' ? 'block' : 'none';
-      document.getElementById('tab-content-logs').style.display = target === 'logs' ? 'block' : 'none';
+      const termContent = document.getElementById('tab-content-terminal');
+      const valContent = document.getElementById('tab-content-validation');
+      const logContent = document.getElementById('tab-content-logs');
+
+      if (termContent) termContent.style.display = target === 'terminal' ? 'flex' : 'none';
+      if (valContent) valContent.style.display = target === 'validation' ? 'block' : 'none';
+      if (logContent) logContent.style.display = target === 'logs' ? 'block' : 'none';
+
+      if (target === 'terminal') {
+        inputElem?.focus();
+      }
     });
   });
 
-  if (runBtn && inputElem) {
-    runBtn.addEventListener('click', () => executeTerminalCommand());
+  // Enter to execute & ArrowUp/Down for command history
+  if (inputElem) {
     inputElem.addEventListener('keydown', (e) => {
+      const active = getActiveSession();
+      if (!active) return;
+
       if (e.key === 'Enter') {
+        e.preventDefault();
         executeTerminalCommand();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (active.history.length > 0) {
+          if (active.historyIndex === -1) {
+            active.historyIndex = active.history.length - 1;
+          } else if (active.historyIndex > 0) {
+            active.historyIndex--;
+          }
+          inputElem.value = active.history[active.historyIndex] || '';
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (active.history.length > 0 && active.historyIndex !== -1) {
+          if (active.historyIndex < active.history.length - 1) {
+            active.historyIndex++;
+            inputElem.value = active.history[active.historyIndex] || '';
+          } else {
+            active.historyIndex = -1;
+            inputElem.value = '';
+          }
+        }
+      } else if (e.key === 'c' && e.ctrlKey) {
+        // Ctrl+C cancellation representation
+        appendTerminalText(`^C\n`);
+        inputElem.value = '';
       }
     });
   }
 
-  if (clearBtn && stdoutElem) {
-    clearBtn.addEventListener('click', () => {
-      stdoutElem.textContent = 'Terminal cleared.';
-    });
-  }
+  runBtn?.addEventListener('click', () => executeTerminalCommand());
 
-  if (collapseBtn && bottomPanel) {
-    collapseBtn.addEventListener('click', () => {
-      bottomPanel.classList.toggle('collapsed');
-    });
-  }
+  clearBtn?.addEventListener('click', () => {
+    const active = getActiveSession();
+    if (active) {
+      active.buffer = '';
+      renderActiveBuffer();
+    }
+  });
+
+  newTerminalBtn?.addEventListener('click', () => {
+    createTerminalInstance();
+  });
+
+  collapseBtn?.addEventListener('click', () => {
+    bottomPanel?.classList.toggle('collapsed');
+  });
+
+  // Focus terminal input when clicking anywhere on stdout area
+  document.getElementById('terminal-stdout')?.addEventListener('click', () => {
+    inputElem?.focus();
+  });
 
   // Validation Suite triggers
   document.getElementById('btn-run-all-tests')?.addEventListener('click', runValidationTests);
+
+  renderTerminalTabs();
+  renderActiveBuffer();
+  updatePromptDisplay();
+}
+
+export function getActiveSession() {
+  return terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[0];
+}
+
+export function createTerminalInstance(name = 'powershell') {
+  const newId = terminalInstances.length > 0 ? Math.max(...terminalInstances.map(t => t.id)) + 1 : 1;
+  const newSession = new TerminalSession(newId, name);
+  terminalInstances.push(newSession);
+  switchTerminalInstance(newId);
+  renderTerminalTabs();
+}
+
+export function switchTerminalInstance(id) {
+  activeTerminalId = id;
+  renderTerminalTabs();
+  renderActiveBuffer();
+  updatePromptDisplay();
+  document.getElementById('terminal-command-input')?.focus();
+}
+
+export function closeTerminalInstance(id, event) {
+  if (event) event.stopPropagation();
+
+  if (terminalInstances.length <= 1) {
+    // If only one, clear it instead of deleting
+    const session = terminalInstances[0];
+    session.buffer = '';
+    renderActiveBuffer();
+    return;
+  }
+
+  terminalInstances = terminalInstances.filter(t => t.id !== id);
+  if (activeTerminalId === id) {
+    activeTerminalId = terminalInstances[0].id;
+  }
+
+  renderTerminalTabs();
+  renderActiveBuffer();
+  updatePromptDisplay();
+}
+
+function renderTerminalTabs() {
+  const container = document.getElementById('terminal-instance-tabs');
+  if (!container) return;
+
+  container.innerHTML = '';
+  terminalInstances.forEach(term => {
+    const isActive = term.id === activeTerminalId;
+    const tabEl = document.createElement('div');
+    tabEl.className = `terminal-instance-pill ${isActive ? 'active' : ''}`;
+    tabEl.innerHTML = `
+      <span>${term.id}: ${term.name}</span>
+      <span class="terminal-close-btn" title="Kill Terminal">✕</span>
+    `;
+
+    tabEl.addEventListener('click', () => switchTerminalInstance(term.id));
+    tabEl.querySelector('.terminal-close-btn')?.addEventListener('click', (e) => closeTerminalInstance(term.id, e));
+
+    container.appendChild(tabEl);
+  });
+}
+
+function updatePromptDisplay() {
+  const promptLabel = document.getElementById('terminal-prompt-label');
+  const active = getActiveSession();
+  if (promptLabel && active) {
+    const cwd = active.cwd || (state.workspace.rootPath || 'D:\\1work\\YT\\Orbital X');
+    promptLabel.textContent = `PS ${cwd}>`;
+  }
+}
+
+function renderActiveBuffer() {
+  const stdoutElem = document.getElementById('terminal-stdout');
+  const active = getActiveSession();
+  if (!stdoutElem || !active) return;
+
+  if (!active.buffer) {
+    const defaultGreeting = `Orbital X Integrated Terminal [Version 0.1.0]\n(c) 2026 Orbital X Corp. Modern developer shell active.\n\nType commands directly and press Enter. ArrowUp/Down for history.`;
+    stdoutElem.textContent = defaultGreeting;
+  } else {
+    stdoutElem.textContent = active.buffer;
+  }
+
+  stdoutElem.scrollTop = stdoutElem.scrollHeight;
 }
 
 export async function executeTerminalCommand(cmdString) {
   const stdoutElem = document.getElementById('terminal-stdout');
   const inputElem = document.getElementById('terminal-command-input');
+  const active = getActiveSession();
+  if (!active) return;
 
-  const command = cmdString || (inputElem ? inputElem.value.trim() : '');
+  const command = (cmdString || (inputElem ? inputElem.value : '')).trim();
   if (!command) return;
 
   if (inputElem) inputElem.value = '';
+  active.historyIndex = -1;
+  active.history.push(command);
 
-  appendTerminalText(`\n$ ${command}\n[Running process in workspace...]`);
+  // 1. Built-in: clear / cls
+  if (command.toLowerCase() === 'cls' || command.toLowerCase() === 'clear') {
+    active.buffer = '';
+    renderActiveBuffer();
+    return;
+  }
+
+  // 2. Built-in: exit
+  if (command.toLowerCase() === 'exit') {
+    closeTerminalInstance(active.id);
+    return;
+  }
+
+  // 3. Built-in: cd <dir>
+  if (command.toLowerCase().startsWith('cd ') || command.toLowerCase() === 'cd') {
+    const targetDir = command.substring(3).trim();
+    if (targetDir) {
+      active.cwd = targetDir;
+      updatePromptDisplay();
+      appendTerminalText(`\nPS ${active.cwd}>\n`);
+    } else {
+      appendTerminalText(`\n${active.cwd}\n`);
+    }
+    return;
+  }
+
+  // Append command to buffer
+  const promptText = `\nPS ${active.cwd}> ${command}\n`;
+  appendTerminalText(promptText);
+
+  // Show inline progress indicator
+  active.isRunning = true;
 
   try {
     const res = await invoke('run_command', {
       command,
-      timeout_seconds: 45,
+      timeout_seconds: 60,
     });
 
     let output = '';
@@ -73,19 +273,27 @@ export async function executeTerminalCommand(cmdString) {
     if (res.stderr) output += `\n[STDERR]\n${res.stderr}`;
 
     const statusBadge = res.success
-      ? `\n✓ Exited with code ${res.exit_code} (${res.duration_ms}ms)`
-      : `\n✗ Exited with code ${res.exit_code ?? 'terminated'} (${res.duration_ms}ms)`;
+      ? `\n✓ Exited with code ${res.exit_code} (${res.duration_ms}ms)\n`
+      : `\n✗ Exited with code ${res.exit_code ?? 'terminated'} (${res.duration_ms}ms)\n`;
 
-    appendTerminalText(`${output}${statusBadge}\n`);
-    logAudit(`Executed command: "${command}" -> Exit code: ${res.exit_code}`);
+    appendTerminalText(`${output}${statusBadge}`);
+    logAudit(`Terminal: "${command}" -> exit ${res.exit_code}`);
   } catch (err) {
     appendTerminalText(`\nExecution Error: ${err}\n`);
-    logAudit(`Command failed: "${command}" -> Error: ${err}`);
+    logAudit(`Terminal error: "${command}" -> ${err}`);
+  } finally {
+    active.isRunning = false;
+    updatePromptDisplay();
+    inputElem?.focus();
   }
 }
 
 function appendTerminalText(text) {
   const stdoutElem = document.getElementById('terminal-stdout');
+  const active = getActiveSession();
+  if (active) {
+    active.buffer = (active.buffer || '') + text;
+  }
   if (stdoutElem) {
     stdoutElem.textContent += text;
     stdoutElem.scrollTop = stdoutElem.scrollHeight;

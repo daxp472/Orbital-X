@@ -126,21 +126,21 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
             "type": "function",
             "function": {
                 "name": "save_project_memory",
-                "description": "Save an architectural decision, rule, setup fact, or convention to persistent project memory.",
+                "description": "Persist or update key architectural decisions, tech stack details, conventions, or rules in project memory. Automatically updates existing entries if the category and title match. Call this whenever you discover or establish key workspace knowledge.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "category": {
                             "type": "string",
-                            "description": "Category (e.g. architecture, convention, rule, instruction)"
+                            "description": "Category (architecture, convention, rule, toolchain)"
                         },
                         "title": {
                             "type": "string",
-                            "description": "Title or short key"
+                            "description": "Short concise title (e.g. 'Project Structure Overview', 'Build Command')"
                         },
                         "content": {
                             "type": "string",
-                            "description": "Memory content or rule description"
+                            "description": "Concise summary of the architectural fact or rule"
                         }
                     },
                     "required": ["category", "title", "content"]
