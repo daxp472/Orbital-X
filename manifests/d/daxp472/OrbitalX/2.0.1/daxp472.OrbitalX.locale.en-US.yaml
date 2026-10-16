@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: daxp472.OrbitalX
+PackageVersion: 2.0.1
+PackageLocale: en-US
+Publisher: Orbital X
+PublisherUrl: https://daxp472.github.io/Orbital-X/
+PublisherSupportUrl: https://github.com/daxp472/Orbital-X/issues
+PrivacyUrl: https://github.com/daxp472/Orbital-X/blob/main/SECURITY.md
+PackageName: Orbital X
+PackageUrl: https://daxp472.github.io/Orbital-X/
+License: MIT
+LicenseUrl: https://github.com/daxp472/Orbital-X/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Orbital X Contributors
+CopyrightUrl: https://github.com/daxp472/Orbital-X/blob/main/LICENSE
+ShortDescription: High-performance, memory-conscious AI coding desktop IDE built on Tauri 2 and Rust.
+Description: |
+  Orbital X combines native desktop speed with deep local AI integration.
+  Featuring first-class support for Ollama offline models (Llama 3, Qwen 2.5 Coder),
+  durable project memory, integrated Monaco editor, multi-tab terminal, and
+  kernel-enforced tri-mode safety policies.
+Moniker: orbitalx
+Tags:
+  - ide
+  - code-editor
+  - ai
+  - ollama
+  - developer-tools
+  - rust
+  - tauri
+ReleaseNotes: |
+  Orbital X v2.0.1 Official Release:
+  - 100% local model support via Ollama
+  - Durable project memory with automatic architecture extraction
+  - VS Code-style multi-tab integrated terminal
+  - Multi-session chat history persistence
+  - Tri-mode kernel safety policy (Agent Pro, Dev, User)
+ReleaseNotesUrl: https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

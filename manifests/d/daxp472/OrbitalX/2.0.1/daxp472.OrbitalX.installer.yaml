@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: daxp472.OrbitalX
+PackageVersion: 2.0.1
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+InstallerSwitches:
+  Silent: /S
+  SilentWithProgress: /S
+UpgradeBehavior: install
+ReleaseDate: 2026-10-15
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe
+    InstallerSha256: CED499E416DF22EE54B4F22E308C4C773B6351FEACADE4B41B2F6777719DF63F
+    ProductCode: com.orbitalx.ide
+ManifestType: installer
+ManifestVersion: 1.6.0
