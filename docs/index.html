@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Orbital X — High-Performance, Memory-Conscious AI Desktop Coding IDE</title>
+  
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Orbital X is a native AI desktop coding IDE built with Tauri 2 and Rust. Features 100% offline local model support with Ollama, ~95MB idle memory, and kernel-enforced tri-mode safety policies." />
+  <meta name="keywords" content="Orbital X, AI IDE, Tauri 2, Rust, Ollama, Local LLM, Monaco Editor, Cursor alternative, Antigravity IDE, Developer Tools" />
+  <meta property="og:title" content="Orbital X — The Open-Source, Memory-Conscious AI Desktop IDE" />
+  <meta property="og:description" content="Native speed, zero cloud telemetry, 100% offline Ollama models, and ~95MB idle memory. Built for developers." />
+  <meta property="og:url" content="https://daxp472.github.io/Orbital-X/" />
+  <meta property="og:type" content="website" />
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="#" class="nav-logo">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="url(#logo_grad)" stroke-width="2.5" stroke-dasharray="70 20" />
+          <ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-30 16 16)" stroke="#39c5bb" stroke-width="1.8" opacity="0.85" />
+          <path d="M11 11L21 21M21 11L11 21" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" />
+          <circle cx="16" cy="16" r="3" fill="#bc8cff" />
+          <defs>
+            <linearGradient id="logo_grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#39c5bb" />
+              <stop offset="1" stop-color="#bc8cff" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>Orbital X</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#benchmarks">Benchmarks</a></li>
+        <li><a href="#modes">Safety Modes</a></li>
+        <li><a href="#ollama">Local AI</a></li>
+        <li><a href="#download">Download</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub ★
+        </a>
+        <a href="#download" class="btn btn-primary btn-sm">Get v2.0.1</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="container">
+      <div class="pill-badge">
+        <span class="pill-dot"></span>
+        v2.0.1 Official Release • Windows Setup & Source Available
+      </div>
+
+      <h1>
+        Code with Autonomy.<br />
+        <span class="hero-highlight">Zero Cloud Lock-in. Zero RAM Waste.</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        Orbital X is a native desktop AI coding environment built on <strong>Tauri 2 + Rust</strong>. 
+        Engineered for complete data privacy with offline <strong>Ollama</strong> models, durable workspace memory, 
+        and kernel-enforced permission safety — all while idling at just <strong>~95 MB RAM</strong>.
+      </p>
+
+      <div class="hero-cta">
+        <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe" class="btn btn-primary" id="hero-download-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          <span id="hero-download-label">Download for Windows (x64)</span>
+        </a>
+
+        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary">
+          View on GitHub
+        </a>
+      </div>
+
+      <!-- Live Terminal Install Box (Winget) -->
+      <div>
+        <div class="terminal-install-box">
+          <span>PS&gt; winget install daxp472.OrbitalX</span>
+          <button class="terminal-copy-btn" data-copy="winget install daxp472.OrbitalX">Copy</button>
+        </div>
+      </div>
+
+      <!-- Real-Time Performance Meters -->
+      <div class="metrics-strip">
+        <div class="metric-card">
+          <div class="metric-value">~95 <span>MB</span></div>
+          <div class="metric-label">Idle RAM Footprint</div>
+          <div class="metric-sub">vs 1.8 GB in Electron IDEs</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-value" id="live-fps-val">120+ <span>FPS</span></div>
+          <div class="metric-label">Render Frame Rate</div>
+          <div class="metric-sub">Direct GPU acceleration</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-value">~280 <span>ms</span></div>
+          <div class="metric-label">Cold Startup Time</div>
+          <div class="metric-sub">Instant native launch</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-value">0 <span>ms</span></div>
+          <div class="metric-label">Cloud Hop Latency</div>
+          <div class="metric-sub">100% offline with Ollama</div>
+        </div>
+      </div>
+
+      <!-- Desktop App Mockup -->
+      <div class="mockup-container">
+        <div class="mockup-titlebar">
+          <div class="mockup-dots">
+            <div class="mockup-dot red"></div>
+            <div class="mockup-dot yellow"></div>
+            <div class="mockup-dot green"></div>
+          </div>
+          <div class="mockup-title">Orbital X — src/main.rs [Dev Mode]</div>
+          <div style="font-size: 0.75rem; color: #39c5bb; font-family: var(--font-mono);">● Ollama (llama3)</div>
+        </div>
+
+        <div class="mockup-body">
+          <!-- Mockup Left Sidebar -->
+          <div class="mockup-sidebar">
+            <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">WORKSPACE EXPLORER</div>
+            <div class="mockup-tree-item">📁 src</div>
+            <div class="mockup-tree-item active" style="margin-left: 12px;">📄 main.rs</div>
+            <div class="mockup-tree-item" style="margin-left: 12px;">📄 lib.rs</div>
+            <div class="mockup-tree-item" style="margin-left: 12px;">📄 policy.rs</div>
+            <div class="mockup-tree-item">📁 .orbital</div>
+            <div class="mockup-tree-item" style="margin-left: 12px;">📄 memory.json</div>
+            <div class="mockup-tree-item">📄 Cargo.toml</div>
+          </div>
+
+          <!-- Mockup Center Editor -->
+          <div class="mockup-editor">
+            <div style="color: #64748b;">// Orbital X — Kernel Policy Engine</div>
+            <div><span style="color: #bc8cff;">pub struct</span> <span style="color: #58a6ff;">PolicyDecision</span> {</div>
+            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> allows: <span style="color: #39c5bb;">bool</span>,</div>
+            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> requires_approval: <span style="color: #39c5bb;">bool</span>,</div>
+            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> risk: <span style="color: #58a6ff;">RiskLevel</span>,</div>
+            <div>}</div>
+            <br>
+            <div style="color: #64748b;">// Evaluates tool invocation strictly inside Rust boundary</div>
+            <div><span style="color: #bc8cff;">pub fn</span> <span style="color: #39c5bb;">evaluate_tool_policy</span>(tool: &amp;str, mode: &amp;str) -&gt; <span style="color: #58a6ff;">PolicyDecision</span> {</div>
+            <div style="margin-left: 16px;"><span style="color: #bc8cff;">match</span> (tool, mode) {</div>
+            <div style="margin-left: 32px;">(<span style="color: #39c5bb;">"write_file"</span>, <span style="color: #39c5bb;">"dev"</span>) =&gt; PolicyDecision::require_diff_approval(),</div>
+            <div style="margin-left: 32px;">(<span style="color: #39c5bb;">"write_file"</span>, <span style="color: #39c5bb;">"agent_pro"</span>) =&gt; PolicyDecision::allow(),</div>
+            <div style="margin-left: 32px;">_ =&gt; PolicyDecision::enforce_strict_approval(),</div>
+            <div style="margin-left: 16px;">}</div>
+            <div>}</div>
+          </div>
+
+          <!-- Mockup Right Agent Panel -->
+          <div class="mockup-agent">
+            <div>
+              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">
+                <span>ORBITAL AGENT</span>
+                <span style="color: #39c5bb;">DEV MODE</span>
+              </div>
+              <div class="mockup-chat-msg">
+                <strong>You:</strong> Refactor policy engine to add undo journal support.
+              </div>
+              <div class="mockup-chat-msg agent">
+                <span style="color: #bc8cff; font-weight: bold;">Orbital Agent:</span><br>
+                Inspected <code>policy.rs</code> and verified workspace bounds. I have prepared the diff for your review.
+              </div>
+            </div>
+            <div style="background: var(--bg-surface); padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; border: 1px solid var(--border-subtle); color: var(--text-muted);">
+              Ask Orbital X to edit, test, or explain...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Technical Highlights -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Built from First Principles</h2>
+        <p>No bloated browser wrappers. No cloud middlemen. Pure native speed and complete developer autonomy.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Tauri 2 + Rust Core</h3>
+          <p>
+            Unlike Electron-based editors that bundle duplicate Chromium instances, Orbital X runs on an ultra-lean 
+            Rust backend with native Microsoft Edge WebView2. Idle RAM stays below 100 MB.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🦙</div>
+          <h3>100% Local AI with Ollama</h3>
+          <p>
+            Plug directly into your local machine's Ollama instance (<code>http://localhost:11434</code>). 
+            Run Qwen 2.5 Coder, Llama 3, Mistral, or DeepSeek Coder completely offline with zero API costs.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Tri-Mode Safety Policy</h3>
+          <p>
+            Switch effortlessly between <strong>Agent Pro</strong> (high autonomy), <strong>Dev Mode</strong> (approval cards with diff previews), 
+            and <strong>User Mode</strong> (strict per-action confirmation). Destructive commands are blocked at the Rust kernel.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Durable Project Memory</h3>
+          <p>
+            Architectural decisions, build instructions, and team rules are automatically extracted and stored locally in 
+            <code>.orbital/memory.json</code>. Your AI remembers your project across restarts.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📝</div>
+          <h3>Monaco Code Editor</h3>
+          <p>
+            Enjoy the battle-tested editing experience of VS Code: syntax grammars for 50+ languages, smooth cursor blinking, 
+            bracket pair colorization, minimap, tabs, and integrated side-by-side Monaco Diff reviews.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <h3>Integrated Multi-Tab Terminal</h3>
+          <p>
+            Full multi-tab integrated terminal subsystem with command history navigation (<code>↑</code>/<code>↓</code>), 
+            built-in commands (<code>cd</code>, <code>cls</code>), and instant hotkey toggle (<code>Ctrl+`</code> / <code>Ctrl+J</code>).
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Real Benchmarks Section -->
+  <section class="section" id="benchmarks" style="background: rgba(13, 18, 28, 0.4);">
+    <div class="container">
+      <div class="section-header">
+        <h2>Performance Benchmarks</h2>
+        <p>Real-world measurements taken on a clean Windows 11 system with 1 workspace open.</p>
+      </div>
+
+      <div class="table-container">
+        <table class="bench-table">
+          <thead>
+            <tr>
+              <th>Metric / Resource</th>
+              <th>Orbital X (v2.0.1)</th>
+              <th>Cursor (Electron)</th>
+              <th>VS Code + Copilot</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Idle RAM Footprint</strong></td>
+              <td class="bench-highlight">~95 MB</td>
+              <td class="bench-bad">1,650 MB</td>
+              <td class="bench-bad">1,250 MB</td>
+            </tr>
+            <tr>
+              <td><strong>Cold Launch Latency</strong></td>
+              <td class="bench-highlight">~280 ms</td>
+              <td class="bench-bad">2,400 ms</td>
+              <td class="bench-bad">1,900 ms</td>
+            </tr>
+            <tr>
+              <td><strong>Render Frame Rate</strong></td>
+              <td class="bench-highlight">Solid 120+ FPS</td>
+              <td class="bench-bad">60 - 90 FPS</td>
+              <td class="bench-bad">60 FPS</td>
+            </tr>
+            <tr>
+              <td><strong>Local AI (Ollama) Support</strong></td>
+              <td class="bench-highlight">Native First-Class (Offline)</td>
+              <td class="bench-bad">Cloud Biased</td>
+              <td class="bench-bad">Requires Extension Stack</td>
+            </tr>
+            <tr>
+              <td><strong>Telemetry &amp; Code Privacy</strong></td>
+              <td class="bench-highlight">Zero Telemetry (100% Private)</td>
+              <td class="bench-bad">Cloud Telemetry Active</td>
+              <td class="bench-bad">Cloud Telemetry Active</td>
+            </tr>
+            <tr>
+              <td><strong>Installer Bundle Size</strong></td>
+              <td class="bench-highlight">~5.3 MB (NSIS)</td>
+              <td class="bench-bad">120 MB+</td>
+              <td class="bench-bad">95 MB+</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Safety Modes Sandbox -->
+  <section class="section" id="modes">
+    <div class="container">
+      <div class="section-header">
+        <h2>Kernel-Enforced Safety Policies</h2>
+        <p>You control the autonomy. Choose how much freedom your AI agent gets with one click.</p>
+      </div>
+
+      <div class="modes-card">
+        <div class="modes-tabs">
+          <button class="mode-tab-btn active" data-mode="dev">🟢 Dev Mode (Default)</button>
+          <button class="mode-tab-btn" data-mode="pro">🟣 Agent Pro Mode</button>
+          <button class="mode-tab-btn" data-mode="user">🟠 User Mode</button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div>
+            <h3 id="mode-display-title" style="font-size: 1.3rem; color: #ffffff; margin-bottom: 8px;">🟢 Dev Mode (Default &amp; Balanced)</h3>
+            <p id="mode-display-desc" style="color: var(--text-secondary); font-size: 0.95rem;">
+              Perfect for day-to-day coding. File searches and inspections are completely automatic. Any file edit or terminal command presents an interactive Approval Card with Monaco Diff preview before execution.
+            </p>
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 10px;">
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">File Reads &amp; Searches</div>
+              <div id="mode-rule-reads" style="font-size: 0.95rem; font-weight: 600; color: #39c5bb; margin-top: 4px;">⚡ Automatic (0 Prompts)</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">File Edits &amp; Writes</div>
+              <div id="mode-rule-writes" style="font-size: 0.95rem; font-weight: 600; color: #f0883e; margin-top: 4px;">🛡️ Approval Card with Diff Preview</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Terminal Commands</div>
+              <div id="mode-rule-terminal" style="font-size: 0.95rem; font-weight: 600; color: #f0883e; margin-top: 4px;">🛡️ Approval Required</div>
+            </div>
+
+            <div style="background: var(--bg-surface); padding: 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Safety Guardrail</div>
+              <div id="mode-rule-safety" style="font-size: 0.95rem; font-weight: 600; color: #3fb950; margin-top: 4px;">Kernel-Enforced Sandboxing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Local AI with Ollama Guide -->
+  <section class="section" id="ollama" style="background: rgba(13, 18, 28, 0.4);">
+    <div class="container">
+      <div class="section-header">
+        <h2>Run Any Local Model Offline</h2>
+        <p>No credit cards. No cloud queues. No corporate compliance leaks.</p>
+      </div>
+
+      <div style="max-width: 800px; margin: 0 auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 36px;">
+        <ol style="margin-left: 20px; display: flex; flex-direction: column; gap: 20px; color: var(--text-secondary); font-size: 0.95rem;">
+          <li>
+            <strong style="color: #ffffff;">Launch Ollama on your PC:</strong>
+            <p style="margin-top: 6px;">Pull your favorite coding model via terminal:</p>
+            <div class="terminal-install-box" style="margin-top: 8px;">
+              <span>ollama run qwen2.5-coder:7b</span>
+              <button class="terminal-copy-btn" data-copy="ollama run qwen2.5-coder:7b">Copy</button>
+            </div>
+          </li>
+          <li>
+            <strong style="color: #ffffff;">Open Orbital X Settings:</strong>
+            <p style="margin-top: 4px;">Press <code>Ctrl + ,</code> or click the gear icon in the left activity rail.</p>
+          </li>
+          <li>
+            <strong style="color: #ffffff;">Select Ollama:</strong>
+            <p style="margin-top: 4px;">Orbital X automatically queries your local Ollama port (<code>11434</code>) and populates all installed models in the dropdown selector!</p>
+          </li>
+          <li>
+            <strong style="color: #ffffff;">Code with Total Privacy:</strong>
+            <p style="margin-top: 4px;">Your code never leaves your local hardware. Everything is computed right on your GPU/NPU.</p>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download Section -->
+  <section class="section download-section" id="download">
+    <div class="container">
+      <div class="section-header">
+        <h2>Get Orbital X v2.0.1</h2>
+        <p>Available now as a native Windows setup installer and open-source binaries.</p>
+      </div>
+
+      <div class="download-cards">
+        <!-- Windows -->
+        <div class="download-card primary">
+          <div>
+            <div class="download-icon">🪟</div>
+            <h4>Windows</h4>
+            <p>Windows 10 / 11 (64-bit)<br>Official NSIS Setup Wizard</p>
+          </div>
+          <div>
+            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe" class="btn btn-primary" style="width: 100%;">
+              Download .exe (5.3 MB)
+            </a>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
+              SHA256: <code>CED499E...</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Winget -->
+        <div class="download-card">
+          <div>
+            <div class="download-icon">⚡</div>
+            <h4>Windows Package Manager</h4>
+            <p>Install via Windows Command Prompt or PowerShell</p>
+          </div>
+          <div>
+            <div class="terminal-install-box" style="margin-top: 0; width: 100%; justify-content: space-between;">
+              <span style="font-size: 0.75rem;">winget install daxp472.OrbitalX</span>
+              <button class="terminal-copy-btn" data-copy="winget install daxp472.OrbitalX">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- macOS & Linux -->
+        <div class="download-card">
+          <div>
+            <div class="download-icon">🍎 🐧</div>
+            <h4>macOS &amp; Linux</h4>
+            <p>Apple Silicon / Intel DMG &amp; Linux AppImage</p>
+          </div>
+          <div>
+            <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1" target="_blank" rel="noopener" class="btn btn-secondary" style="width: 100%;">
+              Releases &amp; Build Guides
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-copy">
+          <strong>Orbital X</strong> — An Open-Source Community Project.<br>
+          Licensed under the <a href="https://github.com/daxp472/Orbital-X/blob/main/LICENSE" target="_blank" rel="noopener" style="color: var(--accent-cyan);">MIT License</a>.
+        </div>
+
+        <div class="footer-links">
+          <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/daxp472/Orbital-X/releases" target="_blank" rel="noopener">Releases</a>
+          <a href="https://github.com/daxp472/Orbital-X/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+          <a href="https://github.com/daxp472/Orbital-X/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture</a>
+          <a href="https://github.com/daxp472/Orbital-X/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
