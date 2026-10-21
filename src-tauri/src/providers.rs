@@ -288,7 +288,7 @@ impl ProviderService {
         tools_def: serde_json::Value,
     ) -> Result<ProviderResponse, String> {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_secs(300)) // 5 min for local Ollama cold starts
             .build()
             .unwrap_or_default();
 
@@ -300,29 +300,43 @@ impl ProviderService {
                 let ollama_msgs: Vec<serde_json::Value> = messages
                     .iter()
                     .map(|m| {
-                        let mut msg_obj = serde_json::json!({
-                            "role": m.role,
-                            "content": m.content
-                        });
-                        if let Some(calls) = &m.tool_calls {
-                            let tc_json: Vec<serde_json::Value> = calls.iter().map(|c| {
-                                serde_json::json!({
-                                    "function": {
-                                        "name": c.name,
-                                        "arguments": c.arguments
-                                    }
-                                })
-                            }).collect();
-                            msg_obj["tool_calls"] = serde_json::Value::Array(tc_json);
+                        if m.role == "tool" {
+                            // Ollama uses role=tool with plain content (no tool_call_id needed)
+                            serde_json::json!({
+                                "role": "tool",
+                                "content": m.content
+                            })
+                        } else {
+                            let mut msg_obj = serde_json::json!({
+                                "role": m.role,
+                                "content": m.content
+                            });
+                            if let Some(calls) = &m.tool_calls {
+                                let tc_json: Vec<serde_json::Value> = calls.iter().map(|c| {
+                                    serde_json::json!({
+                                        "function": {
+                                            "name": c.name,
+                                            "arguments": c.arguments
+                                        }
+                                    })
+                                }).collect();
+                                msg_obj["tool_calls"] = serde_json::Value::Array(tc_json);
+                            }
+                            msg_obj
                         }
-                        msg_obj
                     })
                     .collect();
 
                 let mut payload = serde_json::json!({
                     "model": if model.is_empty() { "llama3" } else { model },
                     "messages": ollama_msgs,
-                    "stream": false
+                    "stream": false,
+                    // Keep model loaded in memory for the full agent loop (-1 = indefinite)
+                    "keep_alive": -1,
+                    "options": {
+                        // Ensure sufficient context window for multi-turn tool calling
+                        "num_ctx": 8192
+                    }
                 });
 
                 if let Some(arr) = tools_def.as_array() {
