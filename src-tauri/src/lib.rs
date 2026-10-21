@@ -3,6 +3,7 @@ mod policy;
 mod providers;
 mod terminal;
 mod tools;
+mod usage;
 mod workspace;
 
 use memory::MemoryService;
@@ -10,12 +11,14 @@ use policy::{AgentMode, PolicyDecision, PolicyEngine};
 use providers::{ChatMessage, ConnectionTestResult, ProviderResponse, ProviderService};
 use std::sync::Mutex;
 use tauri::State;
-use terminal::{CommandResult, TerminalService};
+use terminal::{CommandResult, InteractiveSessionInfo, InteractiveTerminalManager, TerminalService};
+use usage::{TokenUsageRecord, TokenUsageStats, UsageService};
 use workspace::{FileDiff, FileReadResult, FileTreeNode, WorkspaceMeta, WorkspaceService};
 
 pub struct AppState {
     pub workspace: Mutex<WorkspaceService>,
     pub active_mode: Mutex<AgentMode>,
+    pub terminal_mgr: InteractiveTerminalManager,
 }
 
 #[tauri::command]
@@ -58,6 +61,12 @@ fn read_file(path: String, state: State<'_, AppState>) -> Result<FileReadResult,
 fn save_file(path: String, content: String, description: Option<String>, state: State<'_, AppState>) -> Result<FileDiff, String> {
     let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
     ws.write_file(&path, &content, &description.unwrap_or_else(|| "User manual save".into()))
+}
+
+#[tauri::command]
+fn create_directory(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.create_directory(&path)
 }
 
 #[tauri::command]
@@ -134,7 +143,111 @@ async fn agent_dispatch_turn(
     messages: Vec<ChatMessage>,
 ) -> Result<ProviderResponse, String> {
     let tool_schemas = tools::get_available_tool_schemas();
-    ProviderService::dispatch_turn(&provider, &api_key, &model, base_url, messages, tool_schemas).await
+    let res = ProviderService::dispatch_turn(&provider, &api_key, &model, base_url, messages, tool_schemas).await?;
+
+    if let Some(u) = &res.usage {
+        let record = TokenUsageRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            provider: provider.clone(),
+            model: model.clone(),
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+            is_estimated: u.is_estimated,
+            category: "agent_turn".into(),
+            status: "completed".into(),
+        };
+        let _ = UsageService::record_usage(record);
+    }
+
+    Ok(res)
+}
+
+#[tauri::command]
+async fn create_interactive_terminal(
+    session_id: Option<String>,
+    name: Option<String>,
+    cwd: Option<String>,
+    shell: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<InteractiveSessionInfo, String> {
+    let effective_cwd = match cwd {
+        Some(c) => c,
+        None => {
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            match ws.get_root() {
+                Some(r) => r.to_string_lossy().to_string(),
+                None => std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
+            }
+        }
+    };
+    state.terminal_mgr.create_session(session_id, name, Some(effective_cwd), shell).await
+}
+
+#[tauri::command]
+async fn send_terminal_input(
+    session_id: String,
+    input: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.terminal_mgr.write_input(&session_id, &input).await
+}
+
+#[tauri::command]
+async fn poll_terminal_output(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    state.terminal_mgr.poll_output(&session_id).await
+}
+
+#[tauri::command]
+async fn close_interactive_terminal(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.terminal_mgr.close_session(&session_id).await
+}
+
+#[tauri::command]
+async fn list_terminal_sessions(
+    state: State<'_, AppState>,
+) -> Result<Vec<InteractiveSessionInfo>, String> {
+    Ok(state.terminal_mgr.list_sessions().await)
+}
+
+#[tauri::command]
+fn record_token_usage(record: TokenUsageRecord) -> Result<(), String> {
+    UsageService::record_usage(record)
+}
+
+#[tauri::command]
+fn get_token_usage_stats() -> Result<TokenUsageStats, String> {
+    Ok(UsageService::get_stats())
+}
+
+#[tauri::command]
+fn clear_token_usage() -> Result<(), String> {
+    UsageService::clear_usage()
+}
+
+#[tauri::command]
+async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let folder = app.dialog().file().blocking_pick_folder();
+    match folder {
+        Some(path) => {
+            let path_str = path.to_string();
+            let p = std::path::Path::new(&path_str);
+            if p.exists() && p.is_dir() {
+                Ok(Some(path_str))
+            } else {
+                Err("Selected path does not exist or is not a directory".into())
+            }
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -421,6 +534,7 @@ pub fn run() {
     let state = AppState {
         workspace: Mutex::new(WorkspaceService::new()),
         active_mode: Mutex::new(AgentMode::Dev),
+        terminal_mgr: InteractiveTerminalManager::new(),
     };
 
     tauri::Builder::default()
@@ -437,10 +551,20 @@ pub fn run() {
             get_file_tree,
             read_file,
             save_file,
+            create_directory,
             get_file_diff,
             undo_agent_change,
             search_workspace,
             run_command,
+            create_interactive_terminal,
+            send_terminal_input,
+            poll_terminal_output,
+            close_interactive_terminal,
+            list_terminal_sessions,
+            record_token_usage,
+            get_token_usage_stats,
+            clear_token_usage,
+            open_folder_dialog,
             test_provider_connection,
             evaluate_tool_policy,
             get_available_tools,

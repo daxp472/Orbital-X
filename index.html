@@ -170,6 +170,13 @@
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
             </svg>
           </div>
+
+          <!-- Token Usage Dashboard Icon -->
+          <div class="rail-btn" id="rail-usage" title="Token Usage & Analytics Dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+          </div>
         </div>
 
         <div class="rail-group">
@@ -190,24 +197,37 @@
           <div class="sidebar-header">
             <span>Explorer</span>
             <div class="sidebar-actions">
-              <button class="icon-btn" id="btn-new-file" title="New File">
+              <!-- New File Button -->
+              <button class="icon-btn" id="btn-new-file" title="New File...">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
                 </svg>
               </button>
-              <button class="icon-btn" id="btn-refresh-files" title="Refresh Tree">
+              <!-- New Folder Button -->
+              <button class="icon-btn" id="btn-new-folder" title="New Folder...">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <line x1="12" y1="11" x2="12" y2="17"></line>
+                  <line x1="9" y1="14" x2="15" y2="14"></line>
+                </svg>
+              </button>
+              <!-- Refresh Tree Button -->
+              <button class="icon-btn" id="btn-refresh-files" title="Refresh Explorer">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="23 4 23 10 17 10"></polyline>
                   <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
                 </svg>
               </button>
-              <button class="icon-btn" title="More Actions">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <circle cx="12" cy="12" r="2"></circle>
-                  <circle cx="19" cy="12" r="2"></circle>
-                  <circle cx="5" cy="12" r="2"></circle>
+              <!-- Collapse All Folders Button -->
+              <button class="icon-btn" id="btn-collapse-folders" title="Collapse Folders in Explorer">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="4 14 10 14 10 20"></polyline>
+                  <polyline points="20 10 14 10 14 4"></polyline>
+                  <line x1="14" y1="10" x2="21" y2="3"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
                 </svg>
               </button>
             </div>
@@ -397,13 +417,18 @@
             </div>
 
             <div class="sidebar-actions">
-              <!-- Terminal Instance Tabs Container -->
-              <div class="terminal-tabs-container" id="terminal-instance-tabs"></div>
               <!-- New Terminal + -->
               <button class="icon-btn" id="btn-new-terminal" title="New Terminal (PowerShell)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+              <!-- Split Terminal -->
+              <button class="icon-btn" id="btn-split-terminal" title="Split Terminal">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="12" y1="3" x2="12" y2="21"></line>
                 </svg>
               </button>
               <!-- Clear output -->
@@ -424,13 +449,27 @@
           </div>
 
           <div class="panel-body">
-            <!-- Terminal Tab Body -->
-            <div id="tab-content-terminal" style="display: flex; flex-direction: column; height: 100%;">
-              <div class="terminal-view" id="terminal-stdout">PS D:\1work\YT\Orbital X> ready for workspace commands...</div>
-              <div class="terminal-prompt-bar">
-                <span id="terminal-prompt-label" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS D:\1work\YT\Orbital X&gt;</span>
-                <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command (e.g. npm test, cargo check, git status) and press Enter..." />
-                <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Run</button>
+            <!-- Terminal Tab Body (Integrated Console + Sessions Sidebar matching VS Code) -->
+            <div id="tab-content-terminal" style="display: flex; flex-direction: row; height: 100%; position: relative;">
+              <!-- Main Terminal Output & Prompt Area -->
+              <div style="flex: 1; display: flex; flex-direction: column; height: 100%; min-width: 0;">
+                <div class="terminal-view" id="terminal-stdout">PS D:\1work\YT\Orbital X> ready for workspace commands...</div>
+                <div class="terminal-prompt-bar">
+                  <span id="terminal-prompt-label" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS D:\1work\YT\Orbital X&gt;</span>
+                  <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command (e.g. npm test, cargo check, git status) and press Enter..." />
+                  <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Run</button>
+                </div>
+              </div>
+
+              <!-- Terminal Sessions Sidebar (Right column matching screenshot) -->
+              <div class="terminal-sessions-sidebar" id="terminal-sessions-sidebar" style="width: 170px; border-left: 1px solid var(--border-color); background: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0;">
+                <div style="padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+                  <span>SESSIONS</span>
+                  <button class="icon-btn" id="btn-sidebar-new-terminal" title="New Session (+)" style="padding: 1px 4px; font-size: 12px; line-height: 1;">+</button>
+                </div>
+                <div class="terminal-sessions-list" id="terminal-sessions-list" style="flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px;">
+                  <!-- Dynamically rendered by terminal.js -->
+                </div>
               </div>
             </div>
 
@@ -544,6 +583,9 @@
         <div class="agent-composer">
           <!-- Developer Action Chips -->
           <div class="composer-chips-bar" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none;">
+            <button class="action-chip" id="chip-plan" title="Generate structured implementation plan (/plan)">
+              <span style="color: var(--accent-purple);">📋</span> Plan
+            </button>
             <button class="action-chip" id="chip-explain" title="Explain workspace architecture & entrypoints">
               <span style="color: var(--accent-cyan);">⚡</span> Architecture
             </button>
@@ -622,6 +664,11 @@
       </div>
 
       <div class="statusbar-right">
+        <!-- Token Usage Counter Pill -->
+        <div class="status-item" id="status-token-usage" style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Token Usage Counter (Click to open Dashboard)">
+          <span style="color: var(--accent-cyan); font-weight: bold; font-size: 11px;">⚡</span>
+          <span id="status-token-count">0 tok today</span>
+        </div>
         <div class="status-item" id="status-mode">
           <span class="mode-dot" style="background-color: var(--accent-cyan);"></span>
           <span id="sb-mode-text">Dev Mode</span>
@@ -639,130 +686,350 @@
     </footer>
   </div>
 
-  <!-- Modal: Settings Dialog -->
+  <!-- Modal: Settings Dialog (Antigravity Two-Column Layout) -->
   <div class="modal-backdrop" id="modal-settings" style="display: none;">
-    <div class="modal-container" style="max-width: 680px;">
-      <div class="modal-header">
-        <span>Settings & Preferences</span>
-        <button class="icon-btn" id="btn-close-settings">✕</button>
+    <div class="settings-modal-container">
+      <!-- Left Sidebar -->
+      <div class="settings-sidebar">
+        <div class="settings-sidebar-header">Settings</div>
+        <div class="settings-nav-item active" id="stab-general" data-pane="spane-general">
+          <span>⚙️</span> General
+        </div>
+        <div class="settings-nav-item" id="stab-models" data-pane="spane-models">
+          <span>🧠</span> Models & Tokens
+        </div>
+        <div class="settings-nav-item" id="stab-appearance" data-pane="spane-appearance">
+          <span>🎨</span> Appearance
+        </div>
+        <div class="settings-nav-item" id="stab-agent" data-pane="spane-agent">
+          <span>🛡️</span> Agent & Security
+        </div>
+        <div class="settings-nav-item" id="stab-terminal" data-pane="spane-terminal">
+          <span>💻</span> Terminal & Shell
+        </div>
+        <div class="settings-nav-item" id="stab-importexport" data-pane="spane-importexport">
+          <span>📦</span> Import / Export
+        </div>
+
+        <div class="settings-sidebar-header" style="margin-top: 20px;">Workspaces</div>
+        <div style="padding: 4px 10px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 11px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green);"></span>
+            <span id="settings-active-workspace-name">Orbital X</span>
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted); word-break: break-all;" id="settings-active-workspace-path">Current Project</div>
+          <span style="display: inline-block; font-size: 9px; padding: 2px 6px; background: rgba(57,197,187,0.12); color: var(--accent-cyan); border-radius: 4px; align-self: flex-start; margin-top: 4px;">Trusted Workspace</span>
+        </div>
       </div>
-      <div class="modal-body">
-        <!-- Settings Tabs Navigation -->
-        <div style="display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
-          <button class="btn btn-secondary btn-sm active" id="stab-providers">AI Models & Keys</button>
-          <button class="btn btn-secondary btn-sm" id="stab-appearance">Appearance</button>
-          <button class="btn btn-secondary btn-sm" id="stab-agent">Agent Policy</button>
-          <button class="btn btn-secondary btn-sm" id="stab-importexport">Import / Export</button>
+
+      <!-- Right Content Pane -->
+      <div class="settings-content-pane">
+        <!-- Close button top right -->
+        <div style="display: flex; justify-content: flex-end; margin-bottom: -10px;">
+          <button class="icon-btn" id="btn-close-settings" title="Close Settings" style="font-size: 16px;">✕</button>
         </div>
 
-        <!-- Tab 1: AI Providers & Keys -->
-        <div id="spane-providers" class="settings-pane" style="display: flex; flex-direction: column; gap: 14px;">
-          <div style="font-size: 12px; color: var(--text-secondary);">
-            Configure your AI model providers. API keys are safely held locally and never exported.
-          </div>
+        <!-- 1. GENERAL PANE (matching Antigravity SS 3) -->
+        <div id="spane-general" class="settings-pane" style="display: flex; flex-direction: column;">
+          <div class="settings-section-title">General</div>
+          <div class="settings-section-desc">Configure agent execution, queued message delivery, and permissions.</div>
 
-          <!-- Anthropic -->
-          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong>Anthropic Claude</strong>
-              <button class="btn btn-secondary btn-sm" id="btn-test-anthropic">Test Connection</button>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <label class="form-label">API Key</label>
-              <input type="password" class="input-text" id="cfg-anthropic-key" placeholder="sk-ant-api..." />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <input type="text" class="input-text" id="cfg-anthropic-model" value="claude-3-5-sonnet-20241022" />
-            </div>
-          </div>
-
-          <!-- OpenAI -->
-          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong>OpenAI</strong>
-              <button class="btn btn-secondary btn-sm" id="btn-test-openai">Test Connection</button>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <label class="form-label">API Key</label>
-              <input type="password" class="input-text" id="cfg-openai-key" placeholder="sk-..." />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <input type="text" class="input-text" id="cfg-openai-model" value="gpt-4o" />
+          <!-- Execution -->
+          <div style="margin-bottom: 24px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 8px;">Execution</div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Queued Messages</span>
+                <span class="settings-setting-caption">Configure when follow-up messages are sent to the running agent.</span>
+              </div>
+              <div class="settings-segmented-group" id="queued-msg-control">
+                <button type="button" class="settings-segmented-btn active" data-val="queue">Queue</button>
+                <button type="button" class="settings-segmented-btn" data-val="immediate">Send Immediately</button>
+              </div>
             </div>
           </div>
 
-          <!-- Google Gemini -->
-          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong>Google Gemini</strong>
-              <button class="btn btn-secondary btn-sm" id="btn-test-gemini">Test Connection</button>
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <label class="form-label">API Key</label>
-              <input type="password" class="input-text" id="cfg-gemini-key" placeholder="AIzaSy..." />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <input type="text" class="input-text" id="cfg-gemini-model" value="gemini-2.0-flash" />
+          <!-- Agent security mode (3 cards matching Antigravity SS 3) -->
+          <div style="margin-bottom: 24px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 4px;">Agent security mode</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Select one of the three options. Agent settings and permissions can be further customized below.</div>
+            <div class="security-cards-grid">
+              <div class="security-card" id="card-mode-pro" data-mode="agent_pro">
+                <div class="security-card-title">⚡ Full access</div>
+                <div class="security-card-desc">Agents have full access to your machine and external resources. Ideal for rapid development.</div>
+              </div>
+              <div class="security-card active" id="card-mode-dev" data-mode="dev">
+                <div class="security-card-title">🛡️ Sandboxed</div>
+                <div class="security-card-desc">Agents run in a secure workspace sandbox that restricts access to external resources outside of your trusted folders.</div>
+              </div>
+              <div class="security-card" id="card-mode-user" data-mode="user">
+                <div class="security-card-title">🔒 Strict</div>
+                <div class="security-card-desc">Terminal commands always require review and the agent cannot access files outside of its given workspaces.</div>
+              </div>
             </div>
           </div>
 
-          <!-- Ollama (Local) -->
-          <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <strong>Ollama (Local Models)</strong>
-              <button class="btn btn-secondary btn-sm" id="btn-test-ollama">Test Connection</button>
+          <!-- Terminal Section in General -->
+          <div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 8px;">Terminal</div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Terminal Command Auto Execution</span>
+                <span class="settings-setting-caption">Controls whether terminal commands require your approval before running.</span>
+              </div>
+              <div>
+                <select class="select-input" id="cfg-terminal-auto-exec" style="width: 170px;">
+                  <option value="allow_trusted">Always Allow (Trusted)</option>
+                  <option value="request_review" selected>Request Review</option>
+                  <option value="strict">Strict Confirmation</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <label class="form-label">Endpoint URL</label>
-              <input type="text" class="input-text" id="cfg-ollama-url" value="http://localhost:11434" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Default Model</label>
-              <input type="text" class="input-text" id="cfg-ollama-model" value="llama3" />
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Enable Shell Integration</span>
+                <span class="settings-setting-caption">When enabled, Agent will use IDE's shell integration to detect and report terminal command execution.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-shell-integration" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Tab 2: Appearance -->
-        <div id="spane-appearance" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
-          <div class="form-group">
-            <label class="form-label">IDE Color Theme</label>
+        <!-- 2. MODELS & TOKENS PANE (with embedded Token Counter) -->
+        <div id="spane-models" class="settings-pane" style="display: none; flex-direction: column;">
+          <div class="settings-section-title">Models & Token Accounting</div>
+          <div class="settings-section-desc">Manage AI model providers, API credentials, and observe live real-time token consumption metrics.</div>
+
+          <!-- Embedded Token Counter Container -->
+          <div style="margin-bottom: 24px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px;">
+              <div>
+                <strong style="font-size: 13px; color: var(--text-primary-bright);">Live Token Usage Dashboard</strong>
+                <div style="font-size: 11px; color: var(--text-muted);">Real-time token counting across all models and local sessions</div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-sm" id="btn-refresh-settings-usage">↻ Refresh</button>
+                <button class="btn btn-secondary btn-sm" id="btn-clear-settings-usage" style="color: var(--accent-red);">Reset History</button>
+              </div>
+            </div>
+            <div id="settings-token-usage-container">
+              <!-- Dynamically populated by usage.js -->
+            </div>
+          </div>
+
+          <!-- Provider Configurations -->
+          <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 10px;">Model Providers & Credentials</div>
+          
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <!-- Anthropic -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>Anthropic Claude</strong>
+                <button class="btn btn-secondary btn-sm" id="btn-test-anthropic">Test Connection</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label class="form-label">API Key</label>
+                <input type="password" class="input-text" id="cfg-anthropic-key" placeholder="sk-ant-api..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Model</label>
+                <input type="text" class="input-text" id="cfg-anthropic-model" value="claude-3-7-sonnet-20250219" />
+              </div>
+            </div>
+
+            <!-- OpenAI -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>OpenAI</strong>
+                <button class="btn btn-secondary btn-sm" id="btn-test-openai">Test Connection</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label class="form-label">API Key</label>
+                <input type="password" class="input-text" id="cfg-openai-key" placeholder="sk-..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Model</label>
+                <input type="text" class="input-text" id="cfg-openai-model" value="gpt-4o" />
+              </div>
+            </div>
+
+            <!-- Google Gemini -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>Google Gemini</strong>
+                <button class="btn btn-secondary btn-sm" id="btn-test-gemini">Test Connection</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label class="form-label">API Key</label>
+                <input type="password" class="input-text" id="cfg-gemini-key" placeholder="AIzaSy..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Model</label>
+                <input type="text" class="input-text" id="cfg-gemini-model" value="gemini-2.0-flash" />
+              </div>
+            </div>
+
+            <!-- Ollama (Local) -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>Ollama (Local Models)</strong>
+                <button class="btn btn-secondary btn-sm" id="btn-test-ollama">Test Connection</button>
+              </div>
+              <div class="form-group" style="margin-bottom: 6px;">
+                <label class="form-label">Endpoint URL</label>
+                <input type="text" class="input-text" id="cfg-ollama-url" value="http://localhost:11434" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Default Model</label>
+                <input type="text" class="input-text" id="cfg-ollama-model" value="llama3" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. APPEARANCE PANE -->
+        <div id="spane-appearance" class="settings-pane" style="display: none; flex-direction: column;">
+          <div class="settings-section-title">Appearance</div>
+          <div class="settings-section-desc">Personalize colors, contrast, editor typography, and layout.</div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Color Theme</label>
             <select class="select-input" id="cfg-theme-select">
               <option value="orbit-dark">Orbit Dark (Antigravity / VS Code Charcoal)</option>
               <option value="nebula-light">Nebula Light (Clean Accessible Slate)</option>
               <option value="midnight-blue">Midnight Blue (Cosmic Deep Navy)</option>
             </select>
           </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Editor Font Size (px)</label>
+            <input type="number" class="input-text" id="cfg-font-size" value="13" min="10" max="24" />
+          </div>
+
+          <div class="settings-setting-row">
+            <div class="settings-setting-info">
+              <span class="settings-setting-label">Editor Minimap</span>
+              <span class="settings-setting-caption">Display high-level code minimap overview on the right edge of editor.</span>
+            </div>
+            <div>
+              <label class="settings-toggle-switch">
+                <input type="checkbox" id="cfg-editor-minimap" checked>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
 
-        <!-- Tab 3: Agent Policy -->
-        <div id="spane-agent" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
-          <div class="form-group">
-            <label class="form-label">Default Operating Mode on Launch</label>
+        <!-- 4. AGENT & SECURITY PANE (1-time workspace trust) -->
+        <div id="spane-agent" class="settings-pane" style="display: none; flex-direction: column;">
+          <div class="settings-section-title">Agent Policy & Workspace Trust</div>
+          <div class="settings-section-desc">Control autonomous execution limits, workspace trust, and permission workflows.</div>
+
+          <div style="background: rgba(57,197,187,0.06); border: 1px solid var(--accent-cyan); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 18px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: var(--accent-cyan); font-size: 13px;">1-Time Workspace Trust Permission</strong>
+                <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">
+                  Grant trusted access to this folder so Git actions, file tree refreshes, and terminal tasks run smoothly without repetitive authorization prompts or flashing windows.
+                </div>
+              </div>
+              <label class="settings-toggle-switch" style="margin-left: 14px;">
+                <input type="checkbox" id="cfg-trust-workspace" checked>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Operating Mode Preset</label>
             <select class="select-input" id="cfg-default-mode">
-              <option value="dev">Dev Mode (Balanced: routine auto, approval for edits/commands)</option>
-              <option value="agent_pro">Agent Pro Mode (High autonomy within workspace)</option>
-              <option value="user">User Mode (Explicit approval for every read/write/cmd)</option>
+              <option value="agent_pro">Agent Pro Mode (Full autonomy within workspace)</option>
+              <option value="dev" selected>Dev Mode (Balanced: routine auto, approval for edits/commands)</option>
+              <option value="user">User Mode (Explicit approval for every tool invocation)</option>
             </select>
           </div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Max Autonomous Agent Steps per Turn</label>
+            <input type="number" class="input-text" id="cfg-max-iterations" value="25" min="1" max="100" />
+          </div>
+
+          <div class="settings-setting-row">
+            <div class="settings-setting-info">
+              <span class="settings-setting-label">Automatic Workspace File Indexing</span>
+              <span class="settings-setting-caption">Continuously keep local semantic and structural index fresh.</span>
+            </div>
+            <div>
+              <label class="settings-toggle-switch">
+                <input type="checkbox" id="cfg-auto-index" checked>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
 
-        <!-- Tab 4: Import / Export -->
-        <div id="spane-importexport" class="settings-pane" style="display: none; flex-direction: column; gap: 14px;">
-          <div style="font-size: 12px; color: var(--text-secondary);">
-            Export your settings to a portable JSON file. Sensitive API keys are never included.
+        <!-- 5. TERMINAL & SHELL PANE -->
+        <div id="spane-terminal" class="settings-pane" style="display: none; flex-direction: column;">
+          <div class="settings-section-title">Terminal & Shell Configuration</div>
+          <div class="settings-section-desc">Manage embedded terminal emulation, Windows process isolation, and background command execution.</div>
+
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label">Default Terminal Shell</label>
+            <select class="select-input" id="cfg-shell-type">
+              <option value="powershell" selected>Windows PowerShell</option>
+              <option value="cmd">Command Prompt (cmd.exe)</option>
+              <option value="bash">Git Bash / WSL</option>
+            </select>
           </div>
-          <div style="display: flex; gap: 8px;">
+
+          <div class="settings-setting-row">
+            <div class="settings-setting-info">
+              <span class="settings-setting-label">Silent Background Execution (CREATE_NO_WINDOW)</span>
+              <span class="settings-setting-caption">Prevents external black CMD/PowerShell console windows from flashing when Git or tools execute.</span>
+            </div>
+            <div>
+              <label class="settings-toggle-switch">
+                <input type="checkbox" id="cfg-silent-terminal" checked disabled>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="settings-setting-row">
+            <div class="settings-setting-info">
+              <span class="settings-setting-label">Auto Reconnect Shell Sessions</span>
+              <span class="settings-setting-caption">Automatically restore backend shell process if terminated unexpectedly.</span>
+            </div>
+            <div>
+              <label class="settings-toggle-switch">
+                <input type="checkbox" id="cfg-terminal-reconnect" checked>
+                <span class="settings-toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. IMPORT / EXPORT PANE -->
+        <div id="spane-importexport" class="settings-pane" style="display: none; flex-direction: column;">
+          <div class="settings-section-title">Import & Export Configuration</div>
+          <div class="settings-section-desc">Backup and transfer your Orbital X IDE setup across machines. Sensitive API keys are omitted.</div>
+
+          <div style="display: flex; gap: 12px; margin-top: 10px;">
             <button class="btn btn-secondary" id="btn-export-settings">Export Settings JSON</button>
             <button class="btn btn-secondary" id="btn-import-settings">Import Settings JSON</button>
           </div>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" id="btn-save-settings">Save & Close</button>
+
+        <!-- Settings Bottom Bar with Save & Close -->
+        <div style="margin-top: auto; padding-top: 20px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; color: var(--text-muted);" id="settings-save-status">Settings are stored locally in your app profile.</span>
+          <button class="btn btn-primary" id="btn-save-settings" style="padding: 6px 18px;">Save & Close</button>
+        </div>
       </div>
     </div>
   </div>
@@ -798,6 +1065,26 @@
         </div>
         <button class="btn btn-danger" id="btn-reject-diff">Reject Changes</button>
         <button class="btn btn-primary" id="btn-accept-diff">Accept & Apply Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Token Usage Dashboard -->
+  <div class="modal-backdrop" id="modal-usage-dashboard" style="display: none;">
+    <div class="modal-container" style="max-width: 760px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 600; font-size: 14px;">Token Usage & Analytics</span>
+          <span style="font-size: 10px; color: var(--accent-cyan); background: var(--bg-surface); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); font-weight: 600;">ACTIVE MONITOR</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-usage" title="Refresh Usage">Refresh</button>
+          <button class="btn btn-danger btn-sm" id="btn-clear-usage" title="Reset History">Reset</button>
+          <button class="icon-btn" id="btn-close-usage-dashboard">✕</button>
+        </div>
+      </div>
+      <div class="modal-body" id="usage-dashboard-content" style="padding: 16px; overflow-y: auto; max-height: 70vh;">
+        <!-- Dynamically rendered by usage.js -->
       </div>
     </div>
   </div>

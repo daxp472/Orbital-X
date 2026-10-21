@@ -247,6 +247,11 @@ impl WorkspaceService {
         Ok(diff)
     }
 
+    pub fn create_directory(&self, path_str: &str) -> Result<(), String> {
+        let full_path = self.resolve_and_validate(path_str)?;
+        fs::create_dir_all(&full_path).map_err(|e| e.to_string())
+    }
+
     pub fn compute_diff(&self, path: &str, old_text: &str, new_text: &str) -> FileDiff {
         let diff = similar::TextDiff::from_lines(old_text, new_text);
         let mut unified = String::new();

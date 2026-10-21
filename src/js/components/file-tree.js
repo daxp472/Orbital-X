@@ -146,3 +146,58 @@ function buildNodeElement(node, parentElem, indentLevel) {
     }
   });
 }
+
+export function initFileTreeHeaderActions() {
+  // 1. New File Action
+  document.getElementById('btn-new-file')?.addEventListener('click', async () => {
+    if (!state.workspace.rootPath) {
+      alert("Please open a workspace folder first to create files.");
+      return;
+    }
+    const relPath = prompt("Enter file name or relative path (e.g. script.js or src/module.py):");
+    if (!relPath || !relPath.trim()) return;
+
+    try {
+      await invoke('save_file', {
+        path: relPath.trim(),
+        content: '',
+        description: 'Created via Explorer New File'
+      });
+      await refreshFileTree();
+      const fileData = await invoke('read_file', { path: relPath.trim() });
+      openFileInTab(fileData);
+    } catch (e) {
+      alert("Failed to create file: " + e);
+    }
+  });
+
+  // 2. New Folder Action
+  document.getElementById('btn-new-folder')?.addEventListener('click', async () => {
+    if (!state.workspace.rootPath) {
+      alert("Please open a workspace folder first to create folders.");
+      return;
+    }
+    const folderPath = prompt("Enter new folder path (e.g. assets or components/ui):");
+    if (!folderPath || !folderPath.trim()) return;
+
+    try {
+      await invoke('create_directory', { path: folderPath.trim() });
+      await refreshFileTree();
+    } catch (e) {
+      alert("Failed to create folder: " + e);
+    }
+  });
+
+  // 3. Refresh Action
+  document.getElementById('btn-refresh-files')?.addEventListener('click', () => {
+    refreshFileTree();
+  });
+
+  // 4. Collapse All Folders Action
+  document.getElementById('btn-collapse-folders')?.addEventListener('click', () => {
+    const container = document.getElementById('file-tree-container');
+    if (!container) return;
+    container.querySelectorAll('div > div[style*="display: block"]').forEach(el => el.style.display = 'none');
+    container.querySelectorAll('.tree-arrow.expanded').forEach(el => el.classList.remove('expanded'));
+  });
+}
