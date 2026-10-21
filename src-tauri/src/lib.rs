@@ -292,6 +292,13 @@ async fn execute_tool(
             let res = ws.read_file(path)?;
             Ok(serde_json::to_value(res).unwrap_or_default())
         }
+        "read_file_lines" => {
+            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let start = arguments.get("start_line").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
+            let end = arguments.get("end_line").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            ws.read_file_lines(path, start, end)
+        }
         "write_file" => {
             let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
             let content = arguments.get("content").and_then(|c| c.as_str()).ok_or("Missing content")?;
@@ -301,16 +308,45 @@ async fn execute_tool(
             let diff = ws.write_file(path, content, desc)?;
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
+        "patch_file" => {
+            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let start = arguments.get("start_line").and_then(|v| v.as_u64()).ok_or("Missing start_line")? as usize;
+            let end = arguments.get("end_line").and_then(|v| v.as_u64()).ok_or("Missing end_line")? as usize;
+            let new_content = arguments.get("new_content").and_then(|c| c.as_str()).ok_or("Missing new_content")?;
+            let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent patch");
+            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let diff = ws.patch_file(path, start, end, new_content, desc)?;
+            Ok(serde_json::to_value(diff).unwrap_or_default())
+        }
+        "delete_file" => {
+            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let msg = ws.delete_file(path)?;
+            Ok(serde_json::json!({ "success": true, "message": msg }))
+        }
+        "rename_file" => {
+            let from = arguments.get("from").and_then(|p| p.as_str()).ok_or("Missing from")?;
+            let to = arguments.get("to").and_then(|p| p.as_str()).ok_or("Missing to")?;
+            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let msg = ws.rename_file(from, to)?;
+            Ok(serde_json::json!({ "success": true, "message": msg }))
+        }
+        "create_directory" => {
+            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            ws.create_directory(path)?;
+            Ok(serde_json::json!({ "success": true, "path": path }))
+        }
         "search_files" => {
             let query = arguments.get("query").and_then(|q| q.as_str()).ok_or("Missing query")?;
             let max_res = arguments.get("max_results").and_then(|m| m.as_u64()).unwrap_or(20) as usize;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-            let results = ws.search_files(query, max_res)?;
+            let results = ws.search_files(query, max_res.min(50))?;
             Ok(serde_json::json!(results))
         }
         "run_command" => {
             let cmd = arguments.get("command").and_then(|c| c.as_str()).ok_or("Missing command")?;
-            let timeout = arguments.get("timeout_seconds").and_then(|t| t.as_u64()).unwrap_or(30);
+            let timeout = arguments.get("timeout_seconds").and_then(|t| t.as_u64()).unwrap_or(60); // default 60s
 
             let cwd = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -339,8 +375,76 @@ async fn execute_tool(
                 };
                 (chosen_cmd.to_string(), cwd_str)
             };
-            let res = TerminalService::run_command(&cmd, &cwd, 45).await?;
+            let res = TerminalService::run_command(&cmd, &cwd, 120).await?;
             Ok(serde_json::to_value(res).unwrap_or_default())
+        }
+        "get_diagnostics" => {
+            let forced_tool = arguments.get("tool").and_then(|t| t.as_str()).unwrap_or("").to_string();
+            let (cmd, cwd) = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                let root = ws.get_root().ok_or("No workspace open")?;
+                let cwd_str = root.to_string_lossy().to_string();
+
+                let chosen = match forced_tool.as_str() {
+                    "cargo_check" => "cargo check 2>&1",
+                    "tsc" => "npx tsc --noEmit 2>&1",
+                    "eslint" => "npx eslint . --max-warnings=0 2>&1",
+                    "pylint" => "python -m pylint . 2>&1",
+                    _ => {
+                        if root.join("Cargo.toml").exists() { "cargo check 2>&1" }
+                        else if root.join("tsconfig.json").exists() { "npx tsc --noEmit 2>&1" }
+                        else if root.join(".eslintrc.json").exists() || root.join(".eslintrc.js").exists() { "npx eslint . --max-warnings=20 2>&1" }
+                        else if root.join("requirements.txt").exists() || root.join("setup.py").exists() { "python -m pylint . --errors-only 2>&1" }
+                        else { "echo No recognized diagnostic tool found" }
+                    }
+                };
+                (chosen.to_string(), cwd_str)
+            };
+            let res = TerminalService::run_command(&cmd, &cwd, 60).await?;
+            Ok(serde_json::json!({
+                "success": res.success,
+                "output": format!("{}{}", res.stdout, res.stderr),
+                "exit_code": res.exit_code
+            }))
+        }
+        "git_status" => {
+            let cwd = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
+            };
+            let res = TerminalService::run_command("git status --short --branch", &cwd, 10).await?;
+            Ok(serde_json::json!({ "output": res.stdout, "success": res.success }))
+        }
+        "git_commit" => {
+            let message = arguments.get("message").and_then(|m| m.as_str()).ok_or("Missing message")?;
+            let cwd = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
+            };
+            let add_res = TerminalService::run_command("git add .", &cwd, 15).await?;
+            if !add_res.success {
+                return Ok(serde_json::json!({ "success": false, "error": add_res.stderr }));
+            }
+            let escaped = message.replace('"', "\\\"");
+            let commit_res = TerminalService::run_command(&format!("git commit -m \"{}\"", escaped), &cwd, 15).await?;
+            Ok(serde_json::json!({
+                "success": commit_res.success,
+                "output": commit_res.stdout,
+                "error": commit_res.stderr
+            }))
+        }
+        "git_diff" => {
+            let path = arguments.get("path").and_then(|p| p.as_str());
+            let cwd = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
+            };
+            let cmd = match path {
+                Some(p) => format!("git diff \"{}\"", p),
+                None => "git diff".to_string(),
+            };
+            let res = TerminalService::run_command(&cmd, &cwd, 15).await?;
+            Ok(serde_json::json!({ "diff": res.stdout, "success": res.success }))
         }
         "undo_agent_change" => {
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;

@@ -54,9 +54,10 @@ impl PolicyEngine {
         match mode {
             AgentMode::AgentPro => {
                 match tool_name {
-                    // In Pro Mode, reading, searching, and workspace file editing/patching are autonomous
-                    "workspace_info" | "list_files" | "search_files" | "read_file" | "read_file_range"
-                    | "get_project_map" | "search_context" | "search_project_memory" | "get_diff" => {
+                    // Reads and searches are fully autonomous in Pro Mode
+                    "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "read_file_lines" | "get_project_map" | "search_context"
+                    | "search_project_memory" | "git_status" | "git_diff" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -64,8 +65,10 @@ impl PolicyEngine {
                             reason: "Autonomous read/search in Agent Pro Mode".into(),
                         }
                     }
-                    "create_file" | "write_file" | "apply_patch" | "undo_agent_change"
-                    | "save_project_memory" | "delete_project_memory" => {
+                    // File writes, patches, directory ops are autonomous
+                    "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "undo_agent_change" | "save_project_memory" | "delete_project_memory"
+                    | "create_directory" | "rename_file" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -73,38 +76,51 @@ impl PolicyEngine {
                             reason: "Autonomous workspace edit in Agent Pro Mode".into(),
                         }
                     }
-                    "run_command" | "run_tests" | "run_build" | "run_linter" => {
-                        // Low risk commands like test/build/lint can run automatically if inside workspace
-                        let is_safe_script = target.starts_with("cargo test")
-                            || target.starts_with("cargo check")
+                    // Diagnostics and safe commands are autonomous
+                    "get_diagnostics" | "run_tests" => {
+                        PolicyDecision {
+                            allowed: true,
+                            requires_approval: false,
+                            risk: ToolRisk::Low,
+                            reason: "Diagnostic/test command autonomous in Pro Mode".into(),
+                        }
+                    }
+                    "run_command" | "run_build" | "run_linter" => {
+                        // Low risk commands like test/build/lint can run automatically
+                        let is_safe_script = target.starts_with("cargo")
                             || target.starts_with("npm test")
-                            || target.starts_with("npm run build")
+                            || target.starts_with("npm run")
+                            || target.starts_with("npx")
                             || target.starts_with("node ")
                             || target.starts_with("pytest")
                             || target.starts_with("git status")
-                            || target.starts_with("git diff");
+                            || target.starts_with("git diff")
+                            || target.starts_with("git log")
+                            || target.starts_with("mkdir")
+                            || target.starts_with("echo");
                         if is_safe_script {
                             PolicyDecision {
                                 allowed: true,
                                 requires_approval: false,
                                 risk: ToolRisk::Low,
-                                reason: "Allowed validation command in Agent Pro Mode".into(),
+                                reason: "Allowed build/test command in Agent Pro Mode".into(),
                             }
                         } else {
                             PolicyDecision {
                                 allowed: true,
                                 requires_approval: true,
                                 risk: ToolRisk::Medium,
-                                reason: "Unrecognized command in Agent Pro Mode requires verification".into(),
+                                reason: "Unknown command requires verification in Agent Pro Mode".into(),
                             }
                         }
                     }
-                    "git_push" | "git_commit" | "delete_path" => {
+                    // Destructive / high-impact ops require approval even in Pro Mode
+                    "delete_file" | "git_commit" | "git_push" | "delete_path" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,
                             risk: ToolRisk::High,
-                            reason: "High impact operations require approval even in Pro Mode".into(),
+                            reason: "High impact operation requires approval even in Pro Mode".into(),
                         }
                     }
                     _ => PolicyDecision {
@@ -118,10 +134,11 @@ impl PolicyEngine {
 
             AgentMode::Dev => {
                 match tool_name {
-                    // In Dev Mode: reads and searches are automatic
-                    "workspace_info" | "list_files" | "search_files" | "read_file" | "read_file_range"
-                    | "get_project_map" | "search_context" | "search_project_memory" | "get_diff"
-                    | "git_status" | "git_diff" | "git_log" => {
+                    // Reads and searches are automatic in Dev Mode
+                    "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "read_file_lines" | "get_project_map" | "search_context"
+                    | "search_project_memory" | "git_status" | "git_diff" | "git_log"
+                    | "get_diagnostics" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -129,8 +146,9 @@ impl PolicyEngine {
                             reason: "Read-only inspection permitted in Dev Mode".into(),
                         }
                     }
-                    // File creation and edits show diff and require approval card unless pre-approved
-                    "create_file" | "write_file" | "apply_patch" | "undo_agent_change" => {
+                    // File edits require approval card
+                    "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "undo_agent_change" | "rename_file" | "create_directory" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,
@@ -138,8 +156,9 @@ impl PolicyEngine {
                             reason: "File modifications require user approval in Dev Mode".into(),
                         }
                     }
-                    // Commands, deletions and commits require approval
-                    "run_command" | "run_tests" | "run_build" | "run_linter" | "git_commit" | "git_push" | "delete_path" => {
+                    // Commands, deletions, and git commits require approval
+                    "run_command" | "run_tests" | "run_build" | "run_linter"
+                    | "git_commit" | "git_push" | "delete_file" | "delete_path" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,
@@ -158,14 +177,16 @@ impl PolicyEngine {
 
             AgentMode::User => {
                 match tool_name {
-                    // In User Mode: EVERY action requires explicit confirmation
+                    // In User Mode: workspace_info is always free
                     "workspace_info" => PolicyDecision {
                         allowed: true,
                         requires_approval: false,
                         risk: ToolRisk::Low,
-                        reason: "Workspace info inspectable".into(),
+                        reason: "Workspace info is always readable".into(),
                     },
-                    "list_files" | "search_files" | "read_file" | "read_file_range" => {
+                    // Reads need confirmation
+                    "list_files" | "search_files" | "read_file" | "read_file_lines"
+                    | "search_project_memory" | "git_status" | "git_diff" | "get_diagnostics" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,
@@ -173,7 +194,9 @@ impl PolicyEngine {
                             reason: "User Mode requires approval before reading workspace files".into(),
                         }
                     }
-                    "create_file" | "write_file" | "apply_patch" | "delete_path" => {
+                    // File edits require confirmation
+                    "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "create_directory" | "rename_file" | "delete_file" | "delete_path" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,

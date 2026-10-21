@@ -252,6 +252,116 @@ impl WorkspaceService {
         fs::create_dir_all(&full_path).map_err(|e| e.to_string())
     }
 
+    /// Delete a file from the workspace. Journals the deletion for undo.
+    pub fn delete_file(&mut self, path_str: &str) -> Result<String, String> {
+        let full_path = self.resolve_and_validate(path_str)?;
+        if !full_path.exists() {
+            return Err(format!("File not found: {}", path_str));
+        }
+        if full_path.is_dir() {
+            return Err("Use delete_file only for files, not directories.".into());
+        }
+        let old_content = fs::read_to_string(&full_path).unwrap_or_default();
+        let entry = AgentChangeEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            path: full_path.to_string_lossy().replace('\\', "/"),
+            before_content: Some(old_content),
+            after_content: String::new(),
+            description: format!("Deleted file: {}", path_str),
+        };
+        self.change_journal.push(entry);
+        fs::remove_file(&full_path).map_err(|e| e.to_string())?;
+        Ok(format!("Deleted {}", path_str))
+    }
+
+    /// Rename or move a file within the workspace.
+    pub fn rename_file(&mut self, from_str: &str, to_str: &str) -> Result<String, String> {
+        let from_path = self.resolve_and_validate(from_str)?;
+        let to_path = self.resolve_and_validate(to_str)?;
+        if !from_path.exists() {
+            return Err(format!("Source not found: {}", from_str));
+        }
+        if let Some(parent) = to_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        fs::rename(&from_path, &to_path).map_err(|e| e.to_string())?;
+        Ok(format!("Renamed {} -> {}", from_str, to_str))
+    }
+
+    /// Read a specific line range from a file (1-indexed, inclusive).
+    /// Returns lines with line numbers prepended — saves context when working on large files.
+    pub fn read_file_lines(&self, path_str: &str, start_line: usize, end_line: usize) -> Result<serde_json::Value, String> {
+        let full_path = self.resolve_and_validate(path_str)?;
+        let root = self.root.as_ref().unwrap();
+        let rel = full_path.strip_prefix(root).unwrap_or(&full_path).to_string_lossy().replace('\\', "/");
+
+        let content = fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
+        let total_lines = content.lines().count();
+        let start = start_line.saturating_sub(1); // 0-indexed
+        let end = end_line.min(total_lines);
+
+        let numbered: String = content
+            .lines()
+            .enumerate()
+            .skip(start)
+            .take(end.saturating_sub(start))
+            .map(|(i, line)| format!("{}: {}", i + 1, line))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        Ok(serde_json::json!({
+            "file": rel,
+            "start_line": start + 1,
+            "end_line": end,
+            "total_lines": total_lines,
+            "content": numbered
+        }))
+    }
+
+    /// Apply a targeted patch: replace lines [start_line..end_line] with new_content.
+    /// This avoids full-file rewrites on large files — critical for working on real codebases.
+    pub fn patch_file(&mut self, path_str: &str, start_line: usize, end_line: usize, new_content: &str, description: &str) -> Result<FileDiff, String> {
+        let full_path = self.resolve_and_validate(path_str)?;
+        let old_content = if full_path.exists() {
+            fs::read_to_string(&full_path).map_err(|e| e.to_string())?
+        } else {
+            return Err(format!("File not found for patching: {}", path_str));
+        };
+
+        let mut lines: Vec<&str> = old_content.lines().collect();
+        let total = lines.len();
+        let start_idx = start_line.saturating_sub(1).min(total);
+        let end_idx = end_line.min(total);
+
+        let new_lines: Vec<&str> = new_content.lines().collect();
+        let _ = lines.drain(start_idx..end_idx);
+        for (i, l) in new_lines.iter().enumerate() {
+            lines.insert(start_idx + i, l);
+        }
+
+        // Preserve trailing newline
+        let mut final_content = lines.join("\n");
+        if old_content.ends_with('\n') {
+            final_content.push('\n');
+        }
+
+        let diff = self.compute_diff(path_str, &old_content, &final_content);
+
+        let entry = AgentChangeEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            path: full_path.to_string_lossy().replace('\\', "/"),
+            before_content: Some(old_content),
+            after_content: final_content.clone(),
+            description: description.to_string(),
+        };
+        self.change_journal.push(entry);
+
+        fs::write(&full_path, &final_content).map_err(|e| e.to_string())?;
+        Ok(diff)
+    }
+
     pub fn compute_diff(&self, path: &str, old_text: &str, new_text: &str) -> FileDiff {
         let diff = similar::TextDiff::from_lines(old_text, new_text);
         let mut unified = String::new();
