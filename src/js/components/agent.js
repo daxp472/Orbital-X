@@ -185,63 +185,82 @@ async function handleSend() {
   }
 }
 
+// Maximum conversation history turns kept in context for local models (saves tokens)
+const LOCAL_MODEL_MAX_TURNS = 20;
+
+// Slide conversation window to avoid blowing context on local models
+function buildContextWindow(provider) {
+  const conv = state.conversation;
+  if (provider !== 'ollama' || conv.length <= LOCAL_MODEL_MAX_TURNS) {
+    return conv;
+  }
+  // Always keep first user message for task reference, then last N turns
+  const firstUser = conv.find(m => m.role === 'user');
+  const recent = conv.slice(-(LOCAL_MODEL_MAX_TURNS));
+  // Avoid duplicating firstUser if already in recent window
+  if (firstUser && recent[0] !== firstUser) {
+    return [firstUser, ...recent];
+  }
+  return recent;
+}
+
 async function runAgentLoop(initialUserPrompt) {
   let iteration = 0;
-  const maxIterations = 25;
+  const maxIterations = 30;
   let hasSavedMemoryThisTurn = false;
+  let lastAssistantContent = '';
+  let noToolStallCount = 0; // Counts consecutive turns with content but no tools
 
-  // 1. Automated Context Management: Load durable project memories
+  // 1. Load durable project memories (brief, token-efficient format)
   let memoryContext = '';
   try {
     const mems = await invoke('list_memories');
     if (mems && mems.length > 0) {
-      memoryContext = '\n\n## Durable Project Knowledge & Architecture Memory:\n' +
-        mems.map(m => `• [${m.category.toUpperCase()}] ${m.title}:\n  ${m.content}`).join('\n');
+      // Cap to 5 most recent memories to conserve local model context
+      const recent = mems.slice(-5);
+      memoryContext = '\n\n## Project Memory:\n' +
+        recent.map(m => `• ${m.title}: ${m.content.substring(0, 120)}`).join('\n');
     }
   } catch (e) {
-    console.warn("Could not load memories for context:", e);
+    console.warn("Could not load memories:", e);
   }
 
-  // 2. Automated Context Management: Focused editor tab context
+  // 2. Active editor context (file path only, not full content)
   let activeEditorContext = '';
   const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
   if (activeTab) {
-    activeEditorContext = `\n\n## Focused Editor Context:\nActive file: ${activeTab.path || activeTab.name}`;
+    activeEditorContext = `\nActive file: ${activeTab.path || activeTab.name}`;
   }
 
-  // System instructions including current mode constraints and automatic memory management
-  const systemPrompt = `You are Orbital X, an autonomous, memory-conscious desktop AI pair programmer inspired by Cursor and Antigravity.
-Current Operating Mode: ${state.agentMode.toUpperCase()}.
-Workspace Root: ${state.workspace.rootPath || "No open workspace"}.${activeEditorContext}${memoryContext}
+  const provider = state.ai.provider;
+  const model = state.ai.model || state.ai.defaultModels[provider];
+  const apiKey = state.ai.keys[provider] || '';
+  const baseUrl = provider === 'ollama' ? state.ai.endpoint : null;
 
-CRITICAL AGENTIC ACTION DIRECTIVES:
-1. AUTONOMOUS EXECUTION: You are equipped with real workspace execution tools. When the user asks to build, create, modify, fix, or run code or entire applications (e.g. create a full React app, component, or script):
-   - You MUST PROACTIVELY CALL TOOLS to do the work directly!
-   - DO NOT merely write markdown instructions or bash snippets telling the user to create folders or files manually.
-   - Use 'run_command' (e.g. mkdir, npm init, git) and 'write_file' to create all files with full, production-ready implementation code.
-2. CONTINUOUS LOOPING: Do not stop at explaining. After each tool execution, you will receive the tool result. Continue calling tools iteratively until all files are written and the application is complete.
-3. CONTEXT & MEMORY: Use the workspace files and project memories naturally to guide architecture decisions. When key architecture conventions or entrypoints are established, use 'save_project_memory' to remember them.
-4. MODE POLICY:
-   - In Agent Pro Mode: You have full autonomy to read/edit files and run commands.
-   - In Dev Mode: Read operations are automatic; file writes and terminal commands will prompt user approval.
-   - In User Mode: Every action requires explicit user approval.
-Always take immediate action with your tools to fulfill user requests!`;
+  // System prompt — kept concise for local model efficiency
+  const systemPrompt = `You are Orbital X, an autonomous AI coding agent.
+Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}
+
+RULES:
+1. ALWAYS call tools to perform actions. NEVER explain in markdown without calling tools first.
+2. After a tool returns a result, immediately call the next required tool. Keep looping until the task is done.
+3. Use write_file to create or edit files. Use run_command for shell commands (npm, mkdir, git, etc).
+4. If a tool call fails, analyze the error and try a corrected approach. Do not stop.
+5. Only produce a final plain-text summary AFTER all tools have been called and the task is complete.
+6. In Agent Pro mode: full autonomy. Dev mode: writes/runs need approval. User mode: all actions need approval.
+DO NOT narrate or explain steps — execute them directly with tools.`;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
 
-    const provider = state.ai.provider;
-    const model = state.ai.model || state.ai.defaultModels[provider];
-    const apiKey = state.ai.keys[provider] || '';
-    const baseUrl = provider === 'ollama' ? state.ai.endpoint : null;
+    // Slide context window for local models to avoid OOM/timeout
+    const contextWindow = buildContextWindow(provider);
 
-    // Build payload messages
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...state.conversation,
+      ...contextWindow,
     ];
 
-    // Show thinking indicator
     const spinnerId = appendThinkingIndicator();
 
     let resp;
@@ -253,19 +272,25 @@ Always take immediate action with your tools to fulfill user requests!`;
         baseUrl,
         messages,
       });
-      // Synchronize token usage counter in status bar
       import('./usage.js').then(m => m.loadAndRenderUsage(false));
+    } catch (err) {
+      removeThinkingIndicator(spinnerId);
+      // Transient error — push error context and retry once
+      console.error('Agent dispatch error (will retry):', err);
+      const errMsg = `Tool dispatch failed: ${err}. Please retry the last action.`;
+      state.conversation.push({ role: 'user', content: errMsg });
+      appendTimelineCard('assistant', `⚠️ Retrying after error: ${err}`);
+      continue;
     } finally {
       removeThinkingIndicator(spinnerId);
     }
 
-    let lastAssistantContent = '';
-    if (resp.content && resp.content.trim()) {
-      lastAssistantContent = resp.content;
+    const currentContent = (resp.content || '').trim();
+    if (currentContent) {
       appendTimelineCard('assistant', resp.content);
     }
 
-    // Always preserve assistant turn in conversation memory with any tool_calls
+    // Preserve assistant turn in conversation memory with tool_calls
     state.conversation.push({
       role: 'assistant',
       content: resp.content || '',
@@ -273,18 +298,38 @@ Always take immediate action with your tools to fulfill user requests!`;
     });
     import('./chat-sessions.js').then(m => m.saveActiveSession());
 
-    // Check if tools were proposed
     if (!resp.tool_calls || resp.tool_calls.length === 0) {
-      // 3. Automated Post-Turn Memory Extraction:
-      // If the turn discussed architecture or project structure and didn't explicitly call save_project_memory,
-      // automatically capture and persist high-level architecture into memory!
-      if (!hasSavedMemoryThisTurn && lastAssistantContent && initialUserPrompt) {
-        checkAndAutoExtractMemory(initialUserPrompt, lastAssistantContent);
+      // Model produced content but no tool calls
+      if (!currentContent) {
+        // Empty response — something went wrong, stop
+        break;
       }
-      break; // No further tools, agent is done
+
+      // Stall detection: if model keeps chatting without calling tools,
+      // nudge it to continue executing, up to 2 times
+      noToolStallCount++;
+      const isDoneSignal = /\b(task complete|all done|finished|done!|completed successfully|nothing more to do)\b/i.test(currentContent);
+      const isGenuinelyDone = isDoneSignal || noToolStallCount >= 3;
+
+      if (isGenuinelyDone) {
+        if (!hasSavedMemoryThisTurn && currentContent && initialUserPrompt) {
+          checkAndAutoExtractMemory(initialUserPrompt, currentContent);
+        }
+        break;
+      }
+
+      // Nudge: inject a continuation prompt so the model keeps executing
+      const nudge = 'Continue. Call the next required tool to make progress on the task. Do not explain — just act.';
+      state.conversation.push({ role: 'user', content: nudge });
+      lastAssistantContent = currentContent;
+      continue;
     }
 
-    // Process each tool call according to active policy mode
+    // Reset stall counter once tools start being called
+    noToolStallCount = 0;
+    lastAssistantContent = currentContent;
+
+    // Process each tool call
     for (const toolCall of resp.tool_calls) {
       if (!isLoopRunning) break;
 
@@ -293,15 +338,20 @@ Always take immediate action with your tools to fulfill user requests!`;
       }
 
       const toolResult = await processToolCallWithPolicy(toolCall);
+      const resultStr = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
 
       state.conversation.push({
         role: 'tool',
         tool_call_id: toolCall.id,
-        content: typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult),
+        content: resultStr,
       });
 
       import('./chat-sessions.js').then(m => m.saveActiveSession());
     }
+  }
+
+  if (iteration >= maxIterations) {
+    appendTimelineCard('assistant', `⚠️ Reached maximum iteration limit (${maxIterations}). The agent stopped to prevent infinite loops. You can send another message to continue.`);
   }
 }
 
@@ -631,17 +681,10 @@ function removeThinkingIndicator(id) {
 // ==========================================================================
 
 export function isComplexRequest(prompt) {
+  // Only trigger plan generation on the explicit /plan command
+  // All other requests go directly to the autonomous agent loop
   const p = prompt.trim().toLowerCase();
-  if (p.startsWith('/plan')) return true;
-  if (p.includes('plan') && (p.includes('create') || p.includes('generate') || p.includes('build') || p.includes('implement') || p.includes('proposal'))) return true;
-
-  const complexityKeywords = [
-    'refactor', 'architect', 'architecture', 'upgrade', 'redesign', 'multi-file',
-    'implement feature', 'add feature', 'build feature', 'migrate', 'database',
-    'new module', 'restructure', 'audit and fix', 'five major', 'complete overhaul'
-  ];
-
-  return complexityKeywords.some(kw => p.includes(kw));
+  return p.startsWith('/plan');
 }
 
 export async function generateAndPresentPlan(rawPrompt, revisionFeedback = null) {
