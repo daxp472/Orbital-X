@@ -1,6 +1,8 @@
 // ==========================================================================
-// Orbital X — Integrated Terminal Subsystem (terminal.js)
-// Real developer terminal modeled after VS Code, Antigravity, and Cursor.
+// Orbital X — Integrated Real Interactive Terminal Subsystem (terminal.js)
+// Modeled after VS Code, Antigravity, and Cursor integrated terminals.
+// Supports real interactive PowerShell shell processes, live output streaming,
+// persistent working directories, and multiple independent sessions.
 // ==========================================================================
 
 import { invoke } from '../services/tauri.js';
@@ -8,28 +10,60 @@ import { state } from '../state/store.js';
 
 let terminalInstances = [];
 let activeTerminalId = 1;
+let pollTimer = null;
 
 class TerminalSession {
   constructor(id, name = 'powershell') {
     this.id = id;
+    this.sessionId = `term_${id}_${Date.now()}`;
     this.name = name;
     this.cwd = state.workspace.rootPath || 'D:\\1work\\YT\\Orbital X';
     this.history = [];
     this.historyIndex = -1;
     this.buffer = '';
     this.isRunning = false;
+    this.isBackendConnected = false;
   }
 
-  getPromptText() {
-    return `PS ${this.cwd}> `;
+  async startBackendShell() {
+    try {
+      const res = await invoke('create_interactive_terminal', {
+        sessionId: this.sessionId,
+        name: this.name,
+        cwd: this.cwd,
+        shell: 'powershell',
+      });
+      if (res && res.id) {
+        this.sessionId = res.id;
+      }
+      this.isBackendConnected = true;
+      // Initial poll after short delay for prompt
+      setTimeout(() => pollActiveTerminalOutput(), 250);
+    } catch (e) {
+      console.warn(`[Terminal] Interactive shell spawn failed for session ${this.sessionId}:`, e);
+      this.isBackendConnected = false;
+    }
+  }
+
+  async closeBackendShell() {
+    if (this.isBackendConnected) {
+      try {
+        await invoke('close_interactive_terminal', { sessionId: this.sessionId });
+      } catch (e) {
+        console.warn(`[Terminal] Close session failed:`, e);
+      }
+      this.isBackendConnected = false;
+    }
   }
 }
 
 export function initTerminal() {
-  // Initialize with at least one active terminal instance
+  // Initialize first terminal session
   if (terminalInstances.length === 0) {
-    terminalInstances.push(new TerminalSession(1, 'powershell'));
+    const firstSession = new TerminalSession(1, 'powershell');
+    terminalInstances.push(firstSession);
     activeTerminalId = 1;
+    firstSession.startBackendShell();
   }
 
   const inputElem = document.getElementById('terminal-command-input');
@@ -37,6 +71,8 @@ export function initTerminal() {
   const clearBtn = document.getElementById('btn-clear-terminal');
   const collapseBtn = document.getElementById('btn-collapse-panel');
   const newTerminalBtn = document.getElementById('btn-new-terminal');
+  const splitTerminalBtn = document.getElementById('btn-split-terminal');
+  const sidebarNewBtn = document.getElementById('btn-sidebar-new-terminal');
   const bottomPanel = document.getElementById('bottom-panel');
 
   // Bottom panel tab switching
@@ -57,11 +93,12 @@ export function initTerminal() {
 
       if (target === 'terminal') {
         inputElem?.focus();
+        pollActiveTerminalOutput();
       }
     });
   });
 
-  // Enter to execute & ArrowUp/Down for command history
+  // Enter to execute & ArrowUp/Down for command history & Ctrl+C
   if (inputElem) {
     inputElem.addEventListener('keydown', (e) => {
       const active = getActiveSession();
@@ -92,8 +129,8 @@ export function initTerminal() {
           }
         }
       } else if (e.key === 'c' && e.ctrlKey) {
-        // Ctrl+C cancellation representation
-        appendTerminalText(`^C\n`);
+        // Send SIGINT / Ctrl+C to real backend shell process
+        sendInterruptSignal();
         inputElem.value = '';
       }
     });
@@ -109,9 +146,9 @@ export function initTerminal() {
     }
   });
 
-  newTerminalBtn?.addEventListener('click', () => {
-    createTerminalInstance();
-  });
+  newTerminalBtn?.addEventListener('click', () => createTerminalInstance());
+  splitTerminalBtn?.addEventListener('click', () => createTerminalInstance());
+  sidebarNewBtn?.addEventListener('click', () => createTerminalInstance());
 
   collapseBtn?.addEventListener('click', () => {
     bottomPanel?.classList.toggle('collapsed');
@@ -125,36 +162,46 @@ export function initTerminal() {
   // Validation Suite triggers
   document.getElementById('btn-run-all-tests')?.addEventListener('click', runValidationTests);
 
-  renderTerminalTabs();
+  renderTerminalSessionsList();
   renderActiveBuffer();
   updatePromptDisplay();
+
+  // Start continuous output polling loop
+  startOutputPolling();
 }
 
 export function getActiveSession() {
   return terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[0];
 }
 
-export function createTerminalInstance(name = 'powershell') {
+export async function createTerminalInstance(name = 'powershell') {
   const newId = terminalInstances.length > 0 ? Math.max(...terminalInstances.map(t => t.id)) + 1 : 1;
   const newSession = new TerminalSession(newId, name);
   terminalInstances.push(newSession);
+  await newSession.startBackendShell();
   switchTerminalInstance(newId);
-  renderTerminalTabs();
+  renderTerminalSessionsList();
 }
 
 export function switchTerminalInstance(id) {
   activeTerminalId = id;
-  renderTerminalTabs();
+  renderTerminalSessionsList();
   renderActiveBuffer();
   updatePromptDisplay();
   document.getElementById('terminal-command-input')?.focus();
+  pollActiveTerminalOutput();
 }
 
-export function closeTerminalInstance(id, event) {
+export async function closeTerminalInstance(id, event) {
   if (event) event.stopPropagation();
 
+  const targetSession = terminalInstances.find(t => t.id === id);
+  if (targetSession) {
+    await targetSession.closeBackendShell();
+  }
+
   if (terminalInstances.length <= 1) {
-    // If only one, clear it instead of deleting
+    // If only one, restart/clear it
     const session = terminalInstances[0];
     session.buffer = '';
     renderActiveBuffer();
@@ -166,29 +213,32 @@ export function closeTerminalInstance(id, event) {
     activeTerminalId = terminalInstances[0].id;
   }
 
-  renderTerminalTabs();
+  renderTerminalSessionsList();
   renderActiveBuffer();
   updatePromptDisplay();
 }
 
-function renderTerminalTabs() {
-  const container = document.getElementById('terminal-instance-tabs');
+function renderTerminalSessionsList() {
+  const container = document.getElementById('terminal-sessions-list');
   if (!container) return;
 
   container.innerHTML = '';
   terminalInstances.forEach(term => {
     const isActive = term.id === activeTerminalId;
-    const tabEl = document.createElement('div');
-    tabEl.className = `terminal-instance-pill ${isActive ? 'active' : ''}`;
-    tabEl.innerHTML = `
-      <span>${term.id}: ${term.name}</span>
-      <span class="terminal-close-btn" title="Kill Terminal">✕</span>
+    const itemEl = document.createElement('div');
+    itemEl.className = `terminal-session-item ${isActive ? 'active' : ''}`;
+    itemEl.innerHTML = `
+      <span style="display: flex; align-items: center; gap: 6px;">
+        <span style="color: ${isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'}; font-size: 10px; font-weight: bold;">&gt;_</span>
+        <span>${term.id}: ${term.name}</span>
+      </span>
+      <span class="terminal-session-trash" title="Kill Terminal Session">✕</span>
     `;
 
-    tabEl.addEventListener('click', () => switchTerminalInstance(term.id));
-    tabEl.querySelector('.terminal-close-btn')?.addEventListener('click', (e) => closeTerminalInstance(term.id, e));
+    itemEl.addEventListener('click', () => switchTerminalInstance(term.id));
+    itemEl.querySelector('.terminal-session-trash')?.addEventListener('click', (e) => closeTerminalInstance(term.id, e));
 
-    container.appendChild(tabEl);
+    container.appendChild(itemEl);
   });
 }
 
@@ -207,17 +257,16 @@ function renderActiveBuffer() {
   if (!stdoutElem || !active) return;
 
   if (!active.buffer) {
-    const defaultGreeting = `Orbital X Integrated Terminal [Version 0.1.0]\n(c) 2026 Orbital X Corp. Modern developer shell active.\n\nType commands directly and press Enter. ArrowUp/Down for history.`;
-    stdoutElem.textContent = defaultGreeting;
+    const defaultGreeting = `Orbital X PowerShell Integrated Terminal [Process ID: ${active.sessionId}]\n(c) 2026 Orbital X Desktop IDE. Active workspace shell ready.\n\nType commands directly and press Enter. ArrowUp/Down for history.\n`;
+    stdoutElem.innerHTML = ansiToHtml(defaultGreeting);
   } else {
-    stdoutElem.textContent = active.buffer;
+    stdoutElem.innerHTML = ansiToHtml(active.buffer);
   }
 
   stdoutElem.scrollTop = stdoutElem.scrollHeight;
 }
 
 export async function executeTerminalCommand(cmdString) {
-  const stdoutElem = document.getElementById('terminal-stdout');
   const inputElem = document.getElementById('terminal-command-input');
   const active = getActiveSession();
   if (!active) return;
@@ -242,42 +291,53 @@ export async function executeTerminalCommand(cmdString) {
     return;
   }
 
-  // 3. Built-in: cd <dir>
-  if (command.toLowerCase().startsWith('cd ') || command.toLowerCase() === 'cd') {
-    const targetDir = command.substring(3).trim();
-    if (targetDir) {
-      active.cwd = targetDir;
-      updatePromptDisplay();
-      appendTerminalText(`\nPS ${active.cwd}>\n`);
-    } else {
-      appendTerminalText(`\n${active.cwd}\n`);
-    }
-    return;
-  }
+  // Display command entered into terminal buffer
+  appendTerminalText(`\nPS ${active.cwd}> ${command}\n`);
 
-  // Append command to buffer
-  const promptText = `\nPS ${active.cwd}> ${command}\n`;
-  appendTerminalText(promptText);
-
-  // Show inline progress indicator
   active.isRunning = true;
 
   try {
-    const res = await invoke('run_command', {
-      command,
-      timeout_seconds: 60,
-    });
+    if (!active.isBackendConnected) {
+      await active.startBackendShell();
+    }
 
-    let output = '';
-    if (res.stdout) output += res.stdout;
-    if (res.stderr) output += `\n[STDERR]\n${res.stderr}`;
+    if (active.isBackendConnected) {
+      try {
+        await invoke('send_terminal_input', {
+          sessionId: active.sessionId,
+          input: command + "\r\n",
+        });
+        setTimeout(() => pollActiveTerminalOutput(), 60);
+        setTimeout(() => pollActiveTerminalOutput(), 180);
+        setTimeout(() => pollActiveTerminalOutput(), 400);
+        setTimeout(() => pollActiveTerminalOutput(), 900);
+      } catch (inputErr) {
+        console.warn("send_terminal_input failed, attempting session auto-recovery:", inputErr);
+        await active.startBackendShell();
+        await invoke('send_terminal_input', {
+          sessionId: active.sessionId,
+          input: command + "\r\n",
+        });
+        setTimeout(() => pollActiveTerminalOutput(), 150);
+      }
+    } else {
+      // Fallback subprocess runner if interactive shell process isn't active
+      const res = await invoke('run_command', {
+        command,
+        timeout_seconds: 60,
+      });
 
-    const statusBadge = res.success
-      ? `\n✓ Exited with code ${res.exit_code} (${res.duration_ms}ms)\n`
-      : `\n✗ Exited with code ${res.exit_code ?? 'terminated'} (${res.duration_ms}ms)\n`;
+      let output = '';
+      if (res.stdout) output += res.stdout;
+      if (res.stderr) output += `\n[STDERR]\n${res.stderr}`;
 
-    appendTerminalText(`${output}${statusBadge}`);
-    logAudit(`Terminal: "${command}" -> exit ${res.exit_code}`);
+      const statusBadge = res.success
+        ? `\n✓ Exited with code ${res.exit_code} (${res.duration_ms}ms)\n`
+        : `\n✗ Exited with code ${res.exit_code ?? 'terminated'} (${res.duration_ms}ms)\n`;
+
+      appendTerminalText(`${output}${statusBadge}`);
+    }
+    logAudit(`Terminal: "${command}"`);
   } catch (err) {
     appendTerminalText(`\nExecution Error: ${err}\n`);
     logAudit(`Terminal error: "${command}" -> ${err}`);
@@ -288,16 +348,111 @@ export async function executeTerminalCommand(cmdString) {
   }
 }
 
+async function sendInterruptSignal() {
+  const active = getActiveSession();
+  if (!active) return;
+
+  appendTerminalText(`^C\n`);
+
+  if (active.isBackendConnected) {
+    try {
+      await invoke('send_terminal_input', {
+        sessionId: active.sessionId,
+        input: "\x03", // ASCII ETX / Ctrl+C
+      });
+      setTimeout(() => pollActiveTerminalOutput(), 100);
+    } catch (e) {
+      console.warn("Failed to send interrupt signal to shell:", e);
+    }
+  }
+}
+
+function startOutputPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    // Only poll when terminal tab is visible
+    const termContent = document.getElementById('tab-content-terminal');
+    if (termContent && termContent.style.display !== 'none') {
+      pollActiveTerminalOutput();
+    }
+  }, 200);
+}
+
+export async function pollActiveTerminalOutput() {
+  const active = getActiveSession();
+  if (!active || !active.isBackendConnected) return;
+
+  try {
+    const newOutput = await invoke('poll_terminal_output', {
+      sessionId: active.sessionId,
+    });
+
+    if (newOutput && newOutput.length > 0) {
+      appendTerminalText(newOutput);
+    }
+  } catch (e) {
+    // Silently continue polling
+  }
+}
+
 function appendTerminalText(text) {
-  const stdoutElem = document.getElementById('terminal-stdout');
   const active = getActiveSession();
   if (active) {
     active.buffer = (active.buffer || '') + text;
+    // Cap buffer at 250,000 characters to prevent memory leaks
+    if (active.buffer.length > 250000) {
+      active.buffer = active.buffer.slice(-150000);
+    }
   }
-  if (stdoutElem) {
-    stdoutElem.textContent += text;
+
+  const stdoutElem = document.getElementById('terminal-stdout');
+  if (stdoutElem && active) {
+    stdoutElem.innerHTML = ansiToHtml(active.buffer);
     stdoutElem.scrollTop = stdoutElem.scrollHeight;
   }
+}
+
+// Convert ANSI escape codes to high-contrast HTML elements
+function ansiToHtml(str) {
+  if (!str) return '';
+
+  // 1. Escape HTML
+  let out = str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // 2. Map standard 16 ANSI color sequences to CSS colors
+  const ansiColors = {
+    '30': 'var(--text-muted)',
+    '31': 'var(--accent-red)',
+    '32': 'var(--accent-green)',
+    '33': 'var(--accent-orange)',
+    '34': 'var(--accent-blue)',
+    '35': 'var(--accent-purple)',
+    '36': 'var(--accent-cyan)',
+    '37': 'var(--text-primary)',
+    '90': 'var(--text-muted)',
+    '91': 'var(--accent-red)',
+    '92': 'var(--accent-green)',
+    '93': 'var(--accent-orange)',
+    '94': 'var(--accent-blue)',
+    '95': 'var(--accent-purple)',
+    '96': 'var(--accent-cyan)',
+    '97': 'var(--text-primary-bright)',
+  };
+
+  // Convert color codes
+  out = out.replace(/\x1b\[(\d+)(;\d+)*m/g, (match, p1) => {
+    if (p1 === '0' || p1 === '39') return '</span>';
+    if (p1 === '1') return '<span style="font-weight: 700;">';
+    if (ansiColors[p1]) {
+      return `<span style="color: ${ansiColors[p1]};">`;
+    }
+    return '';
+  });
+
+  return out;
 }
 
 export function logAudit(message) {
