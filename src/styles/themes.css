@@ -50,33 +50,33 @@
   --monaco-theme: "vs-dark";
 }
 
-/* 2. Nebula Light */
+/* 2. Nebula Light (Clean, Professional Developer Light Theme) */
 [data-theme="nebula-light"] {
-  --bg-app: #f3f3f3;
-  --bg-sidebar: #f8f8f8;
-  --bg-activity: #2c2c2c;
+  --bg-app: #f4f5f7;
+  --bg-sidebar: #ebedf0;
+  --bg-activity: #e1e4e8;
   --bg-editor: #ffffff;
-  --bg-tabs: #f3f3f3;
+  --bg-tabs: #e8eaed;
   --bg-tab-active: #ffffff;
-  --bg-tab-inactive: #ececec;
-  --bg-panel: #f8f8f8;
+  --bg-tab-inactive: #e1e4e8;
+  --bg-panel: #f6f8fa;
   --bg-surface: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.05);
-  --bg-active: rgba(0, 0, 0, 0.09);
+  --bg-hover: rgba(0, 0, 0, 0.06);
+  --bg-active: rgba(0, 0, 0, 0.1);
   --bg-input: #ffffff;
   --bg-card: #ffffff;
 
-  --border-color: #e5e5e5;
-  --border-subtle: #eeeeee;
-  --border-focus: #0078d4;
+  --border-color: #d0d7de;
+  --border-subtle: #e1e4e8;
+  --border-focus: #0969da;
 
-  --text-primary: #3b3b3b;
-  --text-primary-bright: #1f1f1f;
-  --text-secondary: #616161;
-  --text-muted: #8c8c8c;
-  --text-link: #0066b8;
+  --text-primary: #24292f;
+  --text-primary-bright: #1f2328;
+  --text-secondary: #57606a;
+  --text-muted: #8c959f;
+  --text-link: #0969da;
 
-  --accent-blue: #0078d4;
+  --accent-blue: #0969da;
   --accent-cyan: #059669;
   --accent-purple: #8250df;
   --accent-orange: #bc4c00;
@@ -92,11 +92,89 @@
   --diff-del-bg: rgba(207, 34, 46, 0.15);
   --diff-del-border: #cf222e;
 
-  --scrollbar-thumb: #c1c1c1;
-  --scrollbar-thumb-hover: #a6a6a6;
+  --scrollbar-thumb: #c1c7cd;
+  --scrollbar-thumb-hover: #a0a6ac;
 
-  --monaco-theme: "vs";
+  --monaco-theme: "orbital-light-theme";
 }
+
+/* Light Mode Specific Element Refinements */
+[data-theme="nebula-light"] .rail-btn {
+  color: #57606a;
+}
+[data-theme="nebula-light"] .rail-btn:hover,
+[data-theme="nebula-light"] .rail-btn.active {
+  color: #1f2328;
+}
+[data-theme="nebula-light"] .rail-btn.active::before {
+  background-color: #1f2328;
+}
+[data-theme="nebula-light"] .panel-tab.active::after {
+  background-color: #1f2328;
+}
+[data-theme="nebula-light"] .titlebar {
+  background-color: #e8eaed;
+  border-bottom: 1px solid #d0d7de;
+}
+[data-theme="nebula-light"] .statusbar {
+  background-color: #0969da;
+  color: #ffffff;
+}
+[data-theme="nebula-light"] .statusbar .status-item {
+  color: #ffffff;
+}
+[data-theme="nebula-light"] .statusbar .status-item:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+[data-theme="nebula-light"] .terminal-view {
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+[data-theme="nebula-light"] .terminal-prompt-bar {
+  background-color: #f1f5f9;
+  border-top-color: #d0d7de;
+}
+[data-theme="nebula-light"] .terminal-input {
+  color: #1e293b;
+}
+[data-theme="nebula-light"] .terminal-instance-pill {
+  background-color: #ffffff;
+  border-color: #d0d7de;
+  color: #57606a;
+}
+[data-theme="nebula-light"] .terminal-instance-pill.active {
+  background-color: #eaeef2;
+  color: #059669;
+  border-color: #059669;
+}
+[data-theme="nebula-light"] .modal-container {
+  background-color: #ffffff;
+  border-color: #d0d7de;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
+}
+[data-theme="nebula-light"] .modal-header {
+  border-bottom-color: #e1e4e8;
+}
+[data-theme="nebula-light"] .timeline-card {
+  background-color: #ffffff;
+  border-color: #d0d7de;
+  color: #24292f;
+}
+[data-theme="nebula-light"] .timeline-card-header {
+  border-bottom-color: #e1e4e8;
+}
+[data-theme="nebula-light"] .composer-box {
+  background-color: #ffffff;
+  border-color: #d0d7de;
+}
+[data-theme="nebula-light"] .composer-textarea {
+  color: #24292f;
+}
+[data-theme="nebula-light"] .composer-chips-bar button {
+  background-color: #ffffff;
+  border-color: #d0d7de;
+}
+
 
 /* 3. Midnight Blue */
 [data-theme="midnight-blue"] {

@@ -1,8 +1,8 @@
 import { state, loadPersistedState, persistState, setActiveModel } from './state/store.js';
-import { initMonaco, saveActiveFile } from './editor/monaco.js';
-import { loadWorkspace, refreshFileTree } from './components/file-tree.js';
+import { initMonaco, saveActiveFile, renderTabs } from './editor/monaco.js';
+import { loadWorkspace, refreshFileTree, initFileTreeHeaderActions } from './components/file-tree.js';
 import { initAgent, switchMode } from './components/agent.js';
-import { initTerminal } from './components/terminal.js';
+import { initTerminal, getActiveSession, executeTerminalCommand } from './components/terminal.js';
 import { initMemory, refreshMemories } from './components/memory.js';
 import { initSettings, cycleTheme, applyTheme } from './components/settings.js';
 import { initOnboarding } from './onboarding/wizard.js';
@@ -10,6 +10,7 @@ import { initModelPicker } from './components/model-picker.js';
 import { initSourceControl, refreshGitStatus } from './components/source-control.js';
 import { initExtensions } from './components/extensions.js';
 import { initChatSessions } from './components/chat-sessions.js';
+import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -34,12 +35,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   initAgent();
   initChatSessions();
   initTerminal();
+  initUsageDashboard();
   initMemory();
   initSettings();
   initOnboarding();
   initModelPicker();
   initSourceControl();
   initExtensions();
+  initFileTreeHeaderActions();
   initActivityRail();
   initResizers();
   initGlobalShortcuts();
@@ -90,12 +93,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.log("No initial workspace loaded:", e);
   }
 
-  // Quick Open Folder handler
+  // Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
   const handleOpenFolder = async () => {
-    const selected = await pickFolder();
-    if (selected) {
-      await loadWorkspace(selected);
-      refreshMemories();
+    // 1. Check for unsaved changes in open tabs
+    const unsavedTabs = state.editor.tabs.filter(t => t.isDirty);
+    if (unsavedTabs.length > 0) {
+      const confirmOpen = confirm(`You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`);
+      if (!confirmOpen) return;
+    }
+
+    try {
+      const selected = await pickFolder();
+      if (selected) {
+        // 2. Clean tab state
+        state.editor.tabs = [];
+        state.editor.activeTabId = null;
+        renderTabs();
+        const emptyState = document.getElementById('editor-empty-state');
+        if (emptyState) emptyState.style.display = 'flex';
+
+        // 3. Load workspace and update file tree
+        await loadWorkspace(selected);
+
+        // 4. Update terminal session CWD to match new workspace
+        const activeTerm = getActiveSession();
+        if (activeTerm) {
+          activeTerm.cwd = selected;
+          const promptLabel = document.getElementById('terminal-prompt-label');
+          if (promptLabel) promptLabel.textContent = `PS ${selected}>`;
+          await executeTerminalCommand(`cd "${selected}"`);
+        }
+
+        // 5. Reload memory and source control
+        refreshMemories();
+        refreshGitStatus();
+      }
+    } catch (err) {
+      console.error("Workspace transition error:", err);
+      alert("Failed to open workspace folder: " + err);
     }
   };
 
@@ -173,6 +208,10 @@ function initActivityRail() {
 
   document.getElementById('rail-settings')?.addEventListener('click', () => {
     document.getElementById('btn-open-settings')?.click();
+  });
+
+  document.getElementById('rail-usage')?.addEventListener('click', () => {
+    import('./components/usage.js').then(m => m.showUsageModal());
   });
 
   // Review changes button

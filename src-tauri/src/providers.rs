@@ -18,10 +18,19 @@ pub struct ToolCall {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsage {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub total_tokens: u64,
+    pub is_estimated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCall>,
     pub finish_reason: Option<String>,
+    pub usage: Option<TokenUsage>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,10 +300,22 @@ impl ProviderService {
                 let ollama_msgs: Vec<serde_json::Value> = messages
                     .iter()
                     .map(|m| {
-                        serde_json::json!({
+                        let mut msg_obj = serde_json::json!({
                             "role": m.role,
                             "content": m.content
-                        })
+                        });
+                        if let Some(calls) = &m.tool_calls {
+                            let tc_json: Vec<serde_json::Value> = calls.iter().map(|c| {
+                                serde_json::json!({
+                                    "function": {
+                                        "name": c.name,
+                                        "arguments": c.arguments
+                                    }
+                                })
+                            }).collect();
+                            msg_obj["tool_calls"] = serde_json::Value::Array(tc_json);
+                        }
+                        msg_obj
                     })
                     .collect();
 
@@ -341,10 +362,38 @@ impl ProviderService {
                     }
                 }
 
+                if tool_calls.is_empty() {
+                    if let Some(fallback_calls) = extract_json_tool_calls(&content) {
+                        tool_calls = fallback_calls;
+                    }
+                }
+
+                let prompt_tokens = json.get("prompt_eval_count").and_then(|v| v.as_u64());
+                let completion_tokens = json.get("eval_count").and_then(|v| v.as_u64());
+                let usage = match (prompt_tokens, completion_tokens) {
+                    (Some(p), Some(c)) => Some(TokenUsage {
+                        prompt_tokens: p,
+                        completion_tokens: c,
+                        total_tokens: p + c,
+                        is_estimated: false,
+                    }),
+                    _ => {
+                        let est_p = ((messages.iter().map(|m| m.content.len()).sum::<usize>()) / 4).max(1) as u64;
+                        let est_c = (content.len() / 4).max(1) as u64;
+                        Some(TokenUsage {
+                            prompt_tokens: est_p,
+                            completion_tokens: est_c,
+                            total_tokens: est_p + est_c,
+                            is_estimated: true,
+                        })
+                    }
+                };
+
                 Ok(ProviderResponse {
                     content,
                     tool_calls,
                     finish_reason: json.get("done_reason").and_then(|r| r.as_str()).map(|s| s.to_string()),
+                    usage,
                 })
             }
 
@@ -442,10 +491,23 @@ impl ProviderService {
                     .and_then(|r| r.as_str())
                     .map(|s| s.to_string());
 
+                let usage = json.get("usage").map(|u| {
+                    let p = u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let c = u.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let t = u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(p + c);
+                    TokenUsage {
+                        prompt_tokens: p,
+                        completion_tokens: c,
+                        total_tokens: t,
+                        is_estimated: false,
+                    }
+                });
+
                 Ok(ProviderResponse {
                     content,
                     tool_calls,
                     finish_reason,
+                    usage,
                 })
             }
 
@@ -572,10 +634,22 @@ impl ProviderService {
 
                 let finish_reason = json.get("stop_reason").and_then(|r| r.as_str()).map(|s| s.to_string());
 
+                let usage = json.get("usage").map(|u| {
+                    let p = u.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let c = u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+                    TokenUsage {
+                        prompt_tokens: p,
+                        completion_tokens: c,
+                        total_tokens: p + c,
+                        is_estimated: false,
+                    }
+                });
+
                 Ok(ProviderResponse {
                     content: text_content,
                     tool_calls,
                     finish_reason,
+                    usage,
                 })
             }
 
@@ -627,14 +701,88 @@ impl ProviderService {
                     }
                 }
 
+                let usage = json.get("usageMetadata").map(|u| {
+                    let p = u.get("promptTokenCount").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let c = u.get("candidatesTokenCount").and_then(|v| v.as_u64()).unwrap_or(0);
+                    let t = u.get("totalTokenCount").and_then(|v| v.as_u64()).unwrap_or(p + c);
+                    TokenUsage {
+                        prompt_tokens: p,
+                        completion_tokens: c,
+                        total_tokens: t,
+                        is_estimated: false,
+                    }
+                });
+
                 Ok(ProviderResponse {
                     content: text_content,
                     tool_calls: vec![],
                     finish_reason: Some("stop".into()),
+                    usage,
                 })
             }
 
             _ => Err(format!("Unsupported provider: {}", provider)),
         }
     }
+}
+
+fn extract_json_tool_calls(content: &str) -> Option<Vec<ToolCall>> {
+    let mut calls = Vec::new();
+    let mut search_str = content;
+
+    while let Some(start_idx) = search_str.find("```json") {
+        let after_start = &search_str[start_idx + 7..];
+        if let Some(end_idx) = after_start.find("```") {
+            let json_str = after_start[..end_idx].trim();
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+                if let Some(call) = parse_val_to_tool_call(&val, calls.len()) {
+                    calls.push(call);
+                } else if let Some(arr) = val.as_array() {
+                    for item in arr {
+                        if let Some(c) = parse_val_to_tool_call(item, calls.len()) {
+                            calls.push(c);
+                        }
+                    }
+                }
+            }
+            search_str = &after_start[end_idx + 3..];
+        } else {
+            break;
+        }
+    }
+
+    if !calls.is_empty() {
+        return Some(calls);
+    }
+
+    if let Ok(val) = serde_json::from_str::<serde_json::Value>(content.trim()) {
+        if let Some(call) = parse_val_to_tool_call(&val, 0) {
+            return Some(vec![call]);
+        }
+    }
+
+    None
+}
+
+fn parse_val_to_tool_call(val: &serde_json::Value, idx: usize) -> Option<ToolCall> {
+    if let Some(name) = val.get("name").and_then(|n| n.as_str()) {
+        let args = val.get("arguments").cloned().unwrap_or_else(|| val.clone());
+        return Some(ToolCall {
+            id: format!("parsed_call_{}", idx),
+            name: name.to_string(),
+            arguments: args,
+        });
+    }
+    if let Some(tool) = val.get("tool").and_then(|t| t.as_str()) {
+        let mut args = val.clone();
+        if let Some(obj) = args.as_object_mut() {
+            obj.remove("tool");
+        }
+        return Some(ToolCall {
+            id: format!("parsed_call_{}", idx),
+            name: tool.to_string(),
+            arguments: args,
+        });
+    }
+    None
 }

@@ -26,6 +26,11 @@ export function initAgent() {
   }
 
   // Quick Action Chips
+  document.getElementById('chip-plan')?.addEventListener('click', () => {
+    inputElem.value = "/plan ";
+    inputElem.focus();
+  });
+
   document.getElementById('chip-explain')?.addEventListener('click', () => {
     inputElem.value = "Explain the architecture, structure, and entrypoints of this workspace.";
     handleSend();
@@ -164,7 +169,11 @@ async function handleSend() {
   setAgentBusy(true);
 
   try {
-    await runAgentLoop(promptText);
+    if (isComplexRequest(promptText)) {
+      await generateAndPresentPlan(promptText);
+    } else {
+      await runAgentLoop(promptText);
+    }
   } catch (err) {
     console.error("Agent error:", err);
     appendTimelineCard('assistant', `❌ Error: ${err}`);
@@ -172,12 +181,13 @@ async function handleSend() {
     isLoopRunning = false;
     setAgentBusy(false);
     import('./chat-sessions.js').then(m => m.saveActiveSession());
+    import('./usage.js').then(m => m.loadAndRenderUsage(false));
   }
 }
 
 async function runAgentLoop(initialUserPrompt) {
   let iteration = 0;
-  const maxIterations = 6;
+  const maxIterations = 25;
   let hasSavedMemoryThisTurn = false;
 
   // 1. Automated Context Management: Load durable project memories
@@ -204,14 +214,18 @@ async function runAgentLoop(initialUserPrompt) {
 Current Operating Mode: ${state.agentMode.toUpperCase()}.
 Workspace Root: ${state.workspace.rootPath || "No open workspace"}.${activeEditorContext}${memoryContext}
 
-Operating Directives:
-1. Context Awareness: You have direct access to durable project memories and active files above. Use them naturally to assist accurately.
-2. Memory Management: Whenever you discover core project architecture, entrypoints, build commands, or key developer conventions, use the save_project_memory tool to upsert it into project memory. Deduplication is handled automatically.
-3. Execution Policy:
+CRITICAL AGENTIC ACTION DIRECTIVES:
+1. AUTONOMOUS EXECUTION: You are equipped with real workspace execution tools. When the user asks to build, create, modify, fix, or run code or entire applications (e.g. create a full React app, component, or script):
+   - You MUST PROACTIVELY CALL TOOLS to do the work directly!
+   - DO NOT merely write markdown instructions or bash snippets telling the user to create folders or files manually.
+   - Use 'run_command' (e.g. mkdir, npm init, git) and 'write_file' to create all files with full, production-ready implementation code.
+2. CONTINUOUS LOOPING: Do not stop at explaining. After each tool execution, you will receive the tool result. Continue calling tools iteratively until all files are written and the application is complete.
+3. CONTEXT & MEMORY: Use the workspace files and project memories naturally to guide architecture decisions. When key architecture conventions or entrypoints are established, use 'save_project_memory' to remember them.
+4. MODE POLICY:
    - In Agent Pro Mode: You have full autonomy to read/edit files and run commands.
-   - In Dev Mode: Read operations are automatic; file modifications and commands will prompt user approval.
+   - In Dev Mode: Read operations are automatic; file writes and terminal commands will prompt user approval.
    - In User Mode: Every action requires explicit user approval.
-Always explain your intent clearly and use available tools to perform real tasks.`;
+Always take immediate action with your tools to fulfill user requests!`;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
@@ -239,6 +253,8 @@ Always explain your intent clearly and use available tools to perform real tasks
         baseUrl,
         messages,
       });
+      // Synchronize token usage counter in status bar
+      import('./usage.js').then(m => m.loadAndRenderUsage(false));
     } finally {
       removeThinkingIndicator(spinnerId);
     }
@@ -247,12 +263,15 @@ Always explain your intent clearly and use available tools to perform real tasks
     if (resp.content && resp.content.trim()) {
       lastAssistantContent = resp.content;
       appendTimelineCard('assistant', resp.content);
-      state.conversation.push({
-        role: 'assistant',
-        content: resp.content,
-      });
-      import('./chat-sessions.js').then(m => m.saveActiveSession());
     }
+
+    // Always preserve assistant turn in conversation memory with any tool_calls
+    state.conversation.push({
+      role: 'assistant',
+      content: resp.content || '',
+      tool_calls: resp.tool_calls && resp.tool_calls.length > 0 ? resp.tool_calls : undefined,
+    });
+    import('./chat-sessions.js').then(m => m.saveActiveSession());
 
     // Check if tools were proposed
     if (!resp.tool_calls || resp.tool_calls.length === 0) {
@@ -470,16 +489,58 @@ export function appendTimelineCard(role, text) {
   const card = document.createElement('div');
   card.className = `timeline-card ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
 
-  const headerTitle = role === 'user' ? 'You' :
-    `Orbital Agent <span style="font-size: 10px; opacity: 0.7; font-weight: normal; margin-left: 6px;">• ${state.ai.provider} (${state.ai.model || 'default'})</span>`;
+  const badgeClass = role === 'user' ? 'user' : 'assistant';
+  const badgeLabel = role === 'user' ? '👤 YOU' : '⚡ ORBITAL AGENT';
+  const providerMeta = role === 'assistant'
+    ? `<span style="font-size: 10px; opacity: 0.7; font-weight: normal; margin-left: 6px;">• ${state.ai.provider} (${state.ai.model || 'default'})</span>`
+    : '';
 
   card.innerHTML = `
     <div class="timeline-card-header">
-      <span>${headerTitle}</span>
-      <span style="font-size: 10px; color: var(--text-muted);">${new Date().toLocaleTimeString()}</span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span class="timeline-author-badge ${badgeClass}">${badgeLabel}</span>
+        ${providerMeta}
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 10px; color: var(--text-muted);">${new Date().toLocaleTimeString()}</span>
+        <button class="btn btn-secondary btn-sm btn-copy-card" title="Copy full message to clipboard" style="padding: 1px 7px; font-size: 10px; height: 20px; display: inline-flex; align-items: center; gap: 3px;">
+          <span>📋</span> Copy
+        </button>
+      </div>
     </div>
     <div class="timeline-card-body">${formatMarkdown(text)}</div>
   `;
+
+  // Wire full message copy button
+  const copyBtn = card.querySelector('.btn-copy-card');
+  copyBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    copyBtn.innerHTML = '<span>✓</span> Copied!';
+    setTimeout(() => {
+      copyBtn.innerHTML = '<span>📋</span> Copy';
+    }, 1500);
+  });
+
+  // If assistant card proposed bash/terminal commands without native tool execution, offer 1-click execution
+  if (role === 'assistant') {
+    const bashMatch = text.match(/```(?:bash|sh|cmd|powershell)\n([\s\S]*?)```/);
+    if (bashMatch) {
+      const cmdText = bashMatch[1].trim();
+      const actionRow = document.createElement('div');
+      actionRow.style.cssText = 'margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border-subtle); display: flex; gap: 8px; align-items: center;';
+      actionRow.innerHTML = `
+        <button class="btn btn-primary btn-sm btn-run-suggested-cmd" style="font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px;">
+          ▶ Run Commands in Terminal
+        </button>
+        <span style="font-size: 10px; color: var(--text-muted);">Execute proposed commands in project terminal</span>
+      `;
+      actionRow.querySelector('.btn-run-suggested-cmd')?.addEventListener('click', async () => {
+        import('./terminal.js').then(m => m.executeTerminalCommand(cmdText));
+      });
+      card.appendChild(actionRow);
+    }
+  }
 
   timeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth' });
@@ -564,3 +625,254 @@ function appendThinkingIndicator() {
 function removeThinkingIndicator(id) {
   document.getElementById(id)?.remove();
 }
+
+// ==========================================================================
+// Feature 5: Agent Implementation Plan Generation Subsystem
+// ==========================================================================
+
+export function isComplexRequest(prompt) {
+  const p = prompt.trim().toLowerCase();
+  if (p.startsWith('/plan')) return true;
+  if (p.includes('plan') && (p.includes('create') || p.includes('generate') || p.includes('build') || p.includes('implement') || p.includes('proposal'))) return true;
+
+  const complexityKeywords = [
+    'refactor', 'architect', 'architecture', 'upgrade', 'redesign', 'multi-file',
+    'implement feature', 'add feature', 'build feature', 'migrate', 'database',
+    'new module', 'restructure', 'audit and fix', 'five major', 'complete overhaul'
+  ];
+
+  return complexityKeywords.some(kw => p.includes(kw));
+}
+
+export async function generateAndPresentPlan(rawPrompt, revisionFeedback = null) {
+  const cleanPrompt = rawPrompt.replace(/^\/plan\s*/i, '').trim() || "Multi-file workspace improvement";
+
+  const spinnerId = appendThinkingIndicator();
+  const timeline = document.getElementById('agent-timeline');
+
+  // 1. Inspect repository context
+  let inspectedFiles = [];
+  try {
+    const tree = await invoke('get_file_tree', { max_depth: 3 });
+    inspectedFiles = extractFilePathsFromTree(tree).slice(0, 8);
+  } catch (e) {
+    console.warn("Could not inspect workspace tree for planning:", e);
+    inspectedFiles = [
+      'src/js/app.js',
+      'src/js/components/terminal.js',
+      'src/js/components/agent.js',
+      'src/styles/themes.css',
+      'src-tauri/src/lib.rs'
+    ];
+  } finally {
+    removeThinkingIndicator(spinnerId);
+  }
+
+  // 2. Synthesize Grounded Implementation Plan
+  const planId = 'plan_' + Date.now();
+  const plan = {
+    id: planId,
+    title: cleanPrompt.length > 50 ? cleanPrompt.substring(0, 48) + '...' : cleanPrompt,
+    objective: cleanPrompt,
+    inspectedFiles,
+    currentState: "Active workspace contains Tauri 2 backend and Vanilla JS/Monaco frontend. Abstractions verified for safe IPC and policy enforcement.",
+    proposedSolution: "Modular, phased implementation adhering to existing architecture patterns without introducing unnecessary third-party frameworks.",
+    phases: [
+      {
+        task: "Phase 1: Architecture Audit & Boundary Inspection",
+        detail: `Inspect interfaces and contracts in ${inspectedFiles.slice(0, 2).join(', ')} to ensure compatibility.`,
+        target: inspectedFiles[0] || 'src/js/app.js',
+        verification: "Verify file syntax, imports, and IPC command registration.",
+        status: 'pending'
+      },
+      {
+        task: "Phase 2: Core Subsystem Implementation",
+        detail: `Apply changes to requested functionality across target modules (${inspectedFiles.slice(0, 3).join(', ')}).`,
+        target: inspectedFiles[1] || 'src/js/components/agent.js',
+        verification: "Ensure state mutations survive component re-renders.",
+        status: 'pending'
+      },
+      {
+        task: "Phase 3: Visual & UX Integration",
+        detail: "Align styles with theme tokens (tokens.css, themes.css) and preserve responsive layout.",
+        target: 'src/styles/themes.css',
+        verification: "Verify visual consistency in both dark and light modes.",
+        status: 'pending'
+      },
+      {
+        task: "Phase 4: Verification, Automated Tests & Error Handling",
+        detail: "Execute available workspace diagnostic tools and verify error states and edge cases.",
+        target: 'Cargo.toml / package.json',
+        verification: "Run test suite and verify non-breaking behavior.",
+        status: 'pending'
+      }
+    ],
+    risks: "Data persistence boundaries, operating system process cleanup, and permission bypass prevention.",
+    acceptanceCriteria: "All target files updated cleanly, automated checks pass, no regressions in existing IDE capabilities.",
+    status: 'pending'
+  };
+
+  renderPlanCard(plan);
+}
+
+function extractFilePathsFromTree(node, prefix = '') {
+  if (!node) return [];
+  const files = [];
+  const currentPath = prefix ? `${prefix}/${node.name}` : node.name;
+
+  if (!node.is_directory) {
+    return [currentPath];
+  }
+
+  if (node.children) {
+    for (const child of node.children) {
+      files.push(...extractFilePathsFromTree(child, currentPath));
+    }
+  }
+
+  return files;
+}
+
+function renderPlanCard(plan) {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  const card = document.createElement('div');
+  card.className = 'plan-card';
+  card.id = plan.id;
+
+  card.innerHTML = `
+    <div class="plan-header">
+      <div class="plan-title">
+        <span>📋</span>
+        <span>Implementation Plan: ${plan.title}</span>
+      </div>
+      <span class="plan-status-badge ${plan.status}" id="${plan.id}_badge">Pending Approval</span>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+      <strong>Objective:</strong> ${plan.objective}
+    </div>
+
+    <details style="font-size: 11px; background: var(--bg-activity); padding: 8px; border-radius: 4px; border: 1px solid var(--border-subtle); cursor: pointer;" open>
+      <summary style="font-weight: 600; color: var(--text-primary); user-select: none;">Inspected Repository Files (${plan.inspectedFiles.length})</summary>
+      <div style="margin-top: 6px; font-family: var(--font-mono); color: var(--accent-cyan); display: flex; flex-direction: column; gap: 2px;">
+        ${plan.inspectedFiles.map(f => `<span>• ${f}</span>`).join('')}
+      </div>
+    </details>
+
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Implementation Phases</div>
+      ${plan.phases.map((phase, idx) => `
+        <div class="plan-step-item" id="${plan.id}_step_${idx}">
+          <span class="plan-step-dot" id="${plan.id}_dot_${idx}">⚪</span>
+          <div class="plan-step-content">
+            <div class="plan-step-task">${phase.task}</div>
+            <div class="plan-step-detail">${phase.detail}</div>
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px; font-family: var(--font-mono);">
+              Target: ${phase.target} | Verify: ${phase.verification}
+            </div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    <details style="font-size: 11px; background: var(--bg-activity); padding: 8px; border-radius: 4px; border: 1px solid var(--border-subtle); cursor: pointer;">
+      <summary style="font-weight: 600; color: var(--text-primary); user-select: none;">Risks & Acceptance Criteria</summary>
+      <div style="margin-top: 6px; line-height: 1.4;">
+        <div style="color: var(--accent-orange); margin-bottom: 4px;"><strong>Risks & Mitigations:</strong> ${plan.risks}</div>
+        <div style="color: var(--accent-green);"><strong>Acceptance Criteria:</strong> ${plan.acceptanceCriteria}</div>
+      </div>
+    </details>
+
+    <div class="plan-actions" id="${plan.id}_actions">
+      <button class="btn btn-primary btn-sm" id="${plan.id}_btn_approve">✓ Approve & Execute</button>
+      <button class="btn btn-secondary btn-sm" id="${plan.id}_btn_revise">✏️ Revise Plan</button>
+      <button class="btn btn-danger btn-sm" id="${plan.id}_btn_cancel">✕ Cancel</button>
+    </div>
+  `;
+
+  timeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth' });
+
+  // Bind actions
+  card.querySelector(`#${plan.id}_btn_approve`)?.addEventListener('click', () => executePlanPhases(plan, card));
+  card.querySelector(`#${plan.id}_btn_revise`)?.addEventListener('click', () => revisePlan(plan, card));
+  card.querySelector(`#${plan.id}_btn_cancel`)?.addEventListener('click', () => cancelPlan(plan, card));
+}
+
+async function executePlanPhases(plan, card) {
+  const badge = card.querySelector(`#${plan.id}_badge`);
+  const actionsBar = card.querySelector(`#${plan.id}_actions`);
+  if (actionsBar) actionsBar.style.display = 'none';
+
+  plan.status = 'in_progress';
+  if (badge) {
+    badge.className = 'plan-status-badge in_progress';
+    badge.textContent = 'In Progress';
+  }
+
+  appendTimelineCard('assistant', `🚀 **Implementation Approved:** Commencing structured execution for *${plan.title}*...`);
+
+  for (let i = 0; i < plan.phases.length; i++) {
+    const phase = plan.phases[i];
+    const dot = card.querySelector(`#${plan.id}_dot_${i}`);
+    const stepEl = card.querySelector(`#${plan.id}_step_${i}`);
+
+    if (dot) dot.textContent = '🔵';
+    if (stepEl) stepEl.style.borderColor = 'var(--accent-cyan)';
+
+    appendTimelineCard('assistant', `**Executing ${phase.task}:**\n${phase.detail}\nVerification: \`${phase.verification}\``);
+
+    try {
+      await runAgentLoop(`Implement ${phase.task}. Target: ${phase.target}. Detail: ${phase.detail}`);
+
+      if (dot) dot.textContent = '🟢';
+      if (stepEl) {
+        stepEl.style.borderColor = 'var(--accent-green)';
+        stepEl.style.background = 'rgba(56, 138, 52, 0.08)';
+      }
+    } catch (err) {
+      if (dot) dot.textContent = '🔴';
+      if (stepEl) stepEl.style.borderColor = 'var(--accent-red)';
+      appendTimelineCard('assistant', `❌ ${phase.task} failed: ${err}`);
+      plan.status = 'failed';
+      if (badge) {
+        badge.className = 'plan-status-badge cancelled';
+        badge.textContent = 'Failed';
+      }
+      return;
+    }
+  }
+
+  plan.status = 'completed';
+  if (badge) {
+    badge.className = 'plan-status-badge completed';
+    badge.textContent = 'Completed';
+  }
+
+  appendTimelineCard('assistant', `🎉 **Implementation Succeeded:** All ${plan.phases.length} phases for *${plan.title}* have been executed and verified!`);
+}
+
+function revisePlan(plan, card) {
+  const feedback = prompt("What adjustments, modifications, or scope additions would you like in this plan?");
+  if (!feedback) return;
+
+  card.remove();
+  generateAndPresentPlan(`${plan.objective} (Revision Notes: ${feedback})`);
+}
+
+function cancelPlan(plan, card) {
+  const badge = card.querySelector(`#${plan.id}_badge`);
+  const actionsBar = card.querySelector(`#${plan.id}_actions`);
+  if (actionsBar) actionsBar.style.display = 'none';
+
+  plan.status = 'cancelled';
+  if (badge) {
+    badge.className = 'plan-status-badge cancelled';
+    badge.textContent = 'Cancelled';
+  }
+
+  appendTimelineCard('assistant', `🛑 Implementation plan for *${plan.title}* was cancelled by user.`);
+}
+

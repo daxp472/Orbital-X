@@ -89,10 +89,10 @@ export function initMonaco(containerElement) {
       { token: 'function', foreground: '58a6ff' },
     ],
     colors: {
-      'editor.background': '#0d1117',
+      'editor.background': '#1f1f1f',
       'editor.foreground': '#f0f6fc',
       'editorCursor.foreground': '#39c5bb',
-      'editor.lineHighlightBackground': '#161b22',
+      'editor.lineHighlightBackground': '#252526',
       'editorLineNumber.foreground': '#6e7681',
       'editorLineNumber.activeForeground': '#39c5bb',
       'editor.selectionBackground': '#264f78',
@@ -100,8 +100,35 @@ export function initMonaco(containerElement) {
     }
   });
 
+  // Custom Light Theme for Orbital X (Nebula Light)
+  monaco.editor.defineTheme('orbital-light-theme', {
+    base: 'vs',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: '6e7781', fontStyle: 'italic' },
+      { token: 'keyword', foreground: '8250df', fontStyle: 'bold' },
+      { token: 'string', foreground: '059669' },
+      { token: 'number', foreground: 'bc4c00' },
+      { token: 'type', foreground: '0066b8' },
+      { token: 'function', foreground: '0066b8' },
+    ],
+    colors: {
+      'editor.background': '#ffffff',
+      'editor.foreground': '#24292f',
+      'editorCursor.foreground': '#059669',
+      'editor.lineHighlightBackground': '#f6f8fa',
+      'editorLineNumber.foreground': '#8c959f',
+      'editorLineNumber.activeForeground': '#059669',
+      'editor.selectionBackground': '#b6e3ff',
+      'editor.inactiveSelectionBackground': '#d0e8ff',
+    }
+  });
+
+  const activeTheme = document.documentElement.getAttribute('data-theme') || 'orbit-dark';
+  const initialMonacoTheme = activeTheme === 'nebula-light' ? 'orbital-light-theme' : 'orbital-dark-theme';
+
   editorInstance = monaco.editor.create(containerElement, {
-    theme: 'orbital-dark-theme',
+    theme: initialMonacoTheme,
     fontSize: state.editor.fontSize || 13,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
     fontLigatures: true,
@@ -139,11 +166,10 @@ export function initMonaco(containerElement) {
 }
 
 export function updateTheme(themeName) {
-  if (!editorInstance) return;
-  if (themeName === 'nebula-light') {
-    monaco.editor.setTheme('vs');
-  } else {
-    monaco.editor.setTheme('orbital-dark-theme');
+  const chosen = themeName === 'nebula-light' ? 'orbital-light-theme' : 'orbital-dark-theme';
+  monaco.editor.setTheme(chosen);
+  if (diffEditorInstance) {
+    diffEditorInstance.updateOptions({ theme: chosen });
   }
 }
 
