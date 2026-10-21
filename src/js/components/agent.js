@@ -237,18 +237,39 @@ async function runAgentLoop(initialUserPrompt) {
   const apiKey = state.ai.keys[provider] || '';
   const baseUrl = provider === 'ollama' ? state.ai.endpoint : null;
 
-  // System prompt — kept concise for local model efficiency
-  const systemPrompt = `You are Orbital X, an autonomous AI coding agent.
+  // System prompt — concise but with full tool list for local model reliability
+  const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
 Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}
 
-RULES:
-1. ALWAYS call tools to perform actions. NEVER explain in markdown without calling tools first.
-2. After a tool returns a result, immediately call the next required tool. Keep looping until the task is done.
-3. Use write_file to create or edit files. Use run_command for shell commands (npm, mkdir, git, etc).
-4. If a tool call fails, analyze the error and try a corrected approach. Do not stop.
-5. Only produce a final plain-text summary AFTER all tools have been called and the task is complete.
-6. In Agent Pro mode: full autonomy. Dev mode: writes/runs need approval. User mode: all actions need approval.
-DO NOT narrate or explain steps — execute them directly with tools.`;
+AVAILABLE TOOLS (call these — never explain in markdown):
+• workspace_info — get workspace root, file count, detected languages
+• list_files(max_depth) — explore directory tree
+• read_file(path) — read entire file (use for files <200 lines)
+• read_file_lines(path, start_line, end_line) — read specific line range (USE for large files)
+• write_file(path, content, description) — create or overwrite a file
+• patch_file(path, start_line, end_line, new_content, description) — edit specific lines (preferred for existing files)
+• delete_file(path) — delete a file
+• rename_file(from, to) — rename or move a file
+• create_directory(path) — create a directory
+• search_files(query, max_results) — search across all files for a symbol or text pattern
+• run_command(command, timeout_seconds) — run shell command (npm install: 120s, builds: 90s)
+• run_tests() — auto-detect and run tests
+• get_diagnostics(tool?) — run cargo check / tsc / eslint to find errors
+• git_status() — see changed files and current branch
+• git_commit(message) — stage all changes and commit
+• git_diff(path?) — see uncommitted changes
+• save_project_memory(category, title, content) — persist key project knowledge
+• search_project_memory(query) — recall saved conventions and decisions
+• undo_agent_change() — revert last file modification
+
+STRATEGY:
+1. For new tasks: call workspace_info then list_files to orient yourself first.
+2. To edit existing code: use search_files to find it, then read_file_lines for the relevant section, then patch_file to make targeted changes.
+3. After changing code: call get_diagnostics to check for errors, fix any found before finishing.
+4. Use save_project_memory when you discover the tech stack, build commands, or key conventions.
+5. Keep calling tools until the task is fully done. Do not stop midway.
+6. If a command fails, read the error carefully and retry with a corrected approach.
+7. Mode policy — Agent Pro: full autonomy. Dev: writes/runs need approval. User: all need approval.`;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
