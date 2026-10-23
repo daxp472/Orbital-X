@@ -169,12 +169,22 @@ export function initMonaco(containerElement) {
     saveActiveFile();
   });
 
-  // Global window listener for Ctrl+F when editor view is active
+  // Go to Line on Ctrl+G
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyG, () => {
+    triggerGotoLine();
+  });
+
+  // Global window listener for editor shortcuts when editor view is active
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
       if (editorInstance && state.editor.activeTabId) {
         e.preventDefault();
         triggerFindWidget();
+      }
+    } else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerGotoLine();
       }
     }
   });
@@ -215,6 +225,15 @@ export function triggerFindWidget() {
   const findAction = editorInstance.getAction('actions.find');
   if (findAction) {
     findAction.run();
+  }
+}
+
+export function triggerGotoLine() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.gotoLine');
+  if (action) {
+    action.run();
   }
 }
 
