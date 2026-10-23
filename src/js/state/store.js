@@ -20,8 +20,8 @@ export const state = {
   // Operating Mode: 'agent_pro' | 'dev' | 'user'
   agentMode: 'dev',
 
-  // Active theme: 'orbit-dark' | 'nebula-light' | 'midnight-blue'
-  theme: 'orbit-dark',
+  // Active theme: 'theme-dark' | 'theme-light' | 'theme-hc'
+  theme: 'theme-dark',
 
   // Selected Provider & Models
   ai: {
@@ -81,7 +81,12 @@ export function notify(property, payload) {
 export function loadPersistedState() {
   try {
     const savedTheme = localStorage.getItem('orbital_theme');
-    if (savedTheme) state.theme = savedTheme;
+    if (savedTheme) {
+      if (savedTheme === 'orbit-dark' || savedTheme === 'dark') state.theme = 'theme-dark';
+      else if (savedTheme === 'nebula-light' || savedTheme === 'light') state.theme = 'theme-light';
+      else if (savedTheme === 'high-contrast' || savedTheme === 'hc') state.theme = 'theme-hc';
+      else state.theme = savedTheme;
+    }
 
     const savedMode = localStorage.getItem('orbital_mode');
     if (savedMode) state.agentMode = savedMode;

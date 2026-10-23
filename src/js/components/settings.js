@@ -81,6 +81,7 @@ export function initSettings() {
   setupOllamaPullUI();
 
   // Theme Select inside settings
+  populateThemeDropdown();
   document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
     applyTheme(e.target.value);
   });
@@ -310,7 +311,7 @@ export function openSettings() {
   document.getElementById('cfg-ollama-url').value = state.ai.endpoint || 'http://localhost:11434';
   document.getElementById('cfg-ollama-model').value = state.ai.defaultModels.ollama || 'llama3';
 
-  document.getElementById('cfg-theme-select').value = state.theme;
+  populateThemeDropdown();
   selectSecurityCard(state.agentMode);
 
   // Load live token usage directly
@@ -351,7 +352,7 @@ function saveAndClose() {
     setActiveModel(state.ai.provider, activeModel);
   });
 
-  const selectedTheme = document.getElementById('cfg-theme-select').value;
+  const selectedTheme = document.getElementById('cfg-theme-select')?.value || state.theme;
   applyTheme(selectedTheme);
 
   // Editor font size
@@ -374,16 +375,49 @@ function saveAndClose() {
   closeSettings();
 }
 
+function populateThemeDropdown() {
+  const sel = document.getElementById('cfg-theme-select');
+  if (!sel) return;
+  sel.innerHTML = `
+    <option value="theme-dark">Dark (Default)</option>
+    <option value="theme-light">Light</option>
+    <option value="theme-hc">High Contrast</option>
+  `;
+  const current = (state.theme === 'nebula-light' || state.theme === 'theme-light' || state.theme === 'light') ? 'theme-light' :
+    (state.theme === 'theme-hc' || state.theme === 'hc' || state.theme === 'high-contrast') ? 'theme-hc' : 'theme-dark';
+  sel.value = current;
+}
+
 export function applyTheme(themeName) {
-  state.theme = themeName;
-  document.documentElement.setAttribute('data-theme', themeName);
-  updateTheme(themeName);
+  let norm = 'theme-dark';
+  if (themeName === 'theme-light' || themeName === 'nebula-light' || themeName === 'light') {
+    norm = 'theme-light';
+  } else if (themeName === 'theme-hc' || themeName === 'hc' || themeName === 'high-contrast') {
+    norm = 'theme-hc';
+  } else {
+    norm = 'theme-dark';
+  }
+
+  state.theme = norm;
+
+  // Toggle class on document.body (theme-dark / theme-light / theme-hc)
+  document.body.classList.remove('theme-dark', 'theme-light', 'theme-hc');
+  document.body.classList.add(norm);
+
+  // Set data-theme on documentElement for styling compatibility
+  const legacyDataTheme = norm === 'theme-light' ? 'nebula-light' : (norm === 'theme-hc' ? 'theme-hc' : 'orbit-dark');
+  document.documentElement.setAttribute('data-theme', legacyDataTheme);
+
+  // Persist to localStorage
+  localStorage.setItem('orbital_theme', norm);
+
+  updateTheme(legacyDataTheme);
   persistState();
-  notify('themeChanged', themeName);
+  notify('themeChanged', norm);
 }
 
 export function cycleTheme() {
-  const themes = ['orbit-dark', 'nebula-light', 'midnight-blue'];
+  const themes = ['theme-dark', 'theme-light', 'theme-hc'];
   const currentIndex = themes.indexOf(state.theme);
   const nextTheme = themes[(currentIndex + 1) % themes.length];
   applyTheme(nextTheme);

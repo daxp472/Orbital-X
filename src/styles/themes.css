@@ -3,7 +3,7 @@
    ========================================================================== */
 
 /* 1. Orbit Dark (Default — Matches Antigravity / Cursor / VS Code exact palette) */
-[data-theme="orbit-dark"], :root {
+body.theme-dark, [data-theme="theme-dark"], [data-theme="orbit-dark"], :root {
   --bg-app: #181818;
   --bg-sidebar: #181818;
   --bg-activity: #181818;
@@ -50,8 +50,8 @@
   --monaco-theme: "vs-dark";
 }
 
-/* 2. Nebula Light (Clean, Professional Developer Light Theme) */
-[data-theme="nebula-light"] {
+/* 2. Light Theme (Clean, Professional Developer Light Theme) */
+body.theme-light, [data-theme="theme-light"], [data-theme="nebula-light"] {
   --bg-app: #f4f5f7;
   --bg-sidebar: #ebedf0;
   --bg-activity: #e1e4e8;
@@ -99,78 +99,79 @@
 }
 
 /* Light Mode Specific Element Refinements */
-[data-theme="nebula-light"] .rail-btn {
+body.theme-light .rail-btn, [data-theme="theme-light"] .rail-btn, [data-theme="nebula-light"] .rail-btn {
   color: #57606a;
 }
-[data-theme="nebula-light"] .rail-btn:hover,
-[data-theme="nebula-light"] .rail-btn.active {
+body.theme-light .rail-btn:hover, body.theme-light .rail-btn.active,
+[data-theme="theme-light"] .rail-btn:hover, [data-theme="theme-light"] .rail-btn.active,
+[data-theme="nebula-light"] .rail-btn:hover, [data-theme="nebula-light"] .rail-btn.active {
   color: #1f2328;
 }
-[data-theme="nebula-light"] .rail-btn.active::before {
+body.theme-light .rail-btn.active::before, [data-theme="theme-light"] .rail-btn.active::before, [data-theme="nebula-light"] .rail-btn.active::before {
   background-color: #1f2328;
 }
-[data-theme="nebula-light"] .panel-tab.active::after {
+body.theme-light .panel-tab.active::after, [data-theme="theme-light"] .panel-tab.active::after, [data-theme="nebula-light"] .panel-tab.active::after {
   background-color: #1f2328;
 }
-[data-theme="nebula-light"] .titlebar {
+body.theme-light .titlebar, [data-theme="theme-light"] .titlebar, [data-theme="nebula-light"] .titlebar {
   background-color: #e8eaed;
   border-bottom: 1px solid #d0d7de;
 }
-[data-theme="nebula-light"] .statusbar {
+body.theme-light .statusbar, [data-theme="theme-light"] .statusbar, [data-theme="nebula-light"] .statusbar {
   background-color: #0969da;
   color: #ffffff;
 }
-[data-theme="nebula-light"] .statusbar .status-item {
+body.theme-light .statusbar .status-item, [data-theme="theme-light"] .statusbar .status-item, [data-theme="nebula-light"] .statusbar .status-item {
   color: #ffffff;
 }
-[data-theme="nebula-light"] .statusbar .status-item:hover {
+body.theme-light .statusbar .status-item:hover, [data-theme="theme-light"] .statusbar .status-item:hover, [data-theme="nebula-light"] .statusbar .status-item:hover {
   background-color: rgba(255, 255, 255, 0.15);
 }
-[data-theme="nebula-light"] .terminal-view {
+body.theme-light .terminal-view, [data-theme="theme-light"] .terminal-view, [data-theme="nebula-light"] .terminal-view {
   background-color: #f8fafc;
   color: #1e293b;
 }
-[data-theme="nebula-light"] .terminal-prompt-bar {
+body.theme-light .terminal-prompt-bar, [data-theme="theme-light"] .terminal-prompt-bar, [data-theme="nebula-light"] .terminal-prompt-bar {
   background-color: #f1f5f9;
   border-top-color: #d0d7de;
 }
-[data-theme="nebula-light"] .terminal-input {
+body.theme-light .terminal-input, [data-theme="theme-light"] .terminal-input, [data-theme="nebula-light"] .terminal-input {
   color: #1e293b;
 }
-[data-theme="nebula-light"] .terminal-instance-pill {
+body.theme-light .terminal-instance-pill, [data-theme="theme-light"] .terminal-instance-pill, [data-theme="nebula-light"] .terminal-instance-pill {
   background-color: #ffffff;
   border-color: #d0d7de;
   color: #57606a;
 }
-[data-theme="nebula-light"] .terminal-instance-pill.active {
+body.theme-light .terminal-instance-pill.active, [data-theme="theme-light"] .terminal-instance-pill.active, [data-theme="nebula-light"] .terminal-instance-pill.active {
   background-color: #eaeef2;
   color: #059669;
   border-color: #059669;
 }
-[data-theme="nebula-light"] .modal-container {
+body.theme-light .modal-container, [data-theme="theme-light"] .modal-container, [data-theme="nebula-light"] .modal-container {
   background-color: #ffffff;
   border-color: #d0d7de;
   box-shadow: 0 16px 32px rgba(0, 0, 0, 0.15);
 }
-[data-theme="nebula-light"] .modal-header {
+body.theme-light .modal-header, [data-theme="theme-light"] .modal-header, [data-theme="nebula-light"] .modal-header {
   border-bottom-color: #e1e4e8;
 }
-[data-theme="nebula-light"] .timeline-card {
+body.theme-light .timeline-card, [data-theme="theme-light"] .timeline-card, [data-theme="nebula-light"] .timeline-card {
   background-color: #ffffff;
   border-color: #d0d7de;
   color: #24292f;
 }
-[data-theme="nebula-light"] .timeline-card-header {
+body.theme-light .timeline-card-header, [data-theme="theme-light"] .timeline-card-header, [data-theme="nebula-light"] .timeline-card-header {
   border-bottom-color: #e1e4e8;
 }
-[data-theme="nebula-light"] .composer-box {
+body.theme-light .composer-box, [data-theme="theme-light"] .composer-box, [data-theme="nebula-light"] .composer-box {
   background-color: #ffffff;
   border-color: #d0d7de;
 }
-[data-theme="nebula-light"] .composer-textarea {
+body.theme-light .composer-textarea, [data-theme="theme-light"] .composer-textarea, [data-theme="nebula-light"] .composer-textarea {
   color: #24292f;
 }
-[data-theme="nebula-light"] .composer-chips-bar button {
+body.theme-light .composer-chips-bar button, [data-theme="theme-light"] .composer-chips-bar button, [data-theme="nebula-light"] .composer-chips-bar button {
   background-color: #ffffff;
   border-color: #d0d7de;
 }
@@ -222,4 +223,73 @@
   --scrollbar-thumb-hover: #484f58;
 
   --monaco-theme: "vs-dark";
+}
+
+/* 4. High Contrast Theme (Accessibility & High Legibility) */
+body.theme-hc, [data-theme="theme-hc"], [data-theme="high-contrast"] {
+  --bg-app: #000000;
+  --bg-sidebar: #000000;
+  --bg-activity: #000000;
+  --bg-editor: #000000;
+  --bg-tabs: #000000;
+  --bg-tab-active: #0c0c0c;
+  --bg-tab-inactive: #000000;
+  --bg-panel: #000000;
+  --bg-surface: #0c0c0c;
+  --bg-hover: rgba(255, 255, 255, 0.15);
+  --bg-active: rgba(255, 255, 255, 0.25);
+  --bg-input: #000000;
+  --bg-card: #050505;
+
+  --border-color: #6fc3df;
+  --border-subtle: #ffffff;
+  --border-focus: #ffff00;
+
+  --text-primary: #ffffff;
+  --text-primary-bright: #ffffff;
+  --text-secondary: #ffffff;
+  --text-muted: #e0e0e0;
+  --text-link: #ffff00;
+
+  --accent-blue: #75beff;
+  --accent-cyan: #00ffff;
+  --accent-purple: #bc8cff;
+  --accent-orange: #f38518;
+  --accent-green: #89d185;
+  --accent-red: #f48771;
+
+  --agent-pro-color: #00ffff;
+  --agent-dev-color: #89d185;
+  --agent-user-color: #f38518;
+
+  --diff-add-bg: rgba(137, 209, 133, 0.3);
+  --diff-add-border: #89d185;
+  --diff-del-bg: rgba(244, 135, 113, 0.3);
+  --diff-del-border: #f48771;
+
+  --scrollbar-thumb: #6fc3df;
+  --scrollbar-thumb-hover: #ffffff;
+
+  --monaco-theme: "hc-black";
+}
+
+body.theme-hc .rail-btn {
+  color: #ffffff;
+}
+body.theme-hc .rail-btn.active {
+  color: #ffff00;
+  border-left: 2px solid #ffff00;
+}
+body.theme-hc .titlebar {
+  background-color: #000000;
+  border-bottom: 1px solid #6fc3df;
+}
+body.theme-hc .statusbar {
+  background-color: #000000;
+  border-top: 1px solid #6fc3df;
+  color: #ffffff;
+}
+body.theme-hc .modal-container {
+  background-color: #000000;
+  border: 2px solid #6fc3df;
 }
