@@ -1,7 +1,36 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+/// Strips Windows verbatim prefix (\\?\) so paths can be safely compared
+pub fn strip_verbatim_prefix(path: &Path) -> PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else {
+        path.to_path_buf()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteManifestItem {
+    pub path: String,
+    pub relative_path: String,
+    pub size_bytes: u64,
+    pub exists: bool,
+    pub is_file: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchDeleteManifest {
+    pub manifest_id: String,
+    pub created_at: String,
+    pub items: Vec<BatchDeleteManifestItem>,
+    pub total_files: usize,
+    pub total_bytes: u64,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileTreeNode {
@@ -54,6 +83,7 @@ pub struct AgentChangeEntry {
 pub struct WorkspaceService {
     root: Option<PathBuf>,
     change_journal: Vec<AgentChangeEntry>,
+    pending_manifests: HashMap<String, BatchDeleteManifest>,
 }
 
 impl WorkspaceService {
@@ -61,6 +91,7 @@ impl WorkspaceService {
         Self {
             root: None,
             change_journal: Vec::new(),
+            pending_manifests: HashMap::new(),
         }
     }
 
@@ -87,14 +118,21 @@ impl WorkspaceService {
         self.root.clone()
     }
 
-    /// Validates that a target path is strictly within the permitted workspace root
+    /// Validates that a target path is strictly within the permitted workspace root.
+    /// Defeats symlink/junction escapes, Windows \\?\ prefix disparities, and prefix-collision bypasses.
     pub fn resolve_and_validate(&self, target_path: &str) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("No workspace is currently open")?;
+        let clean_root = strip_verbatim_prefix(root);
 
-        let candidate = if Path::new(target_path).is_absolute() {
-            PathBuf::from(target_path)
+        let trimmed = target_path.trim();
+        if trimmed.is_empty() {
+            return Err("Security Violation: Target path cannot be empty.".into());
+        }
+
+        let candidate = if Path::new(trimmed).is_absolute() {
+            strip_verbatim_prefix(Path::new(trimmed))
         } else {
-            root.join(target_path)
+            clean_root.join(trimmed)
         };
 
         // Normalize path by resolving components
@@ -113,15 +151,58 @@ impl WorkspaceService {
             }
         }
 
-        // Canonicalize if exists, otherwise compare normalized prefix
-        let normalized_str = normalized.to_string_lossy().replace('\\', "/").to_lowercase();
-        let root_str = root.to_string_lossy().replace('\\', "/").to_lowercase();
+        let norm_str = normalized.to_string_lossy().replace('\\', "/").to_lowercase();
+        let root_str = clean_root.to_string_lossy().replace('\\', "/").to_lowercase();
 
-        if !normalized_str.starts_with(&root_str) {
-            return Err("Security Violation: Path traversal outside workspace root is blocked.".into());
+        // Exact match or subpath check (must have trailing slash boundary to prevent prefix spoofing)
+        let is_inside = if norm_str == root_str {
+            true
+        } else if norm_str.starts_with(&root_str) {
+            let next_char = norm_str[root_str.len()..].chars().next();
+            next_char == Some('/')
+        } else {
+            false
+        };
+
+        if !is_inside {
+            return Err(format!("Security Violation: Path '{}' is outside workspace boundary.", target_path));
+        }
+
+        // If the path already exists, verify real canonical path to defeat symlink/junction redirection
+        if normalized.exists() {
+            if let Ok(canonical_target) = normalized.canonicalize() {
+                let clean_target = strip_verbatim_prefix(&canonical_target);
+                let target_str = clean_target.to_string_lossy().replace('\\', "/").to_lowercase();
+                let target_inside = if target_str == root_str {
+                    true
+                } else if target_str.starts_with(&root_str) {
+                    let next_char = target_str[root_str.len()..].chars().next();
+                    next_char == Some('/')
+                } else {
+                    false
+                };
+                if !target_inside {
+                    return Err("Security Violation: Symlink or filesystem redirection escapes workspace root.".into());
+                }
+            }
         }
 
         Ok(normalized)
+    }
+
+    /// Explicitly guards the workspace root against deletion
+    pub fn ensure_not_workspace_root(&self, path: &Path) -> Result<(), String> {
+        let root = self.root.as_ref().ok_or("No workspace is currently open")?;
+        let clean_root = strip_verbatim_prefix(root);
+        let clean_path = strip_verbatim_prefix(path);
+
+        let p_str = clean_path.to_string_lossy().replace('\\', "/").to_lowercase();
+        let r_str = clean_root.to_string_lossy().replace('\\', "/").to_lowercase();
+
+        if p_str == r_str || p_str == format!("{}/", r_str) {
+            return Err("Security Violation: Deleting the workspace root directory is strictly prohibited.".into());
+        }
+        Ok(())
     }
 
     pub fn get_file_tree(&self, max_depth: usize) -> Result<FileTreeNode, String> {
@@ -252,14 +333,15 @@ impl WorkspaceService {
         fs::create_dir_all(&full_path).map_err(|e| e.to_string())
     }
 
-    /// Delete a file from the workspace. Journals the deletion for undo.
+    /// Delete a file from the workspace. Strictly prevents deleting the workspace root and journals deletion.
     pub fn delete_file(&mut self, path_str: &str) -> Result<String, String> {
         let full_path = self.resolve_and_validate(path_str)?;
+        self.ensure_not_workspace_root(&full_path)?;
         if !full_path.exists() {
             return Err(format!("File not found: {}", path_str));
         }
         if full_path.is_dir() {
-            return Err("Use delete_file only for files, not directories.".into());
+            return Err("Target is a directory, not a file. Use delete_directory instead.".into());
         }
         let old_content = fs::read_to_string(&full_path).unwrap_or_default();
         let entry = AgentChangeEntry {
@@ -273,6 +355,165 @@ impl WorkspaceService {
         self.change_journal.push(entry);
         fs::remove_file(&full_path).map_err(|e| e.to_string())?;
         Ok(format!("Deleted {}", path_str))
+    }
+
+    /// Delete a directory within the workspace. Strictly prevents deleting the workspace root.
+    pub fn delete_directory(&mut self, path_str: &str, recursive: bool) -> Result<serde_json::Value, String> {
+        let full_path = self.resolve_and_validate(path_str)?;
+        self.ensure_not_workspace_root(&full_path)?;
+
+        if !full_path.exists() {
+            return Err(format!("Directory not found: {}", path_str));
+        }
+        if !full_path.is_dir() {
+            return Err(format!("Target is a file, not a directory: {}. Use delete_file instead.", path_str));
+        }
+
+        // Preview count and size before removal
+        let mut file_count: usize = 0;
+        let mut total_bytes: u64 = 0;
+        for entry in WalkDir::new(&full_path).into_iter().filter_map(|e| e.ok()) {
+            if entry.file_type().is_file() {
+                file_count += 1;
+                total_bytes += entry.metadata().map(|m| m.len()).unwrap_or(0);
+            }
+        }
+
+        if !recursive && file_count > 0 {
+            return Err(format!("Directory '{}' is not empty (contains {} files). Set recursive: true to delete.", path_str, file_count));
+        }
+
+        let entry = AgentChangeEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            path: full_path.to_string_lossy().replace('\\', "/"),
+            before_content: Some(format!("Directory with {} files ({} bytes)", file_count, total_bytes)),
+            after_content: String::new(),
+            description: format!("Deleted directory: {} ({} files, {} bytes)", path_str, file_count, total_bytes),
+        };
+        self.change_journal.push(entry);
+
+        fs::remove_dir_all(&full_path).map_err(|e| format!("Failed to delete directory: {}", e))?;
+
+        Ok(serde_json::json!({
+            "success": true,
+            "path": path_str,
+            "files_removed": file_count,
+            "bytes_freed": total_bytes,
+            "message": format!("Successfully removed directory '{}' ({} files, {} bytes)", path_str, file_count, total_bytes)
+        }))
+    }
+
+    /// Stage 1 of Verified Batch File Deletion: Validate paths and generate verified deletion manifest.
+    pub fn prepare_batch_delete(&mut self, paths: &[String]) -> Result<BatchDeleteManifest, String> {
+        if paths.is_empty() {
+            return Err("Batch delete requires at least one file path.".into());
+        }
+
+        let root = self.root.as_ref().ok_or("No workspace open")?;
+        let clean_root = strip_verbatim_prefix(root);
+
+        let mut items = Vec::new();
+        let mut total_bytes: u64 = 0;
+
+        for p_str in paths {
+            let full_path = self.resolve_and_validate(p_str)?;
+            self.ensure_not_workspace_root(&full_path)?;
+
+            if !full_path.exists() {
+                return Err(format!("File does not exist: {}", p_str));
+            }
+            if full_path.is_dir() {
+                return Err(format!("Target '{}' is a directory. Batch file deletion only permits files.", p_str));
+            }
+
+            let meta = fs::metadata(&full_path).map_err(|e| format!("Cannot read metadata for {}: {}", p_str, e))?;
+            let size = meta.len();
+            total_bytes += size;
+
+            let clean_full = strip_verbatim_prefix(&full_path);
+            let rel = clean_full.strip_prefix(&clean_root).unwrap_or(&clean_full).to_string_lossy().replace('\\', "/");
+
+            items.push(BatchDeleteManifestItem {
+                path: p_str.clone(),
+                relative_path: rel,
+                size_bytes: size,
+                exists: true,
+                is_file: true,
+            });
+        }
+
+        let manifest_id = format!("manifest_{}_{}", chrono::Utc::now().timestamp_millis(), &uuid::Uuid::new_v4().to_string()[..8]);
+        let manifest = BatchDeleteManifest {
+            manifest_id: manifest_id.clone(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            total_files: items.len(),
+            total_bytes,
+            items,
+        };
+
+        self.pending_manifests.insert(manifest_id, manifest.clone());
+        Ok(manifest)
+    }
+
+    /// Stage 2 of Verified Batch File Deletion: Re-validate manifest targets against filesystem and execute deletion.
+    pub fn execute_batch_delete(&mut self, manifest_id: &str) -> Result<serde_json::Value, String> {
+        let manifest = self.pending_manifests.remove(manifest_id)
+            .ok_or_else(|| format!("Deletion manifest '{}' not found, expired, or already executed.", manifest_id))?;
+
+        let mut succeeded = Vec::new();
+        let mut failed = Vec::new();
+        let mut freed_bytes: u64 = 0;
+
+        for item in &manifest.items {
+            match self.resolve_and_validate(&item.path) {
+                Ok(full_path) => {
+                    if let Err(e) = self.ensure_not_workspace_root(&full_path) {
+                        failed.push(serde_json::json!({ "path": item.path, "error": e }));
+                        continue;
+                    }
+
+                    if !full_path.exists() || full_path.is_dir() {
+                        failed.push(serde_json::json!({ "path": item.path, "error": "Target no longer exists or is a directory" }));
+                        continue;
+                    }
+
+                    let old_content = fs::read_to_string(&full_path).unwrap_or_default();
+                    let entry = AgentChangeEntry {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        path: full_path.to_string_lossy().replace('\\', "/"),
+                        before_content: Some(old_content),
+                        after_content: String::new(),
+                        description: format!("Batch deleted file (manifest {}): {}", manifest_id, item.path),
+                    };
+                    self.change_journal.push(entry);
+
+                    match fs::remove_file(&full_path) {
+                        Ok(_) => {
+                            freed_bytes += item.size_bytes;
+                            succeeded.push(item.path.clone());
+                        }
+                        Err(e) => {
+                            failed.push(serde_json::json!({ "path": item.path, "error": e.to_string() }));
+                        }
+                    }
+                }
+                Err(e) => {
+                    failed.push(serde_json::json!({ "path": item.path, "error": e }));
+                }
+            }
+        }
+
+        Ok(serde_json::json!({
+            "success": failed.is_empty(),
+            "manifest_id": manifest_id,
+            "total_requested": manifest.total_files,
+            "total_deleted": succeeded.len(),
+            "bytes_freed": freed_bytes,
+            "succeeded": succeeded,
+            "failed": failed
+        }))
     }
 
     /// Rename or move a file within the workspace.
@@ -804,5 +1045,14 @@ mod tests {
         let attack = ws.resolve_and_validate("../../Windows/System32/cmd.exe");
         assert!(attack.is_err());
         assert!(attack.unwrap_err().contains("Security Violation"));
+
+        // Empty path rejected
+        assert!(ws.resolve_and_validate("").is_err());
+
+        // Workspace root deletion strictly rejected
+        let root = ws.get_root().unwrap();
+        let root_del_attempt = ws.ensure_not_workspace_root(&root);
+        assert!(root_del_attempt.is_err());
+        assert!(root_del_attempt.unwrap_err().contains("Deleting the workspace root directory is strictly prohibited"));
     }
 }
