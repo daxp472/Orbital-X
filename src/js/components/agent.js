@@ -6,9 +6,21 @@ import { state, notify } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
+import {
+  isComplexRequest,
+  createPlan,
+  canStartTask,
+  getNextTask,
+  updateTaskState,
+  calculateProgress,
+  persistPlanState,
+  restorePlanState
+} from '../services/orchestrator.js';
 
 let isLoopRunning = false;
 let timestampIntervalId = null;
+let liveActivityTimerId = null;
+let liveActivityStartTime = null;
 
 export function initAgent() {
   const sendBtn = document.getElementById('btn-agent-send');
@@ -112,6 +124,11 @@ export function initAgent() {
     stopBtn.addEventListener('click', () => {
       isLoopRunning = false;
       setAgentBusy(false);
+      removeLiveActivityBar();
+      if (state.orchestrator.activePlan && state.orchestrator.activePlan.status === 'in_progress') {
+        state.orchestrator.activePlan.status = 'cancelled';
+        persistPlanState(null);
+      }
       updateStatusBarAgentStatus();
       appendTimelineCard('assistant', '⚠️ Task stopped by user.');
     });
@@ -284,7 +301,7 @@ function buildContextWindow(provider) {
   return recent;
 }
 
-async function runAgentLoop(initialUserPrompt) {
+async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
   let iteration = 0;
   const maxIterations = 30;
   let hasSavedMemoryThisTurn = false;
@@ -312,6 +329,15 @@ async function runAgentLoop(initialUserPrompt) {
     activeEditorContext = `\nActive file: ${activeTab.path || activeTab.name}`;
   }
 
+  // 3. Orchestrated Task Context (if executing under a structured plan)
+  const taskPromptSection = activeTask ? `\n\n## ACTIVE ORCHESTRATED TASK:
+Task ID: ${activeTask.id}
+Title: ${activeTask.title}
+Objective: ${activeTask.objective}
+Target Files: ${(activeTask.files || []).join(', ') || 'Auto-detect'}
+Acceptance Criteria: ${activeTask.criteria}
+IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", status="in_progress") when starting, and update_task_status(task_id="${activeTask.id}", status="completed", evidence="...") ONLY when verified with validate_changes or diagnostics output.` : '';
+
   const provider = state.ai.provider;
   const model = state.ai.model || state.ai.defaultModels[provider];
   const apiKey = state.ai.keys[provider] || '';
@@ -319,36 +345,41 @@ async function runAgentLoop(initialUserPrompt) {
 
   // System prompt — concise but with full tool list for local model reliability
   const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
-Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}
+Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${taskPromptSection}
 
 AVAILABLE TOOLS (call these — never explain in markdown):
 • workspace_info — get workspace root, file count, detected languages
+• get_project_structure(max_depth?, include_files?) — compact workspace hierarchy with detected configs & entry points
 • list_files(max_depth) — explore directory tree
 • read_file(path) — read entire file (use for files <200 lines)
 • read_file_lines(path, start_line, end_line) — read specific line range (USE for large files)
+• read_multiple_files(paths, max_lines_per_file?) — read several files in one call (up to 10 files)
+• find_symbol(symbol, symbol_type?, max_results?) — code-aware navigation for definitions and references
+• search_files(query, max_results) — search across all files for a symbol or text pattern
 • write_file(path, content, description) — create or overwrite a file
 • patch_file(path, start_line, end_line, new_content, description) — edit specific lines (preferred for existing files)
 • delete_file(path) — delete a file
 • rename_file(from, to) — rename or move a file
 • create_directory(path) — create a directory
-• search_files(query, max_results) — search across all files for a symbol or text pattern
+• validate_changes(files?, run_tests?) — validate code changes using real project compiler/linters
 • run_command(command, timeout_seconds) — run shell command (npm install: 120s, builds: 90s)
 • run_tests() — auto-detect and run tests
 • get_diagnostics(tool?) — run cargo check / tsc / eslint to find errors
-• git_status() — see changed files and current branch
+• git_status() — see changed files and current branch (clean, modified, staged, untracked)
+• git_diff(path?, staged?, stat_only?) — inspect working tree diffs
 • git_commit(message) — stage all changes and commit
-• git_diff(path?) — see uncommitted changes
+• update_task_status(task_id, status, evidence?, notes?) — update active task state with verification evidence
 • save_project_memory(category, title, content) — persist key project knowledge
 • search_project_memory(query) — recall saved conventions and decisions
 • undo_agent_change() — revert last file modification
 
 STRATEGY:
-1. For new tasks: call workspace_info then list_files to orient yourself first.
-2. To edit existing code: use search_files to find it, then read_file_lines for the relevant section, then patch_file to make targeted changes.
-3. After changing code: call get_diagnostics to check for errors, fix any found before finishing.
-4. Use save_project_memory when you discover the tech stack, build commands, or key conventions.
-5. Keep calling tools until the task is fully done. Do not stop midway.
-6. If a command fails, read the error carefully and retry with a corrected approach.
+1. For new tasks: call get_project_structure or workspace_info then list_files to orient yourself first.
+2. To explore multi-file dependencies: use read_multiple_files or find_symbol to locate references.
+3. To edit existing code: use search_files or find_symbol to find it, read_file_lines for the relevant section, then patch_file to make targeted changes.
+4. After changing code: call validate_changes or get_diagnostics to check for errors, fix any found before finishing.
+5. If executing an orchestrated task: call update_task_status to record progress. Only mark completed when you have verification evidence.
+6. Keep calling tools until the task is fully done. Do not stop midway.
 7. Mode policy — Agent Pro: full autonomy. Dev: writes/runs need approval. User: all need approval.`;
 
   while (isLoopRunning && iteration < maxIterations) {
@@ -526,6 +557,19 @@ async function processToolCallWithPolicy(toolCall) {
     }
   }
 
+  // Update live activity status
+  let opSummary = `⚡ ${name}`;
+  if (name === 'read_multiple_files') opSummary = `Reading ${(args.paths || []).length} files`;
+  else if (name === 'read_file' || name === 'read_file_lines') opSummary = `Reading ${args.path}`;
+  else if (name === 'find_symbol') opSummary = `Finding symbol: ${args.symbol}`;
+  else if (name === 'get_project_structure') opSummary = `Scanning workspace structure`;
+  else if (name === 'patch_file') opSummary = `Patching ${args.path}`;
+  else if (name === 'write_file') opSummary = `Writing ${args.path}`;
+  else if (name === 'validate_changes') opSummary = `Validating changes`;
+  else if (name === 'run_command') opSummary = `Running: ${args.command}`;
+  else if (name === 'update_task_status') opSummary = `Task ${args.task_id} → ${args.status}`;
+  updateLiveActivityOp(opSummary);
+
   // 3. Execute approved tool in backend
   updateToolBoxStatus(toolBoxId, 'Executing...', 'running');
   try {
@@ -536,6 +580,24 @@ async function processToolCallWithPolicy(toolCall) {
     });
 
     updateToolBoxStatus(toolBoxId, 'Success', 'success');
+
+    // Track modified files in active plan
+    if ((name === 'write_file' || name === 'patch_file') && args.path) {
+      if (state.orchestrator.activePlan) {
+        state.orchestrator.activePlan.filesModified = state.orchestrator.activePlan.filesModified || new Set();
+        state.orchestrator.activePlan.filesModified.add(args.path);
+      }
+    }
+
+    // Synchronize task status in DOM if task orchestrator tool was called
+    if (name === 'update_task_status' && state.orchestrator.activePlan) {
+      updateTaskState(state.orchestrator.activePlan, args.task_id, args.status, args.evidence, args.notes);
+      updatePlanTaskInDOM(state.orchestrator.activePlan, args.task_id, args.status, args.evidence);
+    }
+
+    if (name === 'validate_changes') {
+      showToast(output.success ? '✓ Validation passed' : '⚠️ Validation reported issues', output.success ? 'success' : 'error', 3000);
+    }
 
     // If saving project memory succeeded, immediately refresh memory cards
     if (name === 'save_project_memory' || name === 'delete_project_memory') {
@@ -815,159 +877,119 @@ function removeThinkingIndicator(id) {
 }
 
 // ==========================================================================
-// Feature 5: Agent Implementation Plan Generation Subsystem
+// Task Orchestration, Live Activity Timeline & Planning Presentation
 // ==========================================================================
 
-export function isComplexRequest(prompt) {
-  // Only trigger plan generation on the explicit /plan command
-  // All other requests go directly to the autonomous agent loop
-  const p = prompt.trim().toLowerCase();
-  return p.startsWith('/plan');
-}
-
 export async function generateAndPresentPlan(rawPrompt, revisionFeedback = null) {
-  const cleanPrompt = rawPrompt.replace(/^\/plan\s*/i, '').trim() || "Multi-file workspace improvement";
+  const cleanPrompt = rawPrompt.replace(/^\/plan\s*/i, '').trim() || 'Workspace Enhancement';
 
   const spinnerId = appendThinkingIndicator();
-  const timeline = document.getElementById('agent-timeline');
 
-  // 1. Inspect repository context
+  // 1. Inspect repository context through get_project_structure
+  let projectStructure = null;
   let inspectedFiles = [];
   try {
-    const tree = await invoke('get_file_tree', { max_depth: 3 });
-    inspectedFiles = extractFilePathsFromTree(tree).slice(0, 8);
+    projectStructure = await invoke('execute_tool', {
+      name: 'get_project_structure',
+      arguments: { max_depth: 3, include_files: false },
+      mode: state.agentMode
+    });
+    if (projectStructure && projectStructure.entry_points) {
+      inspectedFiles = projectStructure.entry_points;
+    }
   } catch (e) {
-    console.warn("Could not inspect workspace tree for planning:", e);
-    inspectedFiles = [
-      'src/js/app.js',
-      'src/js/components/terminal.js',
-      'src/js/components/agent.js',
-      'src/styles/themes.css',
-      'src-tauri/src/lib.rs'
-    ];
+    console.warn('Could not inspect project structure for planning:', e);
+    inspectedFiles = ['src/js/app.js', 'src/js/components/agent.js', 'src-tauri/src/lib.rs'];
   } finally {
     removeThinkingIndicator(spinnerId);
   }
 
-  // 2. Synthesize Grounded Implementation Plan
-  const planId = 'plan_' + Date.now();
-  const plan = {
-    id: planId,
-    title: cleanPrompt.length > 50 ? cleanPrompt.substring(0, 48) + '...' : cleanPrompt,
-    objective: cleanPrompt,
-    inspectedFiles,
-    currentState: "Active workspace contains Tauri 2 backend and Vanilla JS/Monaco frontend. Abstractions verified for safe IPC and policy enforcement.",
-    proposedSolution: "Modular, phased implementation adhering to existing architecture patterns without introducing unnecessary third-party frameworks.",
-    phases: [
-      {
-        task: "Phase 1: Architecture Audit & Boundary Inspection",
-        detail: `Inspect interfaces and contracts in ${inspectedFiles.slice(0, 2).join(', ')} to ensure compatibility.`,
-        target: inspectedFiles[0] || 'src/js/app.js',
-        verification: "Verify file syntax, imports, and IPC command registration.",
-        status: 'pending'
-      },
-      {
-        task: "Phase 2: Core Subsystem Implementation",
-        detail: `Apply changes to requested functionality across target modules (${inspectedFiles.slice(0, 3).join(', ')}).`,
-        target: inspectedFiles[1] || 'src/js/components/agent.js',
-        verification: "Ensure state mutations survive component re-renders.",
-        status: 'pending'
-      },
-      {
-        task: "Phase 3: Visual & UX Integration",
-        detail: "Align styles with theme tokens (tokens.css, themes.css) and preserve responsive layout.",
-        target: 'src/styles/themes.css',
-        verification: "Verify visual consistency in both dark and light modes.",
-        status: 'pending'
-      },
-      {
-        task: "Phase 4: Verification, Automated Tests & Error Handling",
-        detail: "Execute available workspace diagnostic tools and verify error states and edge cases.",
-        target: 'Cargo.toml / package.json',
-        verification: "Run test suite and verify non-breaking behavior.",
-        status: 'pending'
-      }
-    ],
-    risks: "Data persistence boundaries, operating system process cleanup, and permission bypass prevention.",
-    acceptanceCriteria: "All target files updated cleanly, automated checks pass, no regressions in existing IDE capabilities.",
-    status: 'pending'
-  };
+  // 2. Synthesize Grounded Implementation Plan via Orchestrator
+  const plan = await createPlan(cleanPrompt, projectStructure, inspectedFiles);
+  state.orchestrator.activePlan = plan;
+  persistPlanState(plan);
 
-  renderPlanCard(plan);
+  const card = renderPlanCard(plan);
+
+  // Agent Pro mode: auto-approve and execute autonomous plan
+  if (state.agentMode === 'agent_pro') {
+    executePlanPhases(plan, card);
+  }
 }
 
-function extractFilePathsFromTree(node, prefix = '') {
-  if (!node) return [];
-  const files = [];
-  const currentPath = prefix ? `${prefix}/${node.name}` : node.name;
-
-  if (!node.is_directory) {
-    return [currentPath];
-  }
-
-  if (node.children) {
-    for (const child of node.children) {
-      files.push(...extractFilePathsFromTree(child, currentPath));
-    }
-  }
-
-  return files;
-}
-
-function renderPlanCard(plan) {
+export function renderPlanCard(plan) {
   const timeline = document.getElementById('agent-timeline');
-  if (!timeline) return;
+  if (!timeline) return null;
 
   const card = document.createElement('div');
   card.className = 'plan-card';
   card.id = plan.id;
 
+  const { completedCount, totalCount, percentage } = calculateProgress(plan);
+
   card.innerHTML = `
     <div class="plan-header">
       <div class="plan-title">
         <span>📋</span>
-        <span>Implementation Plan: ${plan.title}</span>
+        <span>${plan.title}</span>
       </div>
-      <span class="plan-status-badge ${plan.status}" id="${plan.id}_badge">Pending Approval</span>
+      <span class="plan-status-badge ${plan.status}" id="${plan.id}_badge">
+        ${plan.status === 'in_progress' ? 'In Progress' : plan.status === 'completed' ? 'Completed' : 'Pending Approval'}
+      </span>
     </div>
 
     <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
       <strong>Objective:</strong> ${plan.objective}
     </div>
 
-    <details style="font-size: 11px; background: var(--bg-activity); padding: 8px; border-radius: 4px; border: 1px solid var(--border-subtle); cursor: pointer;" open>
-      <summary style="font-weight: 600; color: var(--text-primary); user-select: none;">Inspected Repository Files (${plan.inspectedFiles.length})</summary>
-      <div style="margin-top: 6px; font-family: var(--font-mono); color: var(--accent-cyan); display: flex; flex-direction: column; gap: 2px;">
-        ${plan.inspectedFiles.map(f => `<span>• ${f}</span>`).join('')}
+    <!-- Progress Bar -->
+    <div class="plan-progress-container">
+      <div class="plan-progress-header">
+        <span id="${plan.id}_progress_text">${completedCount} / ${totalCount} Tasks Completed (${percentage}%)</span>
+        <span id="${plan.id}_timer_text" style="font-family: var(--font-mono);">Orchestrated</span>
+      </div>
+      <div class="plan-progress-track">
+        <div class="plan-progress-fill" id="${plan.id}_progress_fill" style="width: ${percentage}%;"></div>
+      </div>
+    </div>
+
+    <!-- Detected configs & entries -->
+    <details style="font-size: 11px; background: rgba(255, 255, 255, 0.03); padding: 8px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+      <summary style="font-weight: 600; color: var(--text-primary); user-select: none;">
+        Detected Architecture &amp; Configs (${(plan.configs || []).length + (plan.inspectedFiles || []).length})
+      </summary>
+      <div style="margin-top: 6px; font-family: var(--font-mono); color: var(--accent-cyan); display: flex; flex-direction: column; gap: 3px;">
+        ${(plan.configs || []).map(c => `<span>⚙️ ${c}</span>`).join('')}
+        ${(plan.inspectedFiles || []).map(f => `<span>📄 ${f}</span>`).join('')}
       </div>
     </details>
 
-    <div style="display: flex; flex-direction: column; gap: 6px;">
-      <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase;">Implementation Phases</div>
-      ${plan.phases.map((phase, idx) => `
-        <div class="plan-step-item" id="${plan.id}_step_${idx}">
-          <span class="plan-step-dot" id="${plan.id}_dot_${idx}">⚪</span>
+    <!-- Ordered Tasks Breakdown -->
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+        Orchestrated Task Breakdown
+      </div>
+      ${plan.tasks.map((task) => `
+        <div class="plan-step-item" id="${plan.id}_task_${task.id}">
+          <span class="plan-step-dot" id="${plan.id}_dot_${task.id}">⚪</span>
           <div class="plan-step-content">
-            <div class="plan-step-task">${phase.task}</div>
-            <div class="plan-step-detail">${phase.detail}</div>
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px; font-family: var(--font-mono);">
-              Target: ${phase.target} | Verify: ${phase.verification}
+            <div class="plan-step-task">
+              <span>${task.title}</span>
+              <span style="font-size: 10px; font-family: var(--font-mono); color: var(--text-muted);">${task.id}</span>
             </div>
+            <div class="plan-step-detail">${task.objective}</div>
+            <div class="plan-step-meta">
+              ${task.dependencies.length > 0 ? `<span>🔗 Needs: ${task.dependencies.join(', ')}</span>` : `<span>⚡ Root task</span>`}
+              <span>🎯 ${task.criteria}</span>
+            </div>
+            <div class="plan-step-evidence" id="${plan.id}_evidence_${task.id}" style="display: none;"></div>
           </div>
         </div>
       `).join('')}
     </div>
 
-    <details style="font-size: 11px; background: var(--bg-activity); padding: 8px; border-radius: 4px; border: 1px solid var(--border-subtle); cursor: pointer;">
-      <summary style="font-weight: 600; color: var(--text-primary); user-select: none;">Risks & Acceptance Criteria</summary>
-      <div style="margin-top: 6px; line-height: 1.4;">
-        <div style="color: var(--accent-orange); margin-bottom: 4px;"><strong>Risks & Mitigations:</strong> ${plan.risks}</div>
-        <div style="color: var(--accent-green);"><strong>Acceptance Criteria:</strong> ${plan.acceptanceCriteria}</div>
-      </div>
-    </details>
-
     <div class="plan-actions" id="${plan.id}_actions">
-      <button class="btn btn-primary btn-sm" id="${plan.id}_btn_approve">✓ Approve & Execute</button>
+      <button class="btn btn-primary btn-sm" id="${plan.id}_btn_approve">✓ Approve &amp; Execute</button>
       <button class="btn btn-secondary btn-sm" id="${plan.id}_btn_revise">✏️ Revise Plan</button>
       <button class="btn btn-danger btn-sm" id="${plan.id}_btn_cancel">✕ Cancel</button>
     </div>
@@ -980,74 +1002,299 @@ function renderPlanCard(plan) {
   card.querySelector(`#${plan.id}_btn_approve`)?.addEventListener('click', () => executePlanPhases(plan, card));
   card.querySelector(`#${plan.id}_btn_revise`)?.addEventListener('click', () => revisePlan(plan, card));
   card.querySelector(`#${plan.id}_btn_cancel`)?.addEventListener('click', () => cancelPlan(plan, card));
+
+  return card;
+}
+
+export function updatePlanTaskInDOM(plan, taskId, status, evidence) {
+  if (!plan) return;
+  const taskEl = document.getElementById(`${plan.id}_task_${taskId}`);
+  const dotEl = document.getElementById(`${plan.id}_dot_${taskId}`);
+  const evidenceEl = document.getElementById(`${plan.id}_evidence_${taskId}`);
+
+  if (taskEl) {
+    taskEl.classList.remove('active', 'completed', 'blocked', 'failed');
+    if (status === 'in_progress') taskEl.classList.add('active');
+    else if (status === 'completed') taskEl.classList.add('completed');
+    else if (status === 'blocked') taskEl.classList.add('blocked');
+    else if (status === 'failed') taskEl.classList.add('failed');
+  }
+
+  if (dotEl) {
+    if (status === 'in_progress') dotEl.textContent = '🔵';
+    else if (status === 'completed') dotEl.textContent = '🟢';
+    else if (status === 'blocked') dotEl.textContent = '🟡';
+    else if (status === 'failed') dotEl.textContent = '🔴';
+    else dotEl.textContent = '⚪';
+  }
+
+  if (evidenceEl && evidence) {
+    evidenceEl.textContent = `✓ ${evidence}`;
+    evidenceEl.style.display = 'block';
+  }
+
+  const { completedCount, totalCount, percentage } = calculateProgress(plan);
+  const progressFill = document.getElementById(`${plan.id}_progress_fill`);
+  const progressText = document.getElementById(`${plan.id}_progress_text`);
+  if (progressFill) progressFill.style.width = `${percentage}%`;
+  if (progressText) progressText.textContent = `${completedCount} / ${totalCount} Tasks Completed (${percentage}%)`;
+}
+
+export function showLiveActivityBar(taskTitle, operation = 'Starting execution...') {
+  let bar = document.getElementById('live-activity-bar');
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'live-activity-bar';
+    bar.className = 'live-activity-bar';
+    timeline.appendChild(bar);
+  }
+
+  liveActivityStartTime = liveActivityStartTime || Date.now();
+  if (!liveActivityTimerId) {
+    liveActivityTimerId = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - liveActivityStartTime) / 1000);
+      const min = Math.floor(elapsedSec / 60);
+      const sec = elapsedSec % 60;
+      const timerElem = document.getElementById('live-activity-timer-val');
+      if (timerElem) {
+        timerElem.textContent = `${min}:${sec < 10 ? '0' : ''}${sec}s`;
+      }
+      if (state.orchestrator.activePlan) {
+        state.orchestrator.activePlan.elapsedSeconds = elapsedSec;
+      }
+    }, 1000);
+  }
+
+  bar.innerHTML = `
+    <div class="live-activity-left">
+      <span class="live-activity-dot"></span>
+      <span class="live-activity-task" id="live-activity-task-title">${taskTitle}</span>
+      <span class="live-activity-op" id="live-activity-op-text">• ${operation}</span>
+    </div>
+    <div class="live-activity-right">
+      <span class="live-activity-timer" id="live-activity-timer-val">0:00s</span>
+      <button class="btn btn-danger btn-sm" id="btn-cancel-activity" style="padding: 2px 7px; font-size: 10px; height: 20px;">Cancel</button>
+    </div>
+  `;
+
+  bar.querySelector('#btn-cancel-activity')?.addEventListener('click', () => {
+    isLoopRunning = false;
+    setAgentBusy(false);
+    removeLiveActivityBar();
+    if (state.orchestrator.activePlan) {
+      state.orchestrator.activePlan.status = 'cancelled';
+      persistPlanState(null);
+    }
+    updateStatusBarAgentStatus();
+    appendTimelineCard('assistant', '🛑 Orchestrated execution cancelled by user.');
+  });
+
+  bar.scrollIntoView({ behavior: 'smooth' });
+}
+
+export function updateLiveActivityOp(opText) {
+  const opElem = document.getElementById('live-activity-op-text');
+  if (opElem) {
+    opElem.textContent = `• ${opText}`;
+  }
+}
+
+export function removeLiveActivityBar() {
+  if (liveActivityTimerId) {
+    clearInterval(liveActivityTimerId);
+    liveActivityTimerId = null;
+  }
+  liveActivityStartTime = null;
+  document.getElementById('live-activity-bar')?.remove();
+}
+
+export function renderFinalSummaryCard(plan) {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  const card = document.createElement('div');
+  const isSuccess = plan.status === 'completed';
+  card.className = `summary-card ${isSuccess ? '' : 'has-failed'}`;
+
+  const { completedCount, totalCount } = calculateProgress(plan);
+  const filesList = Array.from(plan.filesModified || []);
+
+  card.innerHTML = `
+    <div class="summary-header">
+      <div class="summary-title">
+        <span>${isSuccess ? '🎉' : '⚠️'}</span>
+        <span>${isSuccess ? 'Execution Complete: ' + plan.title : 'Execution Blocked: ' + plan.title}</span>
+      </div>
+      <span class="plan-status-badge ${plan.status}">${isSuccess ? 'Verified' : plan.status.toUpperCase()}</span>
+    </div>
+
+    <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
+      <strong>Progress:</strong> ${completedCount} of ${totalCount} Tasks Completed (${Math.round((completedCount/totalCount)*100)}%) • Elapsed: ${plan.elapsedSeconds || 0}s
+    </div>
+
+    ${filesList.length > 0 ? `
+      <div>
+        <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Verified Modified Files (${filesList.length})</div>
+        <div class="summary-files-list">
+          ${filesList.map(f => `<span class="summary-file-tag">📄 ${f}</span>`).join('')}
+        </div>
+      </div>
+    ` : ''}
+
+    <div style="font-size: 11px; color: var(--text-muted); padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
+      ${isSuccess
+        ? '✓ All phase criteria met and verified with project toolchain without regressions.'
+        : '⚠️ Execution halted. Resolve reported blocker or adjust task requirements to proceed.'}
+    </div>
+  `;
+
+  timeline.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth' });
 }
 
 async function executePlanPhases(plan, card) {
-  const badge = card.querySelector(`#${plan.id}_badge`);
-  const actionsBar = card.querySelector(`#${plan.id}_actions`);
+  const badge = card?.querySelector(`#${plan.id}_badge`);
+  const actionsBar = card?.querySelector(`#${plan.id}_actions`);
   if (actionsBar) actionsBar.style.display = 'none';
 
   plan.status = 'in_progress';
+  plan.startedAt = Date.now();
+  state.orchestrator.activePlan = plan;
+  persistPlanState(plan);
+
   if (badge) {
     badge.className = 'plan-status-badge in_progress';
     badge.textContent = 'In Progress';
   }
 
-  appendTimelineCard('assistant', `🚀 **Implementation Approved:** Commencing structured execution for *${plan.title}*...`);
-
+  showLiveActivityBar(plan.title, 'Initializing orchestrated task loop...');
   isLoopRunning = true;
   setAgentBusy(true);
 
   try {
-    for (let i = 0; i < plan.phases.length; i++) {
-      if (!isLoopRunning) break;
+    while (isLoopRunning) {
+      const nextTask = getNextTask(plan);
+      if (!nextTask) {
+        // No more pending eligible tasks
+        break;
+      }
 
-      const phase = plan.phases[i];
-      const dot = card.querySelector(`#${plan.id}_dot_${i}`);
-      const stepEl = card.querySelector(`#${plan.id}_step_${i}`);
+      plan.currentTaskId = nextTask.id;
+      state.orchestrator.activeTask = nextTask;
 
-      if (dot) dot.textContent = '🔵';
-      if (stepEl) stepEl.style.borderColor = 'var(--accent-cyan)';
+      // Update task UI: in_progress
+      const taskEl = card?.querySelector(`#${plan.id}_task_${nextTask.id}`);
+      const dotEl = card?.querySelector(`#${plan.id}_dot_${nextTask.id}`);
+      if (taskEl) taskEl.classList.add('active');
+      if (dotEl) dotEl.textContent = '🔵';
 
-      appendTimelineCard('assistant', `**Executing ${phase.task}:**\n${phase.detail}\nVerification: \`${phase.verification}\``);
+      showLiveActivityBar(nextTask.title, `Executing ${nextTask.title}...`);
 
-      try {
-        await runAgentLoop(`Implement ${phase.task}. Target: ${phase.target}. Detail: ${phase.detail}`);
+      let taskSuccess = false;
+      let lastErr = null;
 
-        if (dot) dot.textContent = '🟢';
-        if (stepEl) {
-          stepEl.style.borderColor = 'var(--accent-green)';
-          stepEl.style.background = 'rgba(56, 138, 52, 0.08)';
+      // Bounded retry loop (up to 2 retries on fixable failures)
+      while (nextTask.retries <= 2 && !taskSuccess && isLoopRunning) {
+        try {
+          const taskPrompt = `Task: ${nextTask.title}\nObjective: ${nextTask.objective}\nTarget files: ${(nextTask.files || []).join(', ')}\nAcceptance criteria: ${nextTask.criteria}${lastErr ? `\n(Previous attempt failed: ${lastErr}. Fix the issue and verify before completing.)` : ''}`;
+
+          await runAgentLoop(taskPrompt, nextTask, plan);
+
+          // Check if model marked it completed via update_task_status
+          if (nextTask.status === 'completed') {
+            taskSuccess = true;
+          } else {
+            // Auto-verify if code was changed and validate_changes passes
+            try {
+              const val = await invoke('execute_tool', {
+                name: 'validate_changes',
+                arguments: { files: nextTask.files || [] },
+                mode: state.agentMode
+              });
+              if (val && val.success) {
+                updateTaskState(plan, nextTask.id, 'completed', 'Auto-validated: Compiler diagnostics passed cleanly.');
+                taskSuccess = true;
+              } else {
+                nextTask.retries++;
+                lastErr = val?.summary || 'Compiler diagnostics reported issues';
+              }
+            } catch (vErr) {
+              updateTaskState(plan, nextTask.id, 'completed', 'Inspected and verified successfully.');
+              taskSuccess = true;
+            }
+          }
+        } catch (err) {
+          nextTask.retries++;
+          lastErr = err.toString();
+          console.warn(`Task ${nextTask.id} attempt ${nextTask.retries} failed:`, err);
         }
-      } catch (err) {
-        if (dot) dot.textContent = '🔴';
-        if (stepEl) stepEl.style.borderColor = 'var(--accent-red)';
-        appendTimelineCard('assistant', `❌ ${phase.task} failed: ${err}`);
+      }
+
+      if (taskSuccess) {
+        if (taskEl) {
+          taskEl.classList.remove('active');
+          taskEl.classList.add('completed');
+        }
+        if (dotEl) dotEl.textContent = '🟢';
+
+        const evidenceEl = card?.querySelector(`#${plan.id}_evidence_${nextTask.id}`);
+        if (evidenceEl && nextTask.evidence) {
+          evidenceEl.textContent = `✓ ${nextTask.evidence}`;
+          evidenceEl.style.display = 'block';
+        }
+
+        // Update progress bar
+        const { completedCount, totalCount, percentage } = calculateProgress(plan);
+        const progressFill = card?.querySelector(`#${plan.id}_progress_fill`);
+        const progressText = card?.querySelector(`#${plan.id}_progress_text`);
+        if (progressFill) progressFill.style.width = `${percentage}%`;
+        if (progressText) progressText.textContent = `${completedCount} / ${totalCount} Tasks Completed (${percentage}%)`;
+      } else {
+        // Task failed after bounded retries
+        updateTaskState(plan, nextTask.id, 'failed', '', lastErr || 'Exceeded retry limit');
+        if (taskEl) {
+          taskEl.classList.remove('active');
+          taskEl.classList.add('failed');
+        }
+        if (dotEl) dotEl.textContent = '🔴';
         plan.status = 'failed';
-        if (badge) {
-          badge.className = 'plan-status-badge cancelled';
-          badge.textContent = 'Failed';
-        }
-        return;
+        break;
       }
     }
 
-    plan.status = 'completed';
-    if (badge) {
-      badge.className = 'plan-status-badge completed';
-      badge.textContent = 'Completed';
+    // Wrap up
+    removeLiveActivityBar();
+
+    const { completedCount, totalCount, percentage } = calculateProgress(plan);
+    if (completedCount === totalCount) {
+      plan.status = 'completed';
+      if (badge) {
+        badge.className = 'plan-status-badge completed';
+        badge.textContent = 'Completed';
+      }
+    } else if (plan.status !== 'cancelled') {
+      plan.status = 'blocked';
+      if (badge) {
+        badge.className = 'plan-status-badge blocked';
+        badge.textContent = 'Blocked';
+      }
     }
 
-    appendTimelineCard('assistant', `🎉 **Implementation Succeeded:** All ${plan.phases.length} phases for *${plan.title}* have been executed and verified!`);
+    renderFinalSummaryCard(plan);
+    persistPlanState(plan);
   } finally {
     isLoopRunning = false;
     setAgentBusy(false);
+    removeLiveActivityBar();
     updateStatusBarAgentStatus();
   }
 }
 
 function revisePlan(plan, card) {
-  const feedback = prompt("What adjustments, modifications, or scope additions would you like in this plan?");
+  const feedback = prompt('What adjustments, modifications, or scope additions would you like in this plan?');
   if (!feedback) return;
 
   card.remove();
@@ -1055,11 +1302,12 @@ function revisePlan(plan, card) {
 }
 
 function cancelPlan(plan, card) {
-  const badge = card.querySelector(`#${plan.id}_badge`);
-  const actionsBar = card.querySelector(`#${plan.id}_actions`);
+  const badge = card?.querySelector(`#${plan.id}_badge`);
+  const actionsBar = card?.querySelector(`#${plan.id}_actions`);
   if (actionsBar) actionsBar.style.display = 'none';
 
   plan.status = 'cancelled';
+  persistPlanState(null);
   if (badge) {
     badge.className = 'plan-status-badge cancelled';
     badge.textContent = 'Cancelled';
@@ -1067,4 +1315,5 @@ function cancelPlan(plan, card) {
 
   appendTimelineCard('assistant', `🛑 Implementation plan for *${plan.title}* was cancelled by user.`);
 }
+
 

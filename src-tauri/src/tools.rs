@@ -283,13 +283,21 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
             "type": "function",
             "function": {
                 "name": "git_diff",
-                "description": "Get the unified diff of uncommitted changes. Optionally specify a single file path to see changes for just that file.",
+                "description": "Get the unified diff of changes in the git working tree. Allows targeted inspection by file path, staged/unstaged changes, or stat summary, avoiding dumping massive diffs into context.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "path": {
                             "type": "string",
                             "description": "Optional: relative file path to diff a specific file only"
+                        },
+                        "staged": {
+                            "type": "boolean",
+                            "description": "If true, show staged changes (--cached); if false, show unstaged"
+                        },
+                        "stat_only": {
+                            "type": "boolean",
+                            "description": "If true, show only the diffstat summary instead of full line-by-line diff"
                         }
                     }
                 }
@@ -345,6 +353,125 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                 "parameters": {
                     "type": "object",
                     "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_multiple_files",
+                "description": "Read multiple workspace files in a single tool call (up to 10 files). Enforces workspace boundaries, provides line counts, and reports truncated files clearly. Use when you need context from several related modules at once.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "paths": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "List of relative file paths to read (max 10)"
+                        },
+                        "max_lines_per_file": {
+                            "type": "integer",
+                            "description": "Max lines to return per file (default 300, max 500)"
+                        }
+                    },
+                    "required": ["paths"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "find_symbol",
+                "description": "Code-aware navigation to locate definitions and references of a symbol (function, class, struct, type, const, or variable) across the workspace. Returns file path, line number, match kind ('definition' vs 'reference'), and surrounding context. Never fabricates symbols.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "The exact symbol name to find"
+                        },
+                        "symbol_type": {
+                            "type": "string",
+                            "enum": ["definition", "reference", "all"],
+                            "description": "Whether to search for definitions, references/usages, or both (default 'all')"
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results to return (default 25, max 50)"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_project_structure",
+                "description": "Return a compact, configurable workspace structural overview. Respects exclusions (.git, node_modules, target, dist), identifies key configuration files (package.json, Cargo.toml, tsconfig.json, etc.) and entry points, with bounded depth. Use for architecture recon.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "max_depth": {
+                            "type": "integer",
+                            "description": "Maximum directory depth to traverse (default 3, max 5)"
+                        },
+                        "include_files": {
+                            "type": "boolean",
+                            "description": "Whether to list individual files or only directory layout (default true)"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "validate_changes",
+                "description": "Focused validation of recent code changes using real toolchain checks (cargo check, node --check, tsc, eslint, etc.). Returns actual exit codes, compiler diagnostics, and errors without inventing results. Satisfies completion evidence requirements.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "files": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Optional: specific modified files to validate. If omitted, validates all recently changed files or project diagnostics."
+                        },
+                        "run_tests": {
+                            "type": "boolean",
+                            "description": "Optional: also execute the project's test suite to verify no regressions (default false)"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_task_status",
+                "description": "Update the execution state of a task in the active orchestration plan. Enforces that marking a task complete requires real completion evidence (test/diagnostic output or verified file state). Synchronizes task progress with the IDE UI.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "description": "The unique task identifier (e.g. 'task-1', 'phase-2')"
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["in_progress", "completed", "blocked", "failed", "skipped"],
+                            "description": "The new status of the task"
+                        },
+                        "evidence": {
+                            "type": "string",
+                            "description": "MANDATORY when status='completed': the verifiable evidence that this task succeeded (diagnostic result, test output, or verified diff)."
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Optional: brief note on what was accomplished or why the task is blocked/failed."
+                        }
+                    },
+                    "required": ["task_id", "status"]
                 }
             }
         }

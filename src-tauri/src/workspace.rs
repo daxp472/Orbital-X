@@ -467,6 +467,276 @@ impl WorkspaceService {
         Ok(matches)
     }
 
+    pub fn read_multiple_files(&self, paths: &[String], max_lines_per_file: usize) -> Result<Vec<serde_json::Value>, String> {
+        let max_paths = 10;
+        let limit = if max_lines_per_file == 0 { 300 } else { max_lines_per_file.min(500) };
+        let mut results = Vec::new();
+
+        for path_str in paths.iter().take(max_paths) {
+            match self.resolve_and_validate(path_str) {
+                Err(e) => {
+                    results.push(serde_json::json!({
+                        "path": path_str,
+                        "error": e,
+                        "success": false
+                    }));
+                }
+                Ok(full_path) => {
+                    if !full_path.exists() || !full_path.is_file() {
+                        results.push(serde_json::json!({
+                            "path": path_str,
+                            "error": "File does not exist or is a directory",
+                            "success": false
+                        }));
+                        continue;
+                    }
+
+                    match fs::read(&full_path) {
+                        Err(e) => {
+                            results.push(serde_json::json!({
+                                "path": path_str,
+                                "error": e.to_string(),
+                                "success": false
+                            }));
+                        }
+                        Ok(bytes) => {
+                            let is_binary = bytes.iter().take(1024).any(|&b| b == 0);
+                            if is_binary {
+                                results.push(serde_json::json!({
+                                    "path": path_str,
+                                    "is_binary": true,
+                                    "total_lines": 0,
+                                    "content": "[Binary File]",
+                                    "truncated": false,
+                                    "success": true
+                                }));
+                                continue;
+                            }
+
+                            let content_full = String::from_utf8_lossy(&bytes).to_string();
+                            let lines: Vec<&str> = content_full.lines().collect();
+                            let total_lines = lines.len();
+
+                            let (content, truncated) = if total_lines > limit {
+                                let truncated_content = lines.iter().take(limit).cloned().collect::<Vec<_>>().join("\n");
+                                (truncated_content, true)
+                            } else {
+                                (content_full, false)
+                            };
+
+                            results.push(serde_json::json!({
+                                "path": path_str,
+                                "total_lines": total_lines,
+                                "lines_returned": if truncated { limit } else { total_lines },
+                                "truncated": truncated,
+                                "content": content,
+                                "success": true
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    pub fn find_symbols(&self, symbol: &str, symbol_type: &str, max_results: usize) -> Result<Vec<serde_json::Value>, String> {
+        let root = self.root.as_ref().ok_or("No workspace open")?;
+        let symbol_clean = symbol.trim();
+        if symbol_clean.is_empty() {
+            return Err("Symbol cannot be empty".to_string());
+        }
+
+        let max_res = max_results.clamp(1, 50);
+        let mut results = Vec::new();
+
+        let escaped_sym = regex::escape(symbol_clean);
+        let def_pattern = format!(
+            r"(?i)\b(?:fn|function|class|struct|enum|trait|type|const|let|var|interface|def|pub\s+fn|async\s+fn|export\s+(?:default\s+)?(?:function|class|const|let|var|interface|type))\s+{}\b",
+            escaped_sym
+        );
+        let def_regex = regex::Regex::new(&def_pattern).map_err(|e| e.to_string())?;
+
+        let word_pattern = format!(r"\b{}\b", escaped_sym);
+        let word_regex = regex::Regex::new(&word_pattern).map_err(|e| e.to_string())?;
+
+        let want_defs = symbol_type == "definition" || symbol_type == "all" || symbol_type.is_empty();
+        let want_refs = symbol_type == "reference" || symbol_type == "all";
+
+        for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+            if results.len() >= max_res {
+                break;
+            }
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+
+            let fname = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
+            if fname.starts_with('.') || fname == "node_modules" || fname == "target" || fname == "dist" || fname == "package-lock.json" || fname == "Cargo.lock" {
+                continue;
+            }
+
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                let is_code = matches!(ext_str.as_str(), "rs" | "js" | "ts" | "jsx" | "tsx" | "py" | "go" | "c" | "cpp" | "h" | "html" | "css");
+                if !is_code {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+
+            if let Ok(meta) = path.metadata() {
+                if meta.len() > 300 * 1024 {
+                    continue;
+                }
+            }
+
+            if let Ok(text) = fs::read_to_string(path) {
+                let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+                for (idx, line) in text.lines().enumerate() {
+                    if results.len() >= max_res {
+                        break;
+                    }
+                    let line_trimmed = line.trim();
+                    if line_trimmed.is_empty() {
+                        continue;
+                    }
+
+                    let is_def = def_regex.is_match(line_trimmed);
+                    let is_ref = !is_def && word_regex.is_match(line_trimmed);
+
+                    if want_defs && is_def {
+                        results.push(serde_json::json!({
+                            "file": rel,
+                            "line": idx + 1,
+                            "kind": "definition",
+                            "snippet": line_trimmed,
+                            "symbol": symbol_clean
+                        }));
+                    } else if want_refs && is_ref {
+                        results.push(serde_json::json!({
+                            "file": rel,
+                            "line": idx + 1,
+                            "kind": "reference",
+                            "snippet": line_trimmed,
+                            "symbol": symbol_clean
+                        }));
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn build_compact_tree(
+        &self,
+        current: &Path,
+        root: &Path,
+        depth: usize,
+        max_depth: usize,
+        include_files: bool,
+        total_files: &mut usize,
+        total_dirs: &mut usize,
+    ) -> Result<serde_json::Value, String> {
+        let name = current.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let rel_path = current.strip_prefix(root).unwrap_or(current).to_string_lossy().replace('\\', "/");
+
+        if current.is_file() {
+            *total_files += 1;
+            let size = fs::metadata(current).map(|m| m.len()).unwrap_or(0);
+            return Ok(serde_json::json!({
+                "name": name,
+                "path": rel_path,
+                "type": "file",
+                "size_bytes": size
+            }));
+        }
+
+        *total_dirs += 1;
+        let mut children = Vec::new();
+        if depth < max_depth {
+            if let Ok(entries) = fs::read_dir(current) {
+                let mut dir_entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+                dir_entries.sort_by_key(|e| {
+                    let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    (!is_dir, e.file_name())
+                });
+
+                for entry in dir_entries {
+                    let fname = entry.file_name().to_string_lossy().to_string();
+                    if fname.starts_with('.') || fname == "node_modules" || fname == "target" || fname == "dist" || fname == ".orbital" {
+                        continue;
+                    }
+                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    if !is_dir && !include_files {
+                        *total_files += 1;
+                        continue;
+                    }
+
+                    if let Ok(child) = self.build_compact_tree(&entry.path(), root, depth + 1, max_depth, include_files, total_files, total_dirs) {
+                        children.push(child);
+                    }
+                }
+            }
+        }
+
+        Ok(serde_json::json!({
+            "name": if rel_path.is_empty() { "root".to_string() } else { name },
+            "path": if rel_path.is_empty() { ".".to_string() } else { rel_path },
+            "type": "directory",
+            "children": children
+        }))
+    }
+
+    pub fn get_project_structure(&self, max_depth: usize, include_files: bool) -> Result<serde_json::Value, String> {
+        let root = self.root.as_ref().ok_or("No workspace open")?;
+        let depth = max_depth.clamp(1, 5);
+
+        let mut configs = Vec::new();
+        let mut entry_points = Vec::new();
+        let mut total_files = 0;
+        let mut total_dirs = 0;
+
+        let known_configs = [
+            "package.json", "Cargo.toml", "tsconfig.json", "tauri.conf.json",
+            "vite.config.js", "vite.config.ts", "webpack.config.js", "requirements.txt",
+            "pyproject.toml", "Dockerfile", "docker-compose.yml", ".gitignore",
+            "README.md", "ARCHITECTURE.md"
+        ];
+
+        let known_entry_points = [
+            "src/main.rs", "src/lib.rs", "src/index.js", "src/index.ts",
+            "src/app.js", "src/main.js", "index.html", "main.py", "app.py"
+        ];
+
+        let tree = self.build_compact_tree(root, root, 0, depth, include_files, &mut total_files, &mut total_dirs)?;
+
+        for cfg in known_configs {
+            if root.join(cfg).exists() {
+                configs.push(cfg.to_string());
+            }
+        }
+        for ep in known_entry_points {
+            if root.join(ep).exists() {
+                entry_points.push(ep.to_string());
+            }
+        }
+
+        Ok(serde_json::json!({
+            "root_name": root.file_name().map(|n| n.to_string_lossy()).unwrap_or_default(),
+            "max_depth": depth,
+            "total_files": total_files,
+            "total_directories": total_dirs,
+            "config_files": configs,
+            "entry_points": entry_points,
+            "tree": tree
+        }))
+    }
+
     fn scan_metadata(&self, root: &Path, name: &str) -> WorkspaceMeta {
         let mut count = 0;
         let mut languages = std::collections::HashSet::new();
