@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": ["nsis", "app", "appimage", "deb", "dmg"],
     "licenseFile": "LICENSE.txt",
     "category": "DeveloperTool",
     "copyright": "Copyright © 2026 Orbital X",
