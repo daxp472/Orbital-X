@@ -13,18 +13,29 @@ export function getFileIcon(filename, isDir, isExpanded) {
 
   const ext = filename.split('.').pop().toLowerCase();
   switch (ext) {
-    case 'rs': return '🦀';
     case 'js':
     case 'mjs':
-    case 'cjs': return '📜';
+    case 'cjs':
+      return '🟨';
     case 'ts':
-    case 'tsx': return '📘';
-    case 'py': return '🐍';
-    case 'html': return '🌐';
+    case 'tsx':
+      return '🔷';
+    case 'rs':
+      return '🟠';
+    case 'py':
+      return '🐍';
+    case 'html':
+    case 'htm':
+      return '🌐';
     case 'css':
-    case 'scss': return '🎨';
-    case 'json': return '📋';
-    case 'md': return '📝';
+    case 'scss':
+    case 'less':
+      return '🎨';
+    case 'json':
+      return '📋';
+    case 'md':
+    case 'markdown':
+      return '📝';
     case 'toml': return '⚙️';
     case 'lock': return '🔒';
     case 'gitignore': return '👁️';
