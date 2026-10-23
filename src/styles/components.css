@@ -216,6 +216,78 @@
   transition-delay: 0.4s;
 }
 
+/* Window Controls Area Polish (Traffic Lights) */
+.titlebar .window-controls,
+.titlebar .traffic-lights {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  padding: 0 4px;
+}
+
+.window-control,
+.traffic-lights .close,
+.traffic-lights .minimize,
+.traffic-lights .maximize,
+.window-controls .close,
+.window-controls .minimize,
+.window-controls .maximize,
+#win-close, #win-minimize, #win-maximize {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  position: relative;
+}
+
+.window-control.close,
+.traffic-lights .close,
+.window-controls .close,
+#win-close {
+  background-color: #ff5f56;
+}
+
+.window-control.close:hover,
+.traffic-lights .close:hover,
+.window-controls .close:hover,
+#win-close:hover {
+  box-shadow: 0 0 10px rgba(255, 95, 86, 0.9);
+  transform: scale(1.15);
+}
+
+.window-control.minimize,
+.traffic-lights .minimize,
+.window-controls .minimize,
+#win-minimize {
+  background-color: #ffbd2e;
+}
+
+.window-control.minimize:hover,
+.traffic-lights .minimize:hover,
+.window-controls .minimize:hover,
+#win-minimize:hover {
+  box-shadow: 0 0 10px rgba(255, 189, 46, 0.9);
+  transform: scale(1.15);
+}
+
+.window-control.maximize,
+.traffic-lights .maximize,
+.window-controls .maximize,
+#win-maximize {
+  background-color: #27c93f;
+}
+
+.window-control.maximize:hover,
+.traffic-lights .maximize:hover,
+.window-controls .maximize:hover,
+#win-maximize:hover {
+  box-shadow: 0 0 10px rgba(39, 201, 63, 0.9);
+  transform: scale(1.15);
+}
+
 /* Mode Pills */
 .mode-pill {
   display: inline-flex;

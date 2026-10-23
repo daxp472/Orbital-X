@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initActivityRail();
   initResizers();
   initGlobalShortcuts();
+  initWindowControls();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
@@ -415,4 +416,45 @@ async function performSearch(query) {
   } catch (e) {
     container.innerHTML = `<div style="color: var(--accent-red); font-size: 12px;">Search error: ${e}</div>`;
   }
+}
+
+function initWindowControls() {
+  const getWin = async () => {
+    try {
+      if (window.__TAURI__?.window?.getCurrentWindow) {
+        return window.__TAURI__.window.getCurrentWindow();
+      }
+      const winModule = await import('@tauri-apps/api/window');
+      return winModule.getCurrentWindow ? winModule.getCurrentWindow() : null;
+    } catch {
+      return null;
+    }
+  };
+
+  document.getElementById('win-close')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.close) {
+      await win.close();
+    } else {
+      console.log("Window close clicked");
+    }
+  });
+
+  document.getElementById('win-minimize')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.minimize) {
+      await win.minimize();
+    } else {
+      console.log("Window minimize clicked");
+    }
+  });
+
+  document.getElementById('win-maximize')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.toggleMaximize) {
+      await win.toggleMaximize();
+    } else {
+      console.log("Window maximize clicked");
+    }
+  });
 }
