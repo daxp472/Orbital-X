@@ -184,6 +184,21 @@ export function initMonaco(containerElement) {
     triggerSelectHighlights();
   });
 
+  // Editor Zoom In: Ctrl+= / Ctrl++
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Equal, () => {
+    zoomIn();
+  });
+
+  // Editor Zoom Out: Ctrl+-
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Minus, () => {
+    zoomOut();
+  });
+
+  // Editor Zoom Reset: Ctrl+0
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Digit0, () => {
+    zoomReset();
+  });
+
   // Global window listener for editor shortcuts when editor view is active
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -205,6 +220,21 @@ export function initMonaco(containerElement) {
       if (editorInstance && state.editor.activeTabId) {
         e.preventDefault();
         triggerSelectHighlights();
+      }
+    } else if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomIn();
+      }
+    } else if (e.ctrlKey && e.key === '-') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomOut();
+      }
+    } else if (e.ctrlKey && e.key === '0') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomReset();
       }
     }
   });
@@ -273,6 +303,21 @@ export function triggerSelectHighlights() {
   if (action) {
     action.run();
   }
+}
+
+export function zoomIn() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomIn', {});
+}
+
+export function zoomOut() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomOut', {});
+}
+
+export function zoomReset() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomReset', {});
 }
 
 export function updateTheme(themeName) {

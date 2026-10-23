@@ -278,6 +278,10 @@ function setupShortcutsTab() {
               <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></td>
             </tr>
             <tr>
+              <td>Zoom In / Out / Reset</td>
+              <td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
+            </tr>
+            <tr>
               <td>Save</td>
               <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
             </tr>
