@@ -6,41 +6,81 @@ import { invoke } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 
 export function initSourceControl() {
-  const commitBtn = document.getElementById('btn-git-commit');
-  const commitInput = document.getElementById('git-commit-message');
+  ensureCommitUI();
+
   const refreshBtn = document.getElementById('btn-git-refresh');
-
-  if (commitBtn && commitInput) {
-    commitBtn.addEventListener('click', async () => {
-      const msg = commitInput.value.trim();
-      if (!msg) {
-        alert("Please enter a commit message.");
-        return;
-      }
-
-      commitBtn.disabled = true;
-      commitBtn.textContent = "Committing...";
-
-      try {
-        const res = await invoke('git_stage_and_commit', { message: msg });
-        commitInput.value = '';
-        alert("Changes committed successfully:\n" + res);
-        await refreshGitStatus();
-      } catch (err) {
-        alert("Commit failed: " + err);
-      } finally {
-        commitBtn.disabled = false;
-        commitBtn.textContent = "Commit Changes";
-      }
-    });
-  }
-
   if (refreshBtn) {
     refreshBtn.addEventListener('click', refreshGitStatus);
   }
 }
 
+function ensureCommitUI() {
+  const viewSC = document.getElementById('view-source-control');
+  if (!viewSC || document.getElementById('git-commit-all-container')) return;
+
+  // Hide static top commit box if present so commit UI is cleanly below file list
+  const topCommitBox = document.getElementById('git-commit-message')?.parentElement;
+  if (topCommitBox) {
+    topCommitBox.style.display = 'none';
+  }
+
+  const container = document.createElement('div');
+  container.id = 'git-commit-all-container';
+  container.style.cssText = 'padding: 10px; border-top: 1px solid var(--border-subtle); background: var(--bg-surface); flex-shrink: 0;';
+  container.innerHTML = `
+    <textarea class="input-text" id="git-commit-all-message" placeholder="Commit message..." rows="2" style="width: 100%; resize: none; font-size: 11px; line-height: 1.4; margin-bottom: 6px;"></textarea>
+    <button class="btn btn-primary btn-sm" id="btn-git-commit-all" style="width: 100%;">Commit All</button>
+    <div id="git-commit-all-status" style="font-size: 11px; margin-top: 6px; min-height: 16px;"></div>
+  `;
+
+  viewSC.appendChild(container);
+
+  const commitBtn = container.querySelector('#btn-git-commit-all');
+  const commitInput = container.querySelector('#git-commit-all-message');
+  const statusEl = container.querySelector('#git-commit-all-status');
+
+  commitBtn?.addEventListener('click', async () => {
+    const msg = commitInput?.value.trim();
+    if (!msg) {
+      if (statusEl) {
+        statusEl.textContent = 'Please enter a commit message.';
+        statusEl.style.color = 'var(--accent-orange)';
+      }
+      return;
+    }
+
+    commitBtn.disabled = true;
+    commitBtn.innerHTML = '<span class="spinner"></span> Committing...';
+    if (statusEl) {
+      statusEl.textContent = 'Staging and committing all changes...';
+      statusEl.style.color = 'var(--text-muted)';
+    }
+
+    try {
+      await invoke('git_stage_and_commit', { message: msg });
+      if (commitInput) commitInput.value = '';
+      if (statusEl) {
+        statusEl.textContent = '✓ Changes committed successfully!';
+        statusEl.style.color = 'var(--accent-green)';
+        setTimeout(() => {
+          if (statusEl.textContent.includes('successfully')) statusEl.textContent = '';
+        }, 4000);
+      }
+      await refreshGitStatus();
+    } catch (err) {
+      if (statusEl) {
+        statusEl.textContent = `✗ Commit failed: ${err}`;
+        statusEl.style.color = 'var(--accent-red)';
+      }
+    } finally {
+      commitBtn.disabled = false;
+      commitBtn.textContent = 'Commit All';
+    }
+  });
+}
+
 export async function refreshGitStatus() {
+  ensureCommitUI();
   const container = document.getElementById('git-changes-list');
   const branchHeader = document.getElementById('git-branch-display');
   const badge = document.querySelector('.rail-badge');
