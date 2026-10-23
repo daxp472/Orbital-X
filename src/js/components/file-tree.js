@@ -399,3 +399,179 @@ function showFileTreeContextMenu(x, y, node) {
   }, 10);
 }
 
+// ==========================================================================
+// Quick Open (Ctrl+P) Command Palette Implementation
+// ==========================================================================
+
+export function dismissQuickOpen() {
+  document.getElementById('quick-open-overlay')?.remove();
+}
+
+export function openQuickOpen() {
+  dismissQuickOpen();
+  dismissFileTreeContextMenu();
+
+  let allFiles = [];
+  let selectedIndex = 0;
+  let filteredFiles = [];
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'quick-open-backdrop';
+  backdrop.id = 'quick-open-overlay';
+
+  const container = document.createElement('div');
+  container.className = 'quick-open-container';
+  container.innerHTML = `
+    <div class="quick-open-header">
+      <span style="opacity: 0.6; font-size: 13px;">🔍</span>
+      <input type="text" class="quick-open-input" id="quick-open-input" placeholder="Type file name to open..." />
+    </div>
+    <div class="quick-open-results" id="quick-open-results">
+      <div class="quick-open-empty">Loading workspace files...</div>
+    </div>
+  `;
+
+  backdrop.appendChild(container);
+  document.body.appendChild(backdrop);
+
+  const input = container.querySelector('#quick-open-input');
+  const resultsContainer = container.querySelector('#quick-open-results');
+
+  setTimeout(() => input?.focus(), 15);
+
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop) {
+      dismissQuickOpen();
+    }
+  });
+
+  async function openSelectedFile(file) {
+    if (!file) return;
+    dismissQuickOpen();
+    try {
+      const fileData = await invoke('read_file', { path: file.path });
+      if (fileData.is_binary) {
+        alert("Cannot view binary files in code editor.");
+        return;
+      }
+      openFileInTab(fileData);
+    } catch (e) {
+      alert("Error opening file: " + e);
+    }
+  }
+
+  function renderResults() {
+    resultsContainer.innerHTML = '';
+    if (filteredFiles.length === 0) {
+      resultsContainer.innerHTML = '<div class="quick-open-empty">No matching files found.</div>';
+      return;
+    }
+
+    filteredFiles.forEach((file, index) => {
+      const item = document.createElement('div');
+      item.className = `quick-open-item ${index === selectedIndex ? 'selected' : ''}`;
+      item.innerHTML = `
+        <span style="font-size: 13px;">${getFileIcon(file.name, false)}</span>
+        <span style="font-weight: 500;">${file.name}</span>
+        <span class="quick-open-item-path" title="${file.relativePath}">${file.relativePath}</span>
+      `;
+      item.addEventListener('click', () => {
+        openSelectedFile(file);
+      });
+      resultsContainer.appendChild(item);
+    });
+
+    const activeEl = resultsContainer.children[selectedIndex];
+    if (activeEl) {
+      activeEl.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function filterList(query) {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      filteredFiles = allFiles.slice(0, 25);
+    } else {
+      filteredFiles = allFiles.filter(f =>
+        f.name.toLowerCase().includes(q) || f.relativePath.toLowerCase().includes(q)
+      ).slice(0, 25);
+    }
+    selectedIndex = 0;
+    renderResults();
+  }
+
+  input?.addEventListener('input', () => {
+    filterList(input.value);
+  });
+
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (filteredFiles.length > 0) {
+        selectedIndex = (selectedIndex + 1) % filteredFiles.length;
+        renderResults();
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (filteredFiles.length > 0) {
+        selectedIndex = (selectedIndex - 1 + filteredFiles.length) % filteredFiles.length;
+        renderResults();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredFiles.length > 0 && filteredFiles[selectedIndex]) {
+        openSelectedFile(filteredFiles[selectedIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      dismissQuickOpen();
+    }
+  });
+
+  // Fetch workspace files
+  (async () => {
+    let tree = null;
+    try {
+      tree = await invoke('get_file_tree', { max_depth: 5 });
+    } catch (e) {
+      try {
+        tree = await invoke('execute_tool', {
+          name: 'list_files',
+          arguments: { max_depth: 5 },
+          mode: 'agent_pro'
+        });
+      } catch (err) {
+        console.warn("Could not load tree for quick open:", err);
+      }
+    }
+
+    allFiles = [];
+    function traverse(node, relPath = '') {
+      if (!node) return;
+      const currentRel = relPath ? `${relPath}/${node.name}` : (node.name || '');
+      if (!node.is_directory) {
+        allFiles.push({
+          name: node.name,
+          path: node.path,
+          relativePath: node.relative_path || currentRel || node.name
+        });
+      }
+      if (node.children && Array.isArray(node.children)) {
+        node.children.forEach(child => traverse(child, node.name ? currentRel : ''));
+      }
+    }
+
+    traverse(tree);
+    filteredFiles = allFiles.slice(0, 25);
+    renderResults();
+  })();
+}
+
+// Global Ctrl+P shortcut
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+    e.preventDefault();
+    openQuickOpen();
+  }
+});
+
