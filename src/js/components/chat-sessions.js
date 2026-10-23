@@ -57,7 +57,7 @@ export function loadSessions() {
   if (!sessions || sessions.length === 0) {
     const defaultSession = {
       id: 'session-' + Date.now(),
-      title: 'Orbital X IDE Development',
+      title: 'Chat 1',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       mode: state.agentMode || 'agent_pro',
@@ -90,12 +90,19 @@ export function saveActiveSession() {
   current.mode = state.agentMode;
   current.updatedAt = new Date().toISOString();
 
-  // Auto-generate title from the first user prompt if still generic
-  if (current.title === 'New Chat' || current.title === 'Orbital X IDE Development') {
+  // Auto-generate title from the first 7 words of initial user message if still default
+  const isDefaultTitle = !current.title ||
+    current.title === 'New Chat' ||
+    current.title === 'Orbital X IDE Development' ||
+    /^Chat\s+\d+$/i.test(current.title.trim());
+
+  if (isDefaultTitle) {
     const firstUserMsg = current.messages.find(m => m.role === 'user');
     if (firstUserMsg && firstUserMsg.content) {
-      const clean = firstUserMsg.content.trim().replace(/\n/g, ' ');
-      current.title = clean.length > 34 ? clean.substring(0, 34) + '...' : clean;
+      const words = firstUserMsg.content.trim().split(/\s+/).filter(Boolean);
+      if (words.length > 0) {
+        current.title = words.slice(0, 7).join(' ').trim();
+      }
     }
   }
 
@@ -103,14 +110,16 @@ export function saveActiveSession() {
   updateTitleDisplay();
 }
 
-export function createNewSession(title = 'New Chat') {
+export function createNewSession(title = null) {
   // Save existing session first
   saveActiveSession();
 
+  const nextNum = sessions.length + 1;
+  const initialTitle = title || `Chat ${nextNum}`;
   const newId = 'session-' + Date.now();
   const newSession = {
     id: newId,
-    title,
+    title: initialTitle,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     mode: state.agentMode || 'agent_pro',
@@ -124,7 +133,7 @@ export function createNewSession(title = 'New Chat') {
 
   // Reset timeline UI
   renderFullTimeline([]);
-  appendTimelineCard('assistant', `Started a new session: <strong>${title}</strong>. Ready to inspect, code, and execute.`);
+  appendTimelineCard('assistant', `Started a new session: <strong>${initialTitle}</strong>. Ready to inspect, code, and execute.`);
   updateTitleDisplay();
   closeHistoryDropdown();
 }
@@ -155,7 +164,7 @@ export function deleteSession(sessionId, event) {
   if (sessions.length <= 1) {
     // If last session, reset it instead of deleting
     sessions[0].messages = [];
-    sessions[0].title = 'Orbital X IDE Development';
+    sessions[0].title = 'Chat 1';
     sessions[0].updatedAt = new Date().toISOString();
     state.conversation = [];
     saveSessionsToStorage();
