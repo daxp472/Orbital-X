@@ -2,52 +2,53 @@
    Orbital X — Modern IDE Themes (themes.css)
    ========================================================================== */
 
-/* 1. Orbit Dark (Default — Matches Antigravity / Cursor / VS Code exact palette) */
+/* 1. Orbit Dark (Default — Apple HIG / Liquid Glass Refined Cosmic Dark) */
 body.theme-dark, [data-theme="theme-dark"], [data-theme="orbit-dark"], :root {
-  --bg-app: #181818;
-  --bg-sidebar: #181818;
-  --bg-activity: #181818;
-  --bg-editor: #1f1f1f;
-  --bg-tabs: #181818;
-  --bg-tab-active: #1f1f1f;
-  --bg-tab-inactive: #181818;
-  --bg-panel: #181818;
-  --bg-surface: #252526;
-  --bg-hover: rgba(255, 255, 255, 0.05);
-  --bg-active: rgba(255, 255, 255, 0.09);
-  --bg-input: #1f1f1f;
-  --bg-card: #222222;
+  --bg-app: #12141a;
+  --bg-sidebar: #161820;
+  --bg-activity: #12141a;
+  --bg-editor: #181b24;
+  --bg-tabs: #14161e;
+  --bg-tab-active: #181b24;
+  --bg-tab-inactive: #14161e;
+  --bg-panel: #14161e;
+  --bg-surface: #1d212b;
+  --bg-hover: rgba(255, 255, 255, 0.06);
+  --bg-active: rgba(255, 255, 255, 0.1);
+  --bg-input: #161922;
+  --bg-card: #1b1e28;
+  --bg-glass-translucent: rgba(22, 25, 33, 0.78);
 
-  --border-color: #2b2b2b;
-  --border-subtle: #232323;
-  --border-focus: #0078d4;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-focus: #39c5bb;
 
-  --text-primary: #cccccc;
+  --text-primary: #e6edf3;
   --text-primary-bright: #ffffff;
-  --text-secondary: #969696;
-  --text-muted: #6e7681;
-  --text-link: #3794ff;
+  --text-secondary: #9aa5b8;
+  --text-muted: #64748b;
+  --text-link: #58a6ff;
 
-  --accent-blue: #0078d4;
+  --accent-blue: #2997ff;
   --accent-cyan: #39c5bb;
   --accent-purple: #bc8cff;
-  --accent-orange: #d18616;
-  --accent-green: #388a34;
-  --accent-red: #f14c4c;
+  --accent-orange: #ff9f0a;
+  --accent-green: #30d158;
+  --accent-red: #ff453a;
 
   --agent-pro-color: #bc8cff;
   --agent-dev-color: #39c5bb;
-  --agent-user-color: #d18616;
+  --agent-user-color: #ff9f0a;
 
-  --diff-add-bg: rgba(56, 138, 52, 0.2);
-  --diff-add-border: #388a34;
-  --diff-del-bg: rgba(241, 76, 76, 0.2);
-  --diff-del-border: #f14c4c;
+  --diff-add-bg: rgba(48, 209, 88, 0.18);
+  --diff-add-border: #30d158;
+  --diff-del-bg: rgba(255, 69, 58, 0.18);
+  --diff-del-border: #ff453a;
 
-  --scrollbar-thumb: #333333;
-  --scrollbar-thumb-hover: #4f4f4f;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
 
-  --monaco-theme: "vs-dark";
+  --monaco-theme: "orbital-dark-theme";
 }
 
 /* 2. Light Theme (Clean, Professional Developer Light Theme) */
