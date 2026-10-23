@@ -838,6 +838,32 @@
               </div>
             </div>
           </div>
+
+          <!-- Editor & File Auto-Save -->
+          <div style="margin-top: 24px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 8px;">Editor & Files</div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Auto Save</span>
+                <span class="settings-setting-caption">Automatically save dirty files after a period of typing inactivity.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-auto-save" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Delay (ms)</span>
+                <span class="settings-setting-caption">Time in milliseconds to wait before automatically saving active file changes.</span>
+              </div>
+              <div>
+                <input type="number" class="text-input" id="cfg-auto-save-delay" value="1000" min="100" max="30000" step="100" style="width: 100px; text-align: right;" />
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 2. MODELS & TOKENS PANE (with embedded Token Counter) -->

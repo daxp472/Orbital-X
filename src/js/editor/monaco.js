@@ -25,6 +25,7 @@ self.MonacoEnvironment = {
 let editorInstance = null;
 let diffEditorInstance = null;
 const editorModels = new Map(); // path -> monaco.editor.ITextModel
+let autoSaveTimer = null;
 
 export function detectLanguage(filename) {
   const ext = filename.split('.').pop().toLowerCase();
@@ -238,6 +239,19 @@ export function openFileInTab(fileData) {
           renderTabs();
         }
         currentTab.content = currentVal;
+
+        // Auto-save debounce timer (like VS Code)
+        if (state.settings?.autoSave) {
+          if (autoSaveTimer) {
+            clearTimeout(autoSaveTimer);
+          }
+          const delay = typeof state.settings?.autoSaveDelay === 'number'
+            ? state.settings.autoSaveDelay
+            : 1000;
+          autoSaveTimer = setTimeout(() => {
+            saveActiveFile();
+          }, delay);
+        }
       }
     });
   }

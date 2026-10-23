@@ -95,6 +95,21 @@ export function initSettings() {
   // Export / Import Settings
   document.getElementById('btn-export-settings')?.addEventListener('click', exportSettings);
   document.getElementById('btn-import-settings')?.addEventListener('click', importSettings);
+
+  // Auto Save Setting Controls
+  document.getElementById('cfg-auto-save')?.addEventListener('change', (e) => {
+    if (!state.settings) state.settings = {};
+    state.settings.autoSave = e.target.checked;
+    persistState();
+  });
+  document.getElementById('cfg-auto-save-delay')?.addEventListener('change', (e) => {
+    if (!state.settings) state.settings = {};
+    const val = parseInt(e.target.value, 10);
+    if (!isNaN(val) && val >= 0) {
+      state.settings.autoSaveDelay = val;
+      persistState();
+    }
+  });
 }
 
 function setupOllamaPullUI() {
@@ -314,6 +329,16 @@ export function openSettings() {
   populateThemeDropdown();
   selectSecurityCard(state.agentMode);
 
+  // Auto Save values
+  const autoSaveToggle = document.getElementById('cfg-auto-save');
+  if (autoSaveToggle) {
+    autoSaveToggle.checked = state.settings?.autoSave ?? true;
+  }
+  const autoSaveDelayInput = document.getElementById('cfg-auto-save-delay');
+  if (autoSaveDelayInput) {
+    autoSaveDelayInput.value = state.settings?.autoSaveDelay ?? 1000;
+  }
+
   // Load live token usage directly
   import('./usage.js').then(m => m.loadAndRenderUsage(true));
 
@@ -369,6 +394,20 @@ function saveAndClose() {
   const trustChecked = document.getElementById('cfg-trust-workspace')?.checked;
   if (trustChecked) {
     localStorage.setItem('orbital_workspace_trusted', 'true');
+  }
+
+  // Auto Save settings
+  if (!state.settings) state.settings = {};
+  const autoSaveToggle = document.getElementById('cfg-auto-save');
+  if (autoSaveToggle) {
+    state.settings.autoSave = autoSaveToggle.checked;
+  }
+  const autoSaveDelayInput = document.getElementById('cfg-auto-save-delay');
+  if (autoSaveDelayInput) {
+    const val = parseInt(autoSaveDelayInput.value, 10);
+    if (!isNaN(val) && val >= 0) {
+      state.settings.autoSaveDelay = val;
+    }
   }
 
   persistState();
