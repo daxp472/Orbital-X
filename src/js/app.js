@@ -215,6 +215,19 @@ function initActivityRail() {
     }
   });
 
+  // Toggle Terminal Panel from rail
+  document.getElementById('rail-terminal')?.addEventListener('click', () => {
+    const bottom = document.getElementById('bottom-panel');
+    const isCollapsed = bottom?.classList.contains('collapsed');
+    if (isCollapsed) {
+      bottom?.classList.remove('collapsed');
+      document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
+      document.getElementById('terminal-command-input')?.focus();
+    } else {
+      bottom?.classList.add('collapsed');
+    }
+  });
+
   document.getElementById('rail-settings')?.addEventListener('click', () => {
     document.getElementById('btn-open-settings')?.click();
   });
