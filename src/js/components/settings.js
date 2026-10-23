@@ -20,10 +20,13 @@ export function initSettings() {
   if (saveBtn) saveBtn.addEventListener('click', saveAndClose);
 
   // Antigravity Sidebar Tab switching
+  setupShortcutsTab();
+
   const tabs = [
     { btn: 'stab-general', pane: 'spane-general' },
     { btn: 'stab-models', pane: 'spane-models' },
     { btn: 'stab-appearance', pane: 'spane-appearance' },
+    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
     { btn: 'stab-agent', pane: 'spane-agent' },
     { btn: 'stab-terminal', pane: 'spane-terminal' },
     { btn: 'stab-importexport', pane: 'spane-importexport' },
@@ -162,6 +165,118 @@ function setupOllamaPullUI() {
   });
 }
 
+function setupShortcutsTab() {
+  const sidebar = document.querySelector('.settings-sidebar');
+  const contentPane = document.querySelector('.settings-content-pane');
+  if (!sidebar || !contentPane) return;
+
+  const allTabs = [
+    { btn: 'stab-general', pane: 'spane-general' },
+    { btn: 'stab-models', pane: 'spane-models' },
+    { btn: 'stab-appearance', pane: 'spane-appearance' },
+    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
+    { btn: 'stab-agent', pane: 'spane-agent' },
+    { btn: 'stab-terminal', pane: 'spane-terminal' },
+    { btn: 'stab-importexport', pane: 'spane-importexport' },
+  ];
+
+  if (!document.getElementById('stab-shortcuts')) {
+    const navItem = document.createElement('div');
+    navItem.className = 'settings-nav-item';
+    navItem.id = 'stab-shortcuts';
+    navItem.setAttribute('data-pane', 'spane-shortcuts');
+    navItem.innerHTML = `<span>⌨️</span> Shortcuts`;
+
+    const refNav = document.getElementById('stab-appearance');
+    if (refNav && refNav.nextSibling) {
+      sidebar.insertBefore(navItem, refNav.nextSibling);
+    } else {
+      const impNav = document.getElementById('stab-importexport');
+      if (impNav) {
+        sidebar.insertBefore(navItem, impNav);
+      } else {
+        sidebar.appendChild(navItem);
+      }
+    }
+
+    navItem.addEventListener('click', () => {
+      allTabs.forEach(o => {
+        document.getElementById(o.btn)?.classList.remove('active');
+        const p = document.getElementById(o.pane);
+        if (p) p.style.display = 'none';
+      });
+      navItem.classList.add('active');
+      const targetPane = document.getElementById('spane-shortcuts');
+      if (targetPane) targetPane.style.display = 'flex';
+    });
+  }
+
+  if (!document.getElementById('spane-shortcuts')) {
+    const pane = document.createElement('div');
+    pane.id = 'spane-shortcuts';
+    pane.className = 'settings-pane';
+    pane.style.display = 'none';
+    pane.style.flexDirection = 'column';
+    pane.innerHTML = `
+      <div class="settings-section-title">Keyboard Shortcuts</div>
+      <div class="settings-section-desc">Quick reference of all keyboard shortcuts used in Orbital X.</div>
+      <div class="settings-shortcuts-wrapper" style="margin-top: 6px;">
+        <table class="settings-shortcuts-table">
+          <thead>
+            <tr>
+              <th style="width: 55%; text-align: left;">Action</th>
+              <th style="width: 45%; text-align: right;">Shortcut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Send Message</td>
+              <td><kbd>Enter</kbd></td>
+            </tr>
+            <tr>
+              <td>New Line</td>
+              <td><kbd>Shift</kbd> + <kbd>Enter</kbd></td>
+            </tr>
+            <tr>
+              <td>Clear Chat</td>
+              <td><kbd>Ctrl</kbd> + <kbd>L</kbd></td>
+            </tr>
+            <tr>
+              <td>Open File</td>
+              <td><kbd>Ctrl</kbd> + <kbd>P</kbd></td>
+            </tr>
+            <tr>
+              <td>Find</td>
+              <td><kbd>Ctrl</kbd> + <kbd>F</kbd></td>
+            </tr>
+            <tr>
+              <td>Save</td>
+              <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
+            </tr>
+            <tr>
+              <td>Toggle Terminal</td>
+              <td><kbd>Ctrl</kbd> + <kbd>\`</kbd></td>
+            </tr>
+            <tr>
+              <td>Toggle Primary Sidebar</td>
+              <td><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
+            </tr>
+            <tr>
+              <td>Open Folder / Workspace</td>
+              <td><kbd>Ctrl</kbd> + <kbd>O</kbd></td>
+            </tr>
+            <tr>
+              <td>Open Settings</td>
+              <td><kbd>Ctrl</kbd> + <kbd>,</kbd></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    contentPane.appendChild(pane);
+  }
+}
+
 function selectSecurityCard(mode) {
   document.querySelectorAll('.security-card').forEach(card => card.classList.remove('active'));
   const cardId = mode === 'agent_pro' ? 'card-mode-pro' : (mode === 'user' ? 'card-mode-user' : 'card-mode-dev');
@@ -173,6 +288,7 @@ function selectSecurityCard(mode) {
 export function openSettings() {
   const modal = document.getElementById('modal-settings');
   if (!modal) return;
+  setupShortcutsTab();
   setupOllamaPullUI();
 
   // Workspace label
