@@ -1,54 +1,70 @@
 /* ==========================================================================
-   Orbital X — Design Tokens (tokens.css)
+   Orbital X — Apple HIG & Liquid Glass Design Tokens (tokens.css)
+   Grounded in Apple Human Interface Guidelines for macOS & Desktop IDEs
    ========================================================================== */
 
 :root {
-  /* Font Families */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, 'Courier New', monospace;
+  /* Typography Stacks (Apple HIG Desktop Standard: SF Pro / Inter + JetBrains Mono) */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Monaco, 'Fira Code', 'Cascadia Code', Consolas, monospace;
 
   /* Typography Scale */
-  --text-xs: 0.6875rem; /* 11px */
-  --text-sm: 0.75rem;   /* 12px */
-  --text-base: 0.8125rem;/* 13px */
-  --text-md: 0.875rem;  /* 14px */
-  --text-lg: 1rem;      /* 16px */
-  --text-xl: 1.25rem;   /* 20px */
-  --text-2xl: 1.5rem;   /* 24px */
+  --text-2xs: 0.625rem;  /* 10px - Apple Caption 2 */
+  --text-xs: 0.6875rem;  /* 11px - Apple Caption 1 */
+  --text-sm: 0.75rem;    /* 12px - Apple Subheadline */
+  --text-base: 0.8125rem;/* 13px - Apple Body Desktop Default */
+  --text-md: 0.875rem;   /* 14px - Apple Headline Desktop */
+  --text-lg: 1rem;       /* 16px - Title 3 */
+  --text-xl: 1.25rem;    /* 20px - Title 2 */
+  --text-2xl: 1.5rem;    /* 24px - Title 1 */
 
-  /* Spacing */
+  /* Tabular Numerics for Metrics, Counters, and Status */
+  --font-numeric: tabular-nums;
+
+  /* Spacing Scale (Apple 4pt / 8pt standard grid) */
   --space-1: 2px;
   --space-2: 4px;
   --space-3: 6px;
   --space-4: 8px;
   --space-6: 12px;
   --space-8: 16px;
+  --space-10: 20px;
   --space-12: 24px;
   --space-16: 32px;
 
-  /* Border Radii */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  /* Continuous Corner Radii (Apple Squircle Aesthetics) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
-  /* Transitions */
-  --trans-fast: 0.15s ease;
-  --trans-normal: 0.25s ease;
+  /* Apple Fluid Motion Timing Functions (Physics & Springs) */
+  --ease-apple: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.15);
+  --trans-fast: 0.14s var(--ease-apple);
+  --trans-normal: 0.22s var(--ease-apple);
+  --trans-spring: 0.34s var(--ease-spring);
 
-  /* Elevation Shadows */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-glow-cyan: 0 0 16px rgba(57, 197, 187, 0.25);
-  --shadow-glow-purple: 0 0 16px rgba(188, 140, 255, 0.25);
+  /* Liquid Glass & Translucent Material Tokens */
+  --glass-blur-sm: blur(12px) saturate(1.3);
+  --glass-blur-md: blur(20px) saturate(1.4);
+  --glass-blur-lg: blur(32px) saturate(1.5);
 
-  /* Heights and Widths */
-  --titlebar-height: 34px;
+  /* Elevation & Diffused Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-sheet: 0 24px 64px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  --shadow-glow-cyan: 0 0 20px rgba(57, 197, 187, 0.3);
+  --shadow-glow-purple: 0 0 20px rgba(188, 140, 255, 0.3);
+
+  /* Structural Geometry */
+  --titlebar-height: 36px;
   --activitybar-width: 48px;
   --sidebar-default-width: 260px;
   --agent-default-width: 380px;
   --bottompanel-default-height: 220px;
-  --statusbar-height: 24px;
+  --statusbar-height: 25px;
 }
