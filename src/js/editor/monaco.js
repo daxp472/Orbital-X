@@ -178,6 +178,32 @@ export function initMonaco(containerElement) {
     }
   });
 
+  // Live File Reload / Watch: Update active tab when AI agent writes a file
+  window.addEventListener('orbital:file-written', async (e) => {
+    const writtenPath = e.detail?.path;
+    if (!writtenPath || !editorInstance) return;
+
+    const normalize = (p) => (p ? p.replace(/\\/g, '/').toLowerCase() : '');
+    const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
+    if (activeTab && normalize(activeTab.path) === normalize(writtenPath)) {
+      try {
+        const fileData = await invoke('read_file', { path: writtenPath });
+        const newContent = fileData.content;
+        const pos = editorInstance.getPosition();
+        editorInstance.setValue(newContent);
+        if (pos) {
+          editorInstance.setPosition(pos);
+        }
+        activeTab.content = newContent;
+        activeTab.originalContent = newContent;
+        activeTab.isDirty = false;
+        renderTabs();
+      } catch (err) {
+        console.warn("Could not reload file on orbital:file-written:", err);
+      }
+    }
+  });
+
   return editorInstance;
 }
 

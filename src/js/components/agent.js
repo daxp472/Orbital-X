@@ -542,14 +542,17 @@ async function processToolCallWithPolicy(toolCall) {
       import('./memory.js').then(m => m.refreshMemories());
     }
 
-    // If writing a file succeeded, open or refresh it in Monaco
+    // If writing a file succeeded, notify listeners and open or refresh it in Monaco
     if (name === 'write_file' && args.path) {
+      window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
       try {
         const fileData = await invoke('read_file', { path: args.path });
         openFileInTab(fileData);
       } catch (e) {
         console.warn("Could not reload written file:", e);
       }
+    } else if (name === 'patch_file' && args.path) {
+      window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
     }
 
     return output;
