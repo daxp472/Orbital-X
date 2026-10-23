@@ -32,7 +32,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 3. Initialize UI Subsystems
-  initAgent();
+  await initAgent();
+  const splash = document.getElementById('splash-screen');
+  if (splash) {
+    setTimeout(() => {
+      splash.classList.add('hidden');
+    }, 1500);
+  }
   initChatSessions();
   initTerminal();
   initUsageDashboard();

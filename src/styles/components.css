@@ -2,6 +2,84 @@
    Orbital X — UI Components (components.css)
    ========================================================================== */
 
+/* Splash Screen */
+.splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-app, #181818);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+.splash-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s;
+}
+
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.splash-logo svg {
+  width: 64px;
+  height: 64px;
+  filter: drop-shadow(0 0 16px rgba(57, 197, 187, 0.45));
+  animation: pulseSplashLogo 2s infinite ease-in-out;
+}
+
+@keyframes pulseSplashLogo {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 14px rgba(57, 197, 187, 0.45)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 24px rgba(188, 140, 255, 0.65)); }
+}
+
+.splash-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-primary-bright, #ffffff);
+}
+
+.splash-text {
+  font-size: 13px;
+  color: var(--text-secondary, #969696);
+}
+
+.splash-progress-track {
+  width: 220px;
+  height: 4px;
+  background: var(--bg-surface, #252526);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border-subtle, #232323);
+  margin-top: 6px;
+}
+
+.splash-progress-bar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-cyan, #39c5bb), var(--accent-purple, #bc8cff));
+  box-shadow: 0 0 12px rgba(57, 197, 187, 0.8);
+  animation: splashProgress 1.4s ease-in-out forwards;
+}
+
+@keyframes splashProgress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(-25%); }
+  100% { transform: translateX(0); }
+}
+
 /* Mode Pills */
 .mode-pill {
   display: inline-flex;
