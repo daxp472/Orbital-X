@@ -12,6 +12,38 @@ let terminalInstances = [];
 let activeTerminalId = 1;
 let pollTimer = null;
 
+const STORAGE_KEY_CMD_HISTORY = 'orbital_cmd_history';
+const MAX_CMD_HISTORY = 50;
+let globalCmdHistory = [];
+let cmdHistoryIndex = -1;
+
+function loadCommandHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CMD_HISTORY);
+    globalCmdHistory = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(globalCmdHistory)) globalCmdHistory = [];
+  } catch (e) {
+    globalCmdHistory = [];
+  }
+}
+
+function saveCommandToHistory(command) {
+  if (!command || !command.trim()) return;
+  const trimmed = command.trim();
+  if (globalCmdHistory.length > 0 && globalCmdHistory[globalCmdHistory.length - 1] === trimmed) {
+    return;
+  }
+  globalCmdHistory.push(trimmed);
+  if (globalCmdHistory.length > MAX_CMD_HISTORY) {
+    globalCmdHistory = globalCmdHistory.slice(-MAX_CMD_HISTORY);
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY_CMD_HISTORY, JSON.stringify(globalCmdHistory));
+  } catch (e) {
+    console.warn("Could not persist terminal command history:", e);
+  }
+}
+
 class TerminalSession {
   constructor(id, name = 'powershell') {
     this.id = id;
@@ -58,6 +90,8 @@ class TerminalSession {
 }
 
 export function initTerminal() {
+  loadCommandHistory();
+
   // Initialize first terminal session
   if (terminalInstances.length === 0) {
     const firstSession = new TerminalSession(1, 'powershell');
@@ -109,22 +143,22 @@ export function initTerminal() {
         executeTerminalCommand();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (active.history.length > 0) {
-          if (active.historyIndex === -1) {
-            active.historyIndex = active.history.length - 1;
-          } else if (active.historyIndex > 0) {
-            active.historyIndex--;
+        if (globalCmdHistory.length > 0) {
+          if (cmdHistoryIndex === -1) {
+            cmdHistoryIndex = globalCmdHistory.length - 1;
+          } else if (cmdHistoryIndex > 0) {
+            cmdHistoryIndex--;
           }
-          inputElem.value = active.history[active.historyIndex] || '';
+          inputElem.value = globalCmdHistory[cmdHistoryIndex] || '';
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (active.history.length > 0 && active.historyIndex !== -1) {
-          if (active.historyIndex < active.history.length - 1) {
-            active.historyIndex++;
-            inputElem.value = active.history[active.historyIndex] || '';
+        if (globalCmdHistory.length > 0 && cmdHistoryIndex !== -1) {
+          if (cmdHistoryIndex < globalCmdHistory.length - 1) {
+            cmdHistoryIndex++;
+            inputElem.value = globalCmdHistory[cmdHistoryIndex] || '';
           } else {
-            active.historyIndex = -1;
+            cmdHistoryIndex = -1;
             inputElem.value = '';
           }
         }
@@ -275,6 +309,8 @@ export async function executeTerminalCommand(cmdString) {
   if (!command) return;
 
   if (inputElem) inputElem.value = '';
+  cmdHistoryIndex = -1;
+  saveCommandToHistory(command);
   active.historyIndex = -1;
   active.history.push(command);
 
