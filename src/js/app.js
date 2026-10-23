@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initResizers();
   initGlobalShortcuts();
   initWindowControls();
+  initShortcutsHelpOverlay();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
@@ -458,3 +459,57 @@ function initWindowControls() {
     }
   });
 }
+
+export function openShortcutsHelp() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+}
+
+export function closeShortcutsHelp() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function initShortcutsHelpOverlay() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  const btnClose = document.getElementById('btn-close-shortcuts-help');
+
+  btnClose?.addEventListener('click', closeShortcutsHelp);
+
+  // Close when clicking outside modal-container (backdrop click)
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeShortcutsHelp();
+    }
+  });
+
+  // Help menu in titlebar opens shortcuts help
+  document.getElementById('menu-help')?.addEventListener('click', openShortcutsHelp);
+
+  // Global keydown: F1 or Ctrl+Shift+P to open/toggle, Escape to close
+  window.addEventListener('keydown', (e) => {
+    const isF1 = e.key === 'F1';
+    const isCmdPalette = e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p';
+
+    if (isF1 || isCmdPalette) {
+      e.preventDefault();
+      const isVisible = modal && modal.style.display !== 'none';
+      if (isVisible) {
+        closeShortcutsHelp();
+      } else {
+        openShortcutsHelp();
+      }
+    } else if (e.key === 'Escape') {
+      const isVisible = modal && modal.style.display !== 'none';
+      if (isVisible) {
+        e.preventDefault();
+        closeShortcutsHelp();
+      }
+    }
+  });
+}
+
