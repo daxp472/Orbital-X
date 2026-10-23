@@ -422,6 +422,11 @@ body {
   left: 0;
 }
 
+.editor-breadcrumb:not(:empty) ~ #monaco-container {
+  top: 24px;
+  height: calc(100% - 24px);
+}
+
 /* ==========================================================================
    Bottom Panel (Terminal / Problems / Output)
    ========================================================================== */

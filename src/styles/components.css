@@ -1701,3 +1701,33 @@ input:checked + .settings-toggle-slider:before {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   Editor Breadcrumb Bar
+   ========================================================================== */
+.editor-breadcrumb {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  background: var(--bg-tabs);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  box-sizing: border-box;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  line-height: 15px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+}
+
+.editor-breadcrumb:empty {
+  display: none;
+}
+

@@ -122,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderTabs();
         const emptyState = document.getElementById('editor-empty-state');
         if (emptyState) emptyState.style.display = 'flex';
+        const breadcrumbElem = document.getElementById('editor-breadcrumb');
+        if (breadcrumbElem) breadcrumbElem.textContent = '';
 
         // 3. Load workspace and update file tree
         await loadWorkspace(selected);

@@ -403,8 +403,26 @@ export function openFileInTab(fileData) {
   const langElem = document.getElementById('status-language');
   if (langElem) langElem.textContent = lang.toUpperCase();
 
+  // Update breadcrumb
+  const relativePath = tab.relativePath || tab.name || tab.path || '';
+  const breadcrumbElem = document.getElementById('editor-breadcrumb');
+  if (breadcrumbElem) {
+    breadcrumbElem.textContent = relativePath.replace(/[\\/]/g, ' › ');
+  }
+
   renderTabs();
   notify('activeTab', tab);
+}
+
+export function updateBreadcrumb(tab) {
+  const breadcrumbElem = document.getElementById('editor-breadcrumb');
+  if (!breadcrumbElem) return;
+  if (!tab) {
+    breadcrumbElem.textContent = '';
+    return;
+  }
+  const relativePath = tab.relativePath || tab.name || tab.path || '';
+  breadcrumbElem.textContent = relativePath.replace(/[\\/]/g, ' › ');
 }
 
 export function closeTab(tabId) {
@@ -433,6 +451,7 @@ export function closeTab(tabId) {
       if (emptyState) emptyState.style.display = 'flex';
       const langElem = document.getElementById('status-language');
       if (langElem) langElem.textContent = 'Plain Text';
+      updateBreadcrumb(null);
     }
   }
 
@@ -452,6 +471,8 @@ export function switchToTab(tabId) {
 
   const langElem = document.getElementById('status-language');
   if (langElem) langElem.textContent = tab.language.toUpperCase();
+
+  updateBreadcrumb(tab);
 
   renderTabs();
 }
