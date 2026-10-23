@@ -270,6 +270,10 @@ function setupShortcutsTab() {
               <td><kbd>Ctrl</kbd> + <kbd>G</kbd></td>
             </tr>
             <tr>
+              <td>Go to Definition</td>
+              <td><kbd>F12</kbd></td>
+            </tr>
+            <tr>
               <td>Save</td>
               <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
             </tr>

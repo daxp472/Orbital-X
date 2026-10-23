@@ -174,6 +174,11 @@ export function initMonaco(containerElement) {
     triggerGotoLine();
   });
 
+  // Go to Definition on F12
+  editorInstance.addCommand(monaco.KeyCode.F12, () => {
+    triggerGotoDefinition();
+  });
+
   // Global window listener for editor shortcuts when editor view is active
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -185,6 +190,11 @@ export function initMonaco(containerElement) {
       if (editorInstance && state.editor.activeTabId) {
         e.preventDefault();
         triggerGotoLine();
+      }
+    } else if (e.key === 'F12') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerGotoDefinition();
       }
     }
   });
@@ -232,6 +242,15 @@ export function triggerGotoLine() {
   if (!editorInstance) return;
   editorInstance.focus();
   const action = editorInstance.getAction('editor.action.gotoLine');
+  if (action) {
+    action.run();
+  }
+}
+
+export function triggerGotoDefinition() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.revealDefinition');
   if (action) {
     action.run();
   }
