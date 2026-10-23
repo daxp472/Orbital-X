@@ -566,6 +566,20 @@ kbd {
   }
 }
 
+/* Live Token Estimate Counter in Chat Input */
+.composer-token-counter {
+  font-size: 10px;
+  color: var(--text-muted);
+  align-self: flex-end;
+  text-align: right;
+  padding: 0 4px;
+  margin-top: -2px;
+  line-height: 1.2;
+  user-select: none;
+  font-family: var(--font-mono, monospace);
+  opacity: 0.8;
+  letter-spacing: 0.2px;
+}
 
 /* Chat History Popover Dropdown */
 .chat-history-dropdown {

@@ -25,19 +25,32 @@ export function initAgent() {
     modeUserBtn.addEventListener('click', () => switchMode('user'));
   }
 
+  // Live token estimate counter below input
+  let tokenCounter = document.getElementById('composer-token-counter');
+  if (!tokenCounter && inputElem) {
+    tokenCounter = document.createElement('div');
+    tokenCounter.id = 'composer-token-counter';
+    tokenCounter.className = 'composer-token-counter';
+    inputElem.insertAdjacentElement('afterend', tokenCounter);
+  }
+  updateTokenEstimate(inputElem?.value || '');
+
   // Quick Action Chips
   document.getElementById('chip-plan')?.addEventListener('click', () => {
     inputElem.value = "/plan ";
+    updateTokenEstimate(inputElem.value);
     inputElem.focus();
   });
 
   document.getElementById('chip-explain')?.addEventListener('click', () => {
     inputElem.value = "Explain the architecture, structure, and entrypoints of this workspace.";
+    updateTokenEstimate(inputElem.value);
     handleSend();
   });
 
   document.getElementById('chip-validate')?.addEventListener('click', () => {
     inputElem.value = "Run the project test suite and validate that all checks pass.";
+    updateTokenEstimate(inputElem.value);
     handleSend();
   });
 
@@ -59,11 +72,13 @@ export function initAgent() {
     const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
     if (activeTab) {
       inputElem.value = `@${activeTab.name} ` + inputElem.value;
+      updateTokenEstimate(inputElem.value);
       inputElem.focus();
     } else {
       const filename = prompt("Enter file name or symbol to attach to prompt (e.g. src/main.rs):");
       if (filename) {
         inputElem.value = `@${filename} ` + inputElem.value;
+        updateTokenEstimate(inputElem.value);
         inputElem.focus();
       }
     }
@@ -78,10 +93,11 @@ export function initAgent() {
       }
     });
 
-    // Auto-expand textarea based on content up to 180px
+    // Auto-expand textarea based on content up to 180px & live token count estimate
     inputElem.addEventListener('input', () => {
       inputElem.style.height = 'auto';
       inputElem.style.height = Math.min(inputElem.scrollHeight, 180) + 'px';
+      updateTokenEstimate(inputElem.value);
     });
   }
 
@@ -117,6 +133,14 @@ function updateStatusBarAgentStatus(statusText = null) {
   if (sbText) {
     sbText.textContent = statusText || getModeDisplayName();
   }
+}
+
+function updateTokenEstimate(text = '') {
+  const tokenCounter = document.getElementById('composer-token-counter');
+  if (!tokenCounter) return;
+  const count = text ? text.length : 0;
+  const estimatedTokens = Math.ceil(count / 4);
+  tokenCounter.textContent = `~${estimatedTokens} tokens`;
 }
 
 export function switchMode(newMode) {
@@ -169,6 +193,7 @@ async function handleSend() {
 
   inputElem.value = '';
   inputElem.style.height = 'auto';
+  updateTokenEstimate('');
   appendTimelineCard('user', promptText);
 
   state.conversation.push({
