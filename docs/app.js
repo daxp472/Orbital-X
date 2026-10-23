@@ -19,16 +19,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/Orbital.X_2.2.1_x64-setup.exe';
   } else if (ua.includes('mac')) {
-    ctaLabel.textContent = 'Download for macOS (v2.0.1)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1';
+    ctaLabel.textContent = 'Download for macOS (.dmg)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/Orbital.X_2.2.1_x64.dmg';
   } else if (ua.includes('linux')) {
-    ctaLabel.textContent = 'Download for Linux (v2.0.1)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1';
+    ctaLabel.textContent = 'Download for Linux (.AppImage)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/orbital-x_2.2.1_amd64.AppImage';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.0.1)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1';
+    ctaLabel.textContent = 'Download Orbital X (v2.2.1)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.2.1';
   }
 }
 

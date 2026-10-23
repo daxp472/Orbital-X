@@ -56,7 +56,7 @@
           </svg>
           GitHub ★
         </a>
-        <a href="#download" class="btn btn-primary btn-sm">Get v2.0.1</a>
+        <a href="#download" class="btn btn-primary btn-sm">Get v2.2.1</a>
       </div>
     </div>
   </nav>
@@ -66,7 +66,7 @@
     <div class="container">
       <div class="pill-badge">
         <span class="pill-dot"></span>
-        v2.0.1 Official Release • Windows Setup & Source Available
+        v2.2.1 Latest Release • Multi-Platform Installers for Windows, macOS &amp; Linux
       </div>
 
       <h1>
@@ -81,7 +81,7 @@
       </p>
 
       <div class="hero-cta">
-        <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe" class="btn btn-primary" id="hero-download-btn">
+        <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/Orbital.X_2.2.1_x64-setup.exe" class="btn btn-primary" id="hero-download-btn">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             <polyline points="7 10 12 15 17 10"></polyline>
@@ -221,7 +221,7 @@
           <h3>100% Local AI with Ollama</h3>
           <p>
             Plug directly into your local machine's Ollama instance (<code>http://localhost:11434</code>). 
-            Run Qwen 2.5 Coder, Llama 3, Mistral, or DeepSeek Coder completely offline with zero API costs.
+            Download and pull models directly inside the IDE with the built-in Ollama manager. Zero API keys, zero cloud costs.
           </p>
         </div>
 
@@ -245,19 +245,19 @@
 
         <div class="feature-card">
           <div class="feature-icon">📝</div>
-          <h3>Monaco Code Editor</h3>
+          <h3>Monaco Code Editor Upgraded</h3>
           <p>
-            Enjoy the battle-tested editing experience of VS Code: syntax grammars for 50+ languages, smooth cursor blinking, 
-            bracket pair colorization, minimap, tabs, and integrated side-by-side Monaco Diff reviews.
+            Battle-tested Monaco experience with active file path breadcrumbs, Go to Line (<code>Ctrl+G</code>), Go to Definition (<code>F12</code>), 
+            multi-cursor selection (<code>Ctrl+Shift+L</code>), zoom controls (<code>Ctrl+=</code>/<code>-</code>), and side-by-side diff review.
           </p>
         </div>
 
         <div class="feature-card">
           <div class="feature-icon">🖥️</div>
-          <h3>Integrated Multi-Tab Terminal</h3>
+          <h3>Terminal History &amp; Git Panel</h3>
           <p>
-            Full multi-tab integrated terminal subsystem with command history navigation (<code>↑</code>/<code>↓</code>), 
-            built-in commands (<code>cd</code>, <code>cls</code>), and instant hotkey toggle (<code>Ctrl+`</code> / <code>Ctrl+J</code>).
+            Integrated terminal with 50-command persistent history navigation (<code>↑</code>/<code>↓</code>), built-in shell commands, 
+            and a complete Source Control panel with live diff review, staging, and one-click Git commits.
           </p>
         </div>
       </div>
@@ -413,8 +413,8 @@
   <section class="section download-section" id="download">
     <div class="container">
       <div class="section-header">
-        <h2>Get Orbital X v2.0.1</h2>
-        <p>Available now as a native Windows setup installer and open-source binaries.</p>
+        <h2>Get Orbital X v2.2.1</h2>
+        <p>Available as native desktop packages and installers for Windows, macOS, and Linux.</p>
       </div>
 
       <div class="download-cards">
@@ -426,11 +426,50 @@
             <p>Windows 10 / 11 (64-bit)<br>Official NSIS Setup Wizard</p>
           </div>
           <div>
-            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.0.1/Orbital.X_2.0.1_x64-setup.exe" class="btn btn-primary" style="width: 100%;">
-              Download .exe (5.3 MB)
+            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/Orbital.X_2.2.1_x64-setup.exe" class="btn btn-primary" style="width: 100%;">
+              Download .exe Setup
             </a>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
-              SHA256: <code>CED499E...</code>
+              Direct NSIS Installer • Fast 1-Click Setup
+            </div>
+          </div>
+        </div>
+
+        <!-- macOS -->
+        <div class="download-card">
+          <div>
+            <div class="download-icon">🍎</div>
+            <h4>macOS</h4>
+            <p>Apple Silicon (M1–M4) &amp; Intel<br>Native Disk Image Bundle</p>
+          </div>
+          <div>
+            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/Orbital.X_2.2.1_x64.dmg" class="btn btn-secondary" style="width: 100%;">
+              Download .dmg
+            </a>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
+              Universal DMG • Drag &amp; Drop Install
+            </div>
+          </div>
+        </div>
+
+        <!-- Linux -->
+        <div class="download-card">
+          <div>
+            <div class="download-icon">🐧</div>
+            <h4>Linux</h4>
+            <p>Ubuntu, Debian, Fedora &amp; Arch<br>AppImage &amp; Debian Package</p>
+          </div>
+          <div>
+            <div style="display: flex; gap: 8px;">
+              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/orbital-x_2.2.1_amd64.AppImage" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
+                .AppImage
+              </a>
+              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.1/orbital-x_2.2.1_amd64.deb" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
+                .deb Package
+              </a>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
+              Standalone Portable &amp; Debian formats
             </div>
           </div>
         </div>
@@ -447,20 +486,6 @@
               <span style="font-size: 0.75rem;">winget install daxp472.OrbitalX</span>
               <button class="terminal-copy-btn" data-copy="winget install daxp472.OrbitalX">Copy</button>
             </div>
-          </div>
-        </div>
-
-        <!-- macOS & Linux -->
-        <div class="download-card">
-          <div>
-            <div class="download-icon">🍎 🐧</div>
-            <h4>macOS &amp; Linux</h4>
-            <p>Apple Silicon / Intel DMG &amp; Linux AppImage</p>
-          </div>
-          <div>
-            <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1" target="_blank" rel="noopener" class="btn btn-secondary" style="width: 100%;">
-              Releases &amp; Build Guides
-            </a>
           </div>
         </div>
       </div>
