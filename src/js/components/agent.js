@@ -688,14 +688,28 @@ function appendToolBox(name, args, risk) {
   box.innerHTML = `
     <div class="tool-box-header">
       <span class="tool-name-badge">⚡ ${name}</span>
-      <span class="tool-status-badge running" id="${id}_status">
-        <span class="spinner"></span> Running
-      </span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span class="tool-status-badge running" id="${id}_status">
+          <span class="spinner"></span> Running
+        </span>
+        <button class="tool-toggle-btn" id="${id}_toggle" title="Toggle arguments">
+          <svg class="tool-toggle-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+      </div>
     </div>
-    <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); max-height: 80px; overflow-y: auto;">
+    <div class="tool-box-body" id="${id}_body" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); max-height: 80px; overflow-y: auto;">
       ${JSON.stringify(args, null, 2)}
     </div>
   `;
+
+  // Bind toggle button click
+  const toggleBtn = box.querySelector(`#${id}_toggle`);
+  toggleBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    box.classList.toggle('collapsed');
+  });
 
   timeline.appendChild(box);
   box.scrollIntoView({ behavior: 'smooth' });
@@ -721,6 +735,14 @@ function updateToolBoxStatus(boxId, statusText, statusType) {
     statusElem.className = 'tool-status-badge';
     statusElem.style.color = 'var(--accent-red)';
     statusElem.innerHTML = `✗ ${statusText}`;
+  }
+
+  // Feature 4: Default to collapsed after the tool finishes (success/fail/denied)
+  if (statusType !== 'running') {
+    const box = document.getElementById(boxId);
+    if (box) {
+      box.classList.add('collapsed');
+    }
   }
 }
 
