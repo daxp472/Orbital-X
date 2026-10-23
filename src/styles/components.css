@@ -1222,6 +1222,19 @@ input:checked + .settings-toggle-slider {
   margin: 4px 0;
 }
 
+/* Tab Unsaved Dot Indicator */
+.tab .tab-dirty-dot {
+  width: auto;
+  height: auto;
+  background-color: transparent;
+  color: var(--accent-cyan, #39c5bb);
+  font-size: 8px;
+  line-height: 1;
+  margin-right: 5px;
+  display: inline-flex;
+  align-items: center;
+}
+
 input:checked + .settings-toggle-slider:before {
   transform: translateX(16px);
 }

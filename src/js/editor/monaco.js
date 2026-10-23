@@ -319,8 +319,8 @@ export function renderTabs() {
     tabEl.title = tab.path;
 
     tabEl.innerHTML = `
+      ${tab.isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes">●</span>' : ''}
       <span>${tab.name}</span>
-      ${tab.isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes"></span>' : ''}
       <span class="tab-close" data-close-id="${tab.id}">✕</span>
     `;
 
