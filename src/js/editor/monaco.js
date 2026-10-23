@@ -157,12 +157,36 @@ export function initMonaco(containerElement) {
     }
   });
 
+  // Find in file on Ctrl+F
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+    triggerFindWidget();
+  });
+
   // Save on Ctrl+S
   editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
     saveActiveFile();
   });
 
+  // Global window listener for Ctrl+F when editor view is active
+  window.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerFindWidget();
+      }
+    }
+  });
+
   return editorInstance;
+}
+
+export function triggerFindWidget() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const findAction = editorInstance.getAction('actions.find');
+  if (findAction) {
+    findAction.run();
+  }
 }
 
 export function updateTheme(themeName) {
