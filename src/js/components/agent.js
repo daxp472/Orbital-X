@@ -89,6 +89,7 @@ export function initAgent() {
     stopBtn.addEventListener('click', () => {
       isLoopRunning = false;
       setAgentBusy(false);
+      updateStatusBarAgentStatus();
       appendTimelineCard('assistant', '⚠️ Task stopped by user.');
     });
   }
@@ -105,6 +106,19 @@ export function initAgent() {
   }
 }
 
+function getModeDisplayName(mode = state.agentMode) {
+  if (mode === 'agent_pro') return 'Agent Pro Mode';
+  if (mode === 'dev') return 'Dev Mode';
+  return 'User Mode';
+}
+
+function updateStatusBarAgentStatus(statusText = null) {
+  const sbText = document.getElementById('sb-mode-text');
+  if (sbText) {
+    sbText.textContent = statusText || getModeDisplayName();
+  }
+}
+
 export function switchMode(newMode) {
   state.agentMode = newMode;
 
@@ -113,7 +127,6 @@ export function switchMode(newMode) {
   const modeUserBtn = document.getElementById('btn-mode-user');
   const headerPill = document.getElementById('header-mode-pill');
   const headerText = document.getElementById('header-mode-text');
-  const sbText = document.getElementById('sb-mode-text');
 
   [modeProBtn, modeDevBtn, modeUserBtn].forEach(b => b?.classList.remove('btn-primary'));
 
@@ -121,17 +134,18 @@ export function switchMode(newMode) {
     modeProBtn?.classList.add('btn-primary');
     headerPill?.setAttribute('class', 'mode-pill agent_pro');
     if (headerText) headerText.textContent = 'AGENT PRO';
-    if (sbText) sbText.textContent = 'Agent Pro Mode';
   } else if (newMode === 'dev') {
     modeDevBtn?.classList.add('btn-primary');
     headerPill?.setAttribute('class', 'mode-pill dev');
     if (headerText) headerText.textContent = 'DEV MODE';
-    if (sbText) sbText.textContent = 'Dev Mode';
   } else {
     modeUserBtn?.classList.add('btn-primary');
     headerPill?.setAttribute('class', 'mode-pill user');
     if (headerText) headerText.textContent = 'USER MODE';
-    if (sbText) sbText.textContent = 'User Mode';
+  }
+
+  if (!isLoopRunning) {
+    updateStatusBarAgentStatus(getModeDisplayName(newMode));
   }
 
   notify('modeChanged', newMode);
@@ -180,6 +194,7 @@ async function handleSend() {
   } finally {
     isLoopRunning = false;
     setAgentBusy(false);
+    updateStatusBarAgentStatus();
     import('./chat-sessions.js').then(m => m.saveActiveSession());
     import('./usage.js').then(m => m.loadAndRenderUsage(false));
   }
@@ -273,6 +288,7 @@ STRATEGY:
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
+    updateStatusBarAgentStatus(`Agent running... iteration ${iteration}/${maxIterations}`);
 
     // Slide context window for local models to avoid OOM/timeout
     const contextWindow = buildContextWindow(provider);
@@ -374,6 +390,8 @@ STRATEGY:
   if (iteration >= maxIterations) {
     appendTimelineCard('assistant', `⚠️ Reached maximum iteration limit (${maxIterations}). The agent stopped to prevent infinite loops. You can send another message to continue.`);
   }
+
+  updateStatusBarAgentStatus();
 }
 
 // Background automated memory extraction when user asks about architecture/structure
@@ -878,44 +896,55 @@ async function executePlanPhases(plan, card) {
 
   appendTimelineCard('assistant', `🚀 **Implementation Approved:** Commencing structured execution for *${plan.title}*...`);
 
-  for (let i = 0; i < plan.phases.length; i++) {
-    const phase = plan.phases[i];
-    const dot = card.querySelector(`#${plan.id}_dot_${i}`);
-    const stepEl = card.querySelector(`#${plan.id}_step_${i}`);
+  isLoopRunning = true;
+  setAgentBusy(true);
 
-    if (dot) dot.textContent = '🔵';
-    if (stepEl) stepEl.style.borderColor = 'var(--accent-cyan)';
+  try {
+    for (let i = 0; i < plan.phases.length; i++) {
+      if (!isLoopRunning) break;
 
-    appendTimelineCard('assistant', `**Executing ${phase.task}:**\n${phase.detail}\nVerification: \`${phase.verification}\``);
+      const phase = plan.phases[i];
+      const dot = card.querySelector(`#${plan.id}_dot_${i}`);
+      const stepEl = card.querySelector(`#${plan.id}_step_${i}`);
 
-    try {
-      await runAgentLoop(`Implement ${phase.task}. Target: ${phase.target}. Detail: ${phase.detail}`);
+      if (dot) dot.textContent = '🔵';
+      if (stepEl) stepEl.style.borderColor = 'var(--accent-cyan)';
 
-      if (dot) dot.textContent = '🟢';
-      if (stepEl) {
-        stepEl.style.borderColor = 'var(--accent-green)';
-        stepEl.style.background = 'rgba(56, 138, 52, 0.08)';
+      appendTimelineCard('assistant', `**Executing ${phase.task}:**\n${phase.detail}\nVerification: \`${phase.verification}\``);
+
+      try {
+        await runAgentLoop(`Implement ${phase.task}. Target: ${phase.target}. Detail: ${phase.detail}`);
+
+        if (dot) dot.textContent = '🟢';
+        if (stepEl) {
+          stepEl.style.borderColor = 'var(--accent-green)';
+          stepEl.style.background = 'rgba(56, 138, 52, 0.08)';
+        }
+      } catch (err) {
+        if (dot) dot.textContent = '🔴';
+        if (stepEl) stepEl.style.borderColor = 'var(--accent-red)';
+        appendTimelineCard('assistant', `❌ ${phase.task} failed: ${err}`);
+        plan.status = 'failed';
+        if (badge) {
+          badge.className = 'plan-status-badge cancelled';
+          badge.textContent = 'Failed';
+        }
+        return;
       }
-    } catch (err) {
-      if (dot) dot.textContent = '🔴';
-      if (stepEl) stepEl.style.borderColor = 'var(--accent-red)';
-      appendTimelineCard('assistant', `❌ ${phase.task} failed: ${err}`);
-      plan.status = 'failed';
-      if (badge) {
-        badge.className = 'plan-status-badge cancelled';
-        badge.textContent = 'Failed';
-      }
-      return;
     }
-  }
 
-  plan.status = 'completed';
-  if (badge) {
-    badge.className = 'plan-status-badge completed';
-    badge.textContent = 'Completed';
-  }
+    plan.status = 'completed';
+    if (badge) {
+      badge.className = 'plan-status-badge completed';
+      badge.textContent = 'Completed';
+    }
 
-  appendTimelineCard('assistant', `🎉 **Implementation Succeeded:** All ${plan.phases.length} phases for *${plan.title}* have been executed and verified!`);
+    appendTimelineCard('assistant', `🎉 **Implementation Succeeded:** All ${plan.phases.length} phases for *${plan.title}* have been executed and verified!`);
+  } finally {
+    isLoopRunning = false;
+    setAgentBusy(false);
+    updateStatusBarAgentStatus();
+  }
 }
 
 function revisePlan(plan, card) {
