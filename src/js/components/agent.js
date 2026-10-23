@@ -7,12 +7,18 @@ import { invoke } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 
 let isLoopRunning = false;
+let timestampIntervalId = null;
 
 export function initAgent() {
   const sendBtn = document.getElementById('btn-agent-send');
   const stopBtn = document.getElementById('btn-agent-stop');
   const inputElem = document.getElementById('agent-input');
   const clearBtn = document.getElementById('btn-clear-chat');
+
+  // Relative timestamp updater every 60 seconds
+  if (!timestampIntervalId) {
+    timestampIntervalId = setInterval(updateAllTimelineTimestamps, 60000);
+  }
 
   // Mode buttons
   const modeProBtn = document.getElementById('btn-mode-pro');
@@ -143,6 +149,37 @@ function updateTokenEstimate(text = '') {
   tokenCounter.textContent = `~${estimatedTokens} tokens`;
 }
 
+export function getRelativeTimeString(timestamp) {
+  if (!timestamp) return 'just now';
+  const now = Date.now();
+  const time = typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime();
+  const diffSec = Math.max(0, Math.floor((now - time) / 1000));
+
+  if (diffSec < 60) {
+    return 'just now';
+  }
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    return `${diffMin} min ago`;
+  }
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return diffHours === 1 ? '1 hr ago' : `${diffHours} hr ago`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+}
+
+export function updateAllTimelineTimestamps() {
+  const elements = document.querySelectorAll('.timeline-timestamp');
+  elements.forEach((el) => {
+    const ts = parseInt(el.dataset.timestamp, 10);
+    if (!isNaN(ts)) {
+      el.textContent = getRelativeTimeString(ts);
+    }
+  });
+}
+
 export function switchMode(newMode) {
   state.agentMode = newMode;
 
@@ -194,11 +231,13 @@ async function handleSend() {
   inputElem.value = '';
   inputElem.style.height = 'auto';
   updateTokenEstimate('');
-  appendTimelineCard('user', promptText);
+  const now = Date.now();
+  appendTimelineCard('user', promptText, now);
 
   state.conversation.push({
     role: 'user',
     content: promptText,
+    timestamp: now,
   });
 
   // Sync to active chat session
@@ -348,14 +387,16 @@ STRATEGY:
     }
 
     const currentContent = (resp.content || '').trim();
+    const now = Date.now();
     if (currentContent) {
-      appendTimelineCard('assistant', resp.content);
+      appendTimelineCard('assistant', resp.content, now);
     }
 
     // Preserve assistant turn in conversation memory with tool_calls
     state.conversation.push({
       role: 'assistant',
       content: resp.content || '',
+      timestamp: now,
       tool_calls: resp.tool_calls && resp.tool_calls.length > 0 ? resp.tool_calls : undefined,
     });
     import('./chat-sessions.js').then(m => m.saveActiveSession());
@@ -589,16 +630,19 @@ export function renderFullTimeline(messages = []) {
 
   messages.forEach(msg => {
     if (msg.role === 'user') {
-      appendTimelineCard('user', msg.content);
+      appendTimelineCard('user', msg.content, msg.timestamp);
     } else if (msg.role === 'assistant' && msg.content) {
-      appendTimelineCard('assistant', msg.content);
+      appendTimelineCard('assistant', msg.content, msg.timestamp);
     }
   });
 }
 
-export function appendTimelineCard(role, text) {
+export function appendTimelineCard(role, text, timestamp = Date.now()) {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return;
+
+  const msgTime = typeof timestamp === 'number' ? timestamp : (timestamp ? new Date(timestamp).getTime() : Date.now());
+  const relativeTime = getRelativeTimeString(msgTime);
 
   const card = document.createElement('div');
   card.className = `timeline-card ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
@@ -616,7 +660,7 @@ export function appendTimelineCard(role, text) {
         ${providerMeta}
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 10px; color: var(--text-muted);">${new Date().toLocaleTimeString()}</span>
+        <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${relativeTime}</span>
         <button class="btn btn-secondary btn-sm btn-copy-card" title="Copy full message to clipboard" style="padding: 1px 7px; font-size: 10px; height: 20px; display: inline-flex; align-items: center; gap: 3px;">
           <span>📋</span> Copy
         </button>
