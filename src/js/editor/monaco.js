@@ -179,6 +179,11 @@ export function initMonaco(containerElement) {
     triggerGotoDefinition();
   });
 
+  // Select All Occurrences of Find Match on Ctrl+Shift+L
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyL, () => {
+    triggerSelectHighlights();
+  });
+
   // Global window listener for editor shortcuts when editor view is active
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -195,6 +200,11 @@ export function initMonaco(containerElement) {
       if (editorInstance && state.editor.activeTabId) {
         e.preventDefault();
         triggerGotoDefinition();
+      }
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerSelectHighlights();
       }
     }
   });
@@ -251,6 +261,15 @@ export function triggerGotoDefinition() {
   if (!editorInstance) return;
   editorInstance.focus();
   const action = editorInstance.getAction('editor.action.revealDefinition');
+  if (action) {
+    action.run();
+  }
+}
+
+export function triggerSelectHighlights() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.selectHighlights');
   if (action) {
     action.run();
   }

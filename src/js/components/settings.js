@@ -274,6 +274,10 @@ function setupShortcutsTab() {
               <td><kbd>F12</kbd></td>
             </tr>
             <tr>
+              <td>Select All Occurrences</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></td>
+            </tr>
+            <tr>
               <td>Save</td>
               <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
             </tr>

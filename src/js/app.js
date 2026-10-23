@@ -362,7 +362,7 @@ function initGlobalShortcuts() {
       document.getElementById('btn-toggle-sidebar')?.click();
     }
     // Ctrl + L: Focus Agent Chat Input (VS Code / Cursor / Antigravity standard)
-    else if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+    else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       const agentPanel = document.getElementById('agent-panel');
       const btnToggleAgent = document.getElementById('btn-toggle-agent');
