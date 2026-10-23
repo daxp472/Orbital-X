@@ -166,19 +166,27 @@ export function initTerminal() {
         // Send SIGINT / Ctrl+C to real backend shell process
         sendInterruptSignal();
         inputElem.value = '';
+      } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
+        e.preventDefault();
+        const stdoutElem = document.getElementById('terminal-stdout');
+        if (stdoutElem) stdoutElem.innerHTML = '';
+        if (active) active.buffer = '';
       }
     });
   }
 
   runBtn?.addEventListener('click', () => executeTerminalCommand());
 
-  clearBtn?.addEventListener('click', () => {
-    const active = getActiveSession();
-    if (active) {
-      active.buffer = '';
-      renderActiveBuffer();
-    }
-  });
+  if (clearBtn) {
+    clearBtn.innerHTML = '🗑️';
+    clearBtn.title = 'Clear Output (Ctrl+L)';
+    clearBtn.addEventListener('click', () => {
+      const stdoutElem = document.getElementById('terminal-stdout');
+      if (stdoutElem) stdoutElem.innerHTML = '';
+      const active = getActiveSession();
+      if (active) active.buffer = '';
+    });
+  }
 
   newTerminalBtn?.addEventListener('click', () => createTerminalInstance());
   splitTerminalBtn?.addEventListener('click', () => createTerminalInstance());
