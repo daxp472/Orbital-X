@@ -523,6 +523,50 @@ kbd {
   to { transform: rotate(360deg); }
 }
 
+/* Typing Indicator Animation */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 2px;
+}
+
+.typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--accent-cyan);
+  display: inline-block;
+  opacity: 0.35;
+  transform: translateY(0);
+  animation: typingBounce 1.3s ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(57, 197, 187, 0.5);
+  }
+}
+
+
 /* Chat History Popover Dropdown */
 .chat-history-dropdown {
   position: absolute;

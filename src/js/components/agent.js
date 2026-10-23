@@ -687,7 +687,7 @@ function appendThinkingIndicator() {
   const div = document.createElement('div');
   div.id = id;
   div.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); padding: 4px;';
-  div.innerHTML = `<span class="spinner"></span> Orbital X is thinking...`;
+  div.innerHTML = `<div class="typing-indicator" aria-label="Thinking"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div> <span>Orbital X is thinking...</span>`;
   timeline.appendChild(div);
   div.scrollIntoView({ behavior: 'smooth' });
   return id;
