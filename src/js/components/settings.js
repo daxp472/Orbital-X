@@ -74,6 +74,9 @@ export function initSettings() {
   document.getElementById('btn-test-gemini')?.addEventListener('click', () => testConnection('gemini'));
   document.getElementById('btn-test-ollama')?.addEventListener('click', () => testConnection('ollama'));
 
+  // Ollama Model Pull UI
+  setupOllamaPullUI();
+
   // Theme Select inside settings
   document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
     applyTheme(e.target.value);
@@ -90,6 +93,75 @@ export function initSettings() {
   document.getElementById('btn-import-settings')?.addEventListener('click', importSettings);
 }
 
+function setupOllamaPullUI() {
+  const ollamaModelInput = document.getElementById('cfg-ollama-model');
+  const parentCard = ollamaModelInput?.closest('div[style*="background"]');
+  if (!parentCard || document.getElementById('ollama-pull-container')) return;
+
+  const pullContainer = document.createElement('div');
+  pullContainer.id = 'ollama-pull-container';
+  pullContainer.style.marginTop = '12px';
+  pullContainer.style.paddingTop = '10px';
+  pullContainer.style.borderTop = '1px solid var(--border-subtle)';
+  pullContainer.innerHTML = `
+    <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px;">Pull New Ollama Model</div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <input type="text" class="input-text" id="cfg-ollama-pull-name" placeholder="e.g. codellama, mistral, qwen2.5-coder" style="flex: 1;" />
+      <button type="button" class="btn btn-primary btn-sm" id="btn-ollama-pull" style="white-space: nowrap;">Pull Model</button>
+    </div>
+    <div id="ollama-pull-status" style="font-size: 11px; margin-top: 6px; min-height: 16px; color: var(--text-muted);"></div>
+  `;
+
+  parentCard.appendChild(pullContainer);
+
+  const pullBtn = pullContainer.querySelector('#btn-ollama-pull');
+  const pullInput = pullContainer.querySelector('#cfg-ollama-pull-name');
+  const statusEl = pullContainer.querySelector('#ollama-pull-status');
+
+  pullBtn?.addEventListener('click', async () => {
+    const modelName = pullInput?.value.trim();
+    if (!modelName) {
+      if (statusEl) {
+        statusEl.textContent = 'Please enter a model name to pull.';
+        statusEl.style.color = 'var(--accent-orange)';
+      }
+      return;
+    }
+
+    pullBtn.disabled = true;
+    pullBtn.innerHTML = `<span class="spinner"></span> Pulling...`;
+    if (statusEl) {
+      statusEl.innerHTML = `Pulling <strong>${modelName}</strong> from Ollama library... (this may take a few minutes)`;
+      statusEl.style.color = 'var(--accent-cyan)';
+    }
+
+    try {
+      await invoke('run_command', {
+        command: `ollama pull ${modelName}`,
+        timeout_seconds: 300,
+      });
+
+      if (statusEl) {
+        statusEl.innerHTML = `✓ Done! Successfully pulled <strong>${modelName}</strong>.`;
+        statusEl.style.color = 'var(--accent-green)';
+      }
+
+      if (ollamaModelInput && !ollamaModelInput.value) {
+        ollamaModelInput.value = modelName;
+        state.ai.defaultModels.ollama = modelName;
+      }
+    } catch (err) {
+      if (statusEl) {
+        statusEl.innerHTML = `✗ Error pulling model: ${err}`;
+        statusEl.style.color = 'var(--accent-red)';
+      }
+    } finally {
+      pullBtn.disabled = false;
+      pullBtn.innerHTML = `Pull Model`;
+    }
+  });
+}
+
 function selectSecurityCard(mode) {
   document.querySelectorAll('.security-card').forEach(card => card.classList.remove('active'));
   const cardId = mode === 'agent_pro' ? 'card-mode-pro' : (mode === 'user' ? 'card-mode-user' : 'card-mode-dev');
@@ -101,6 +173,7 @@ function selectSecurityCard(mode) {
 export function openSettings() {
   const modal = document.getElementById('modal-settings');
   if (!modal) return;
+  setupOllamaPullUI();
 
   // Workspace label
   const wsName = document.getElementById('settings-active-workspace-name');
