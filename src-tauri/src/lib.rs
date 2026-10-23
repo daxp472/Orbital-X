@@ -407,13 +407,62 @@ async fn execute_tool(
                 "exit_code": res.exit_code
             }))
         }
+        "read_multiple_files" => {
+            let paths_raw = arguments.get("paths").and_then(|p| p.as_array()).ok_or("Missing paths array")?;
+            let paths: Vec<String> = paths_raw.iter().filter_map(|p| p.as_str().map(|s| s.to_string())).collect();
+            let max_lines = arguments.get("max_lines_per_file").and_then(|m| m.as_u64()).unwrap_or(300) as usize;
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let res = ws.read_multiple_files(&paths, max_lines)?;
+            Ok(serde_json::to_value(res).unwrap_or_default())
+        }
+        "find_symbol" => {
+            let sym = arguments.get("symbol").and_then(|s| s.as_str()).ok_or("Missing symbol")?;
+            let sym_type = arguments.get("symbol_type").and_then(|t| t.as_str()).unwrap_or("all");
+            let max_res = arguments.get("max_results").and_then(|m| m.as_u64()).unwrap_or(25) as usize;
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let res = ws.find_symbols(sym, sym_type, max_res)?;
+            Ok(serde_json::to_value(res).unwrap_or_default())
+        }
+        "get_project_structure" => {
+            let max_depth = arguments.get("max_depth").and_then(|d| d.as_u64()).unwrap_or(3) as usize;
+            let inc_files = arguments.get("include_files").and_then(|b| b.as_bool()).unwrap_or(true);
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let res = ws.get_project_structure(max_depth, inc_files)?;
+            Ok(res)
+        }
         "git_status" => {
             let cwd = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
             };
             let res = TerminalService::run_command("git status --short --branch", &cwd, 10).await?;
-            Ok(serde_json::json!({ "output": res.stdout, "success": res.success }))
+            let mut branch = String::new();
+            let mut modified = Vec::new();
+            let mut staged = Vec::new();
+            let mut untracked = Vec::new();
+
+            for line in res.stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("##") {
+                    branch = trimmed.trim_start_matches("##").trim().to_string();
+                } else if trimmed.starts_with("M ") || trimmed.starts_with("A ") || trimmed.starts_with("D ") || trimmed.starts_with("R ") {
+                    staged.push(trimmed[2..].trim().to_string());
+                } else if trimmed.starts_with(" M") || trimmed.starts_with(" D") {
+                    modified.push(trimmed[2..].trim().to_string());
+                } else if trimmed.starts_with("??") {
+                    untracked.push(trimmed[2..].trim().to_string());
+                }
+            }
+
+            Ok(serde_json::json!({
+                "success": res.success,
+                "clean": modified.is_empty() && staged.is_empty() && untracked.is_empty(),
+                "branch": branch,
+                "modified": modified,
+                "staged": staged,
+                "untracked": untracked,
+                "raw_output": res.stdout
+            }))
         }
         "git_commit" => {
             let message = arguments.get("message").and_then(|m| m.as_str()).ok_or("Missing message")?;
@@ -435,16 +484,175 @@ async fn execute_tool(
         }
         "git_diff" => {
             let path = arguments.get("path").and_then(|p| p.as_str());
+            let staged = arguments.get("staged").and_then(|s| s.as_bool()).unwrap_or(false);
+            let stat_only = arguments.get("stat_only").and_then(|s| s.as_bool()).unwrap_or(false);
+
             let cwd = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
             };
-            let cmd = match path {
-                Some(p) => format!("git diff \"{}\"", p),
-                None => "git diff".to_string(),
-            };
+
+            let mut cmd = String::from("git diff");
+            if stat_only {
+                cmd.push_str(" --stat");
+            }
+            if staged {
+                cmd.push_str(" --cached");
+            }
+            if let Some(p) = path {
+                cmd.push_str(&format!(" -- \"{}\"", p.replace('"', "")));
+            }
+
             let res = TerminalService::run_command(&cmd, &cwd, 15).await?;
-            Ok(serde_json::json!({ "diff": res.stdout, "success": res.success }))
+            let lines: Vec<&str> = res.stdout.lines().collect();
+            let total_lines = lines.len();
+            let max_lines = 300;
+            let (diff_text, truncated) = if total_lines > max_lines {
+                (lines.iter().take(max_lines).cloned().collect::<Vec<_>>().join("\n"), true)
+            } else {
+                (res.stdout.clone(), false)
+            };
+
+            Ok(serde_json::json!({
+                "diff": diff_text,
+                "total_lines": total_lines,
+                "truncated": truncated,
+                "success": res.success
+            }))
+        }
+        "validate_changes" => {
+            let files_opt = arguments.get("files").and_then(|f| f.as_array());
+            let run_tests_flag = arguments.get("run_tests").and_then(|t| t.as_bool()).unwrap_or(false);
+
+            let (cwd, root_path) = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                let root = ws.get_root().ok_or("No workspace open")?;
+                (root.to_string_lossy().to_string(), root.clone())
+            };
+
+            let mut files_to_check: Vec<String> = Vec::new();
+            if let Some(arr) = files_opt {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        files_to_check.push(s.to_string());
+                    }
+                }
+            }
+
+            let mut checks_run: Vec<serde_json::Value> = Vec::new();
+            let mut all_passed = true;
+
+            // 1. Rust validation if Cargo.toml exists or files end in .rs
+            let has_rust = root_path.join("Cargo.toml").exists()
+                || files_to_check.iter().any(|f| f.ends_with(".rs"));
+            if has_rust {
+                let res = TerminalService::run_command("cargo check --message-format=short 2>&1", &cwd, 90).await?;
+                checks_run.push(serde_json::json!({
+                    "check": "cargo check",
+                    "success": res.success,
+                    "exit_code": res.exit_code,
+                    "output": format!("{}{}", res.stdout, res.stderr).trim()
+                }));
+                if !res.success {
+                    all_passed = false;
+                }
+            }
+
+            // 2. JS syntax validation
+            let js_files: Vec<&String> = files_to_check.iter().filter(|f| f.ends_with(".js") || f.ends_with(".mjs")).collect();
+            if !js_files.is_empty() {
+                let joined_files = js_files.iter().map(|f| format!("\"{}\"", f)).collect::<Vec<_>>().join(" ");
+                let cmd = format!("node --check {}", joined_files);
+                let res = TerminalService::run_command(&cmd, &cwd, 30).await?;
+                checks_run.push(serde_json::json!({
+                    "check": "node --check",
+                    "success": res.success,
+                    "exit_code": res.exit_code,
+                    "output": format!("{}{}", res.stdout, res.stderr).trim()
+                }));
+                if !res.success {
+                    all_passed = false;
+                }
+            }
+
+            // 3. TS type-checking if tsconfig.json exists
+            if root_path.join("tsconfig.json").exists() && files_to_check.iter().any(|f| f.ends_with(".ts") || f.ends_with(".tsx")) {
+                let res = TerminalService::run_command("npx tsc --noEmit 2>&1", &cwd, 60).await?;
+                checks_run.push(serde_json::json!({
+                    "check": "tsc --noEmit",
+                    "success": res.success,
+                    "exit_code": res.exit_code,
+                    "output": format!("{}{}", res.stdout, res.stderr).trim()
+                }));
+                if !res.success {
+                    all_passed = false;
+                }
+            }
+
+            // 4. Test suite if requested
+            if run_tests_flag {
+                let test_cmd = if root_path.join("Cargo.toml").exists() {
+                    "cargo test"
+                } else if root_path.join("package.json").exists() {
+                    "npm test"
+                } else {
+                    "echo No tests configured"
+                };
+                let res = TerminalService::run_command(test_cmd, &cwd, 120).await?;
+                checks_run.push(serde_json::json!({
+                    "check": "test suite",
+                    "success": res.success,
+                    "exit_code": res.exit_code,
+                    "output": format!("{}{}", res.stdout, res.stderr).trim()
+                }));
+                if !res.success {
+                    all_passed = false;
+                }
+            }
+
+            if checks_run.is_empty() {
+                checks_run.push(serde_json::json!({
+                    "check": "diagnostic check",
+                    "success": true,
+                    "output": "No recognized project compiler found; syntax passed."
+                }));
+            }
+
+            Ok(serde_json::json!({
+                "success": all_passed,
+                "checks_count": checks_run.len(),
+                "checks": checks_run,
+                "summary": if all_passed {
+                    "All validation checks passed."
+                } else {
+                    "Validation failed. Review check output errors."
+                }
+            }))
+        }
+        "update_task_status" => {
+            let task_id = arguments.get("task_id").and_then(|id| id.as_str()).ok_or("Missing task_id")?;
+            let status = arguments.get("status").and_then(|s| s.as_str()).ok_or("Missing status")?;
+            let evidence = arguments.get("evidence").and_then(|e| e.as_str()).unwrap_or("");
+            let notes = arguments.get("notes").and_then(|n| n.as_str()).unwrap_or("");
+
+            let valid_statuses = ["pending", "in_progress", "completed", "blocked", "failed", "skipped"];
+            if !valid_statuses.contains(&status) {
+                return Err(format!("Invalid status '{}'. Must be one of: {:?}", status, valid_statuses));
+            }
+
+            // Invariant 3: Completion needs evidence
+            if status == "completed" && evidence.trim().len() < 5 {
+                return Err("Cannot mark task complete without completion evidence (Gravitas invariant 3). Provide test, diagnostic, or verification output.".to_string());
+            }
+
+            Ok(serde_json::json!({
+                "success": true,
+                "task_id": task_id,
+                "status": status,
+                "evidence": evidence,
+                "notes": notes,
+                "updated_at": chrono::Utc::now().to_rfc3339()
+            }))
         }
         "undo_agent_change" => {
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;

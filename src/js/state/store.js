@@ -63,6 +63,14 @@ export const state = {
     autoSave: true,
     autoSaveDelay: 1000,
   },
+
+  // Active Orchestration Plan & Task Execution
+  orchestrator: {
+    activePlan: null,
+    activeTask: null,
+    isExecuting: false,
+    elapsedSeconds: 0,
+  },
 };
 
 // Listeners for reactive updates

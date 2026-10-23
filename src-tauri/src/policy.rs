@@ -56,13 +56,15 @@ impl PolicyEngine {
                 match tool_name {
                     // Reads and searches are fully autonomous in Pro Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
-                    | "read_file_lines" | "get_project_map" | "search_context"
-                    | "search_project_memory" | "git_status" | "git_diff" => {
+                    | "read_file_lines" | "read_multiple_files" | "find_symbol"
+                    | "get_project_structure" | "get_project_map" | "search_context"
+                    | "search_project_memory" | "git_status" | "git_diff"
+                    | "update_task_status" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
                             risk: ToolRisk::Low,
-                            reason: "Autonomous read/search in Agent Pro Mode".into(),
+                            reason: "Autonomous read/search/task update in Agent Pro Mode".into(),
                         }
                     }
                     // File writes, patches, directory ops are autonomous
@@ -77,7 +79,7 @@ impl PolicyEngine {
                         }
                     }
                     // Diagnostics and safe commands are autonomous
-                    "get_diagnostics" | "run_tests" => {
+                    "get_diagnostics" | "validate_changes" | "run_tests" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -134,11 +136,12 @@ impl PolicyEngine {
 
             AgentMode::Dev => {
                 match tool_name {
-                    // Reads and searches are automatic in Dev Mode
+                    // Reads, searches, and task status updates are automatic in Dev Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
-                    | "read_file_lines" | "get_project_map" | "search_context"
+                    | "read_file_lines" | "read_multiple_files" | "find_symbol"
+                    | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "git_status" | "git_diff" | "git_log"
-                    | "get_diagnostics" => {
+                    | "get_diagnostics" | "validate_changes" | "update_task_status" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -177,16 +180,18 @@ impl PolicyEngine {
 
             AgentMode::User => {
                 match tool_name {
-                    // In User Mode: workspace_info is always free
-                    "workspace_info" => PolicyDecision {
+                    // In User Mode: workspace_info and update_task_status are always free
+                    "workspace_info" | "update_task_status" => PolicyDecision {
                         allowed: true,
                         requires_approval: false,
                         risk: ToolRisk::Low,
-                        reason: "Workspace info is always readable".into(),
+                        reason: "Workspace info and task tracking are readable".into(),
                     },
                     // Reads need confirmation
                     "list_files" | "search_files" | "read_file" | "read_file_lines"
-                    | "search_project_memory" | "git_status" | "git_diff" | "get_diagnostics" => {
+                    | "read_multiple_files" | "find_symbol" | "get_project_structure"
+                    | "search_project_memory" | "git_status" | "git_diff"
+                    | "get_diagnostics" | "validate_changes" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: true,
