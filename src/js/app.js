@@ -12,6 +12,9 @@ import { initExtensions } from './components/extensions.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
+import { showToast } from './services/notifications.js';
+
+window.showToast = showToast;
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Orbital X Desktop IDE initializing...");

@@ -5,6 +5,7 @@
 import { state, notify } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
+import { showToast } from '../services/notifications.js';
 
 let isLoopRunning = false;
 let timestampIntervalId = null;
@@ -69,7 +70,7 @@ export function initAgent() {
       const res = await invoke('undo_agent_change');
       appendTimelineCard('assistant', `↩️ ${res}`);
     } catch (e) {
-      alert("Undo failed: " + e);
+      showToast("Undo failed: " + e, 'error');
     }
   });
 
