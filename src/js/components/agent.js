@@ -545,6 +545,7 @@ async function processToolCallWithPolicy(toolCall) {
     // If writing a file succeeded, notify listeners and open or refresh it in Monaco
     if (name === 'write_file' && args.path) {
       window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
+      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
       try {
         const fileData = await invoke('read_file', { path: args.path });
         openFileInTab(fileData);
@@ -553,6 +554,9 @@ async function processToolCallWithPolicy(toolCall) {
       }
     } else if (name === 'patch_file' && args.path) {
       window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
+      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
+    } else if (name === 'delete_file' && args.path) {
+      showToast(`✅ Agent deleted: ${args.path}`, 'success', 2500);
     }
 
     return output;
