@@ -25,6 +25,7 @@ self.MonacoEnvironment = {
 let editorInstance = null;
 let diffEditorInstance = null;
 const editorModels = new Map(); // path -> monaco.editor.ITextModel
+export const tabDirtyMap = new Map(); // tabId -> boolean (tracks unsaved changes)
 let autoSaveTimer = null;
 
 export function detectLanguage(filename) {
@@ -197,6 +198,7 @@ export function initMonaco(containerElement) {
         activeTab.content = newContent;
         activeTab.originalContent = newContent;
         activeTab.isDirty = false;
+        tabDirtyMap.set(activeTab.id, false);
         renderTabs();
       } catch (err) {
         console.warn("Could not reload file on orbital:file-written:", err);
@@ -243,6 +245,9 @@ export function openFileInTab(fileData) {
       language: lang,
     };
     state.editor.tabs.push(tab);
+    tabDirtyMap.set(tab.id, false);
+  } else if (!tabDirtyMap.has(tab.id)) {
+    tabDirtyMap.set(tab.id, tab.isDirty || false);
   }
 
   state.editor.activeTabId = tab.id;
@@ -260,6 +265,7 @@ export function openFileInTab(fileData) {
       const currentTab = state.editor.tabs.find(t => t.path === path);
       if (currentTab) {
         const isDirty = currentVal !== currentTab.originalContent;
+        tabDirtyMap.set(currentTab.id, isDirty);
         if (currentTab.isDirty !== isDirty) {
           currentTab.isDirty = isDirty;
           renderTabs();
@@ -312,6 +318,7 @@ export function closeTab(tabId) {
   }
 
   state.editor.tabs.splice(index, 1);
+  tabDirtyMap.delete(tabId);
 
   if (state.editor.activeTabId === tabId) {
     if (state.editor.tabs.length > 0) {
@@ -363,6 +370,7 @@ export async function saveActiveFile() {
     activeTab.originalContent = currentContent;
     activeTab.content = currentContent;
     activeTab.isDirty = false;
+    tabDirtyMap.set(activeTab.id, false);
     renderTabs();
 
     console.log("File saved successfully:", activeTab.path, diff);
@@ -378,12 +386,13 @@ export function renderTabs() {
   container.innerHTML = '';
 
   state.editor.tabs.forEach(tab => {
+    const isDirty = tabDirtyMap.has(tab.id) ? tabDirtyMap.get(tab.id) : (tab.isDirty || false);
     const tabEl = document.createElement('div');
     tabEl.className = `tab ${tab.id === state.editor.activeTabId ? 'active' : ''}`;
     tabEl.title = tab.path;
 
     tabEl.innerHTML = `
-      ${tab.isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes">●</span>' : ''}
+      ${isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes">●</span>' : ''}
       <span>${tab.name}</span>
       <span class="tab-close" data-close-id="${tab.id}">✕</span>
     `;
