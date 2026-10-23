@@ -324,6 +324,32 @@ async fn execute_tool(
             let msg = ws.delete_file(path)?;
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
+        "delete_directory" | "delete_folder" => {
+            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let recursive = arguments.get("recursive").and_then(|r| r.as_bool()).unwrap_or(true);
+            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let res = ws.delete_directory(path, recursive)?;
+            Ok(res)
+        }
+        "batch_delete_files" => {
+            let paths_opt = arguments.get("paths").and_then(|p| p.as_array());
+            let manifest_id_opt = arguments.get("manifest_id").and_then(|m| m.as_str());
+
+            if let Some(mid) = manifest_id_opt {
+                // Stage 2: executed after explicit user confirmation
+                let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                let res = ws.execute_batch_delete(mid)?;
+                Ok(res)
+            } else if let Some(arr) = paths_opt {
+                // Stage 1: prepare manifest for explicit confirmation
+                let paths: Vec<String> = arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                let manifest = ws.prepare_batch_delete(&paths)?;
+                Ok(serde_json::to_value(manifest).unwrap_or_default())
+            } else {
+                Err("Missing 'paths' or 'manifest_id' for batch_delete_files".into())
+            }
+        }
         "rename_file" => {
             let from = arguments.get("from").and_then(|p| p.as_str()).ok_or("Missing from")?;
             let to = arguments.get("to").and_then(|p| p.as_str()).ok_or("Missing to")?;
@@ -558,8 +584,21 @@ async fn execute_tool(
                 }
             }
 
-            // 2. JS syntax validation
-            let js_files: Vec<&String> = files_to_check.iter().filter(|f| f.ends_with(".js") || f.ends_with(".mjs")).collect();
+            // 2. JS syntax validation (skip JSX/React files as node --check does not support JSX syntax)
+            let js_files: Vec<&String> = files_to_check.iter()
+                .filter(|f| (f.ends_with(".js") || f.ends_with(".mjs")) && !f.ends_with(".jsx"))
+                .filter(|f| {
+                    let full = root_path.join(f);
+                    if let Ok(content) = std::fs::read_to_string(&full) {
+                        !content.contains("import React")
+                            && !content.contains("export default function")
+                            && !content.contains("</")
+                            && !content.contains("/>")
+                    } else {
+                        true
+                    }
+                })
+                .collect();
             if !js_files.is_empty() {
                 let joined_files = js_files.iter().map(|f| format!("\"{}\"", f)).collect::<Vec<_>>().join(" ");
                 let cmd = format!("node --check {}", joined_files);

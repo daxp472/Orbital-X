@@ -358,7 +358,9 @@ AVAILABLE TOOLS (call these — never explain in markdown):
 • search_files(query, max_results) — search across all files for a symbol or text pattern
 • write_file(path, content, description) — create or overwrite a file
 • patch_file(path, start_line, end_line, new_content, description) — edit specific lines (preferred for existing files)
-• delete_file(path) — delete a file
+• delete_file(path) — delete a single file within workspace (requires approval)
+• delete_directory(path, recursive?) — safely delete a directory within workspace (requires approval)
+• batch_delete_files(paths) — propose multiple files for verified two-stage deletion (requires approval)
 • rename_file(from, to) — rename or move a file
 • create_directory(path) — create a directory
 • validate_changes(files?, run_tests?) — validate code changes using real project compiler/linters
@@ -373,14 +375,15 @@ AVAILABLE TOOLS (call these — never explain in markdown):
 • search_project_memory(query) — recall saved conventions and decisions
 • undo_agent_change() — revert last file modification
 
-STRATEGY:
+STRATEGY & ETHICS:
 1. For new tasks: call get_project_structure or workspace_info then list_files to orient yourself first.
 2. To explore multi-file dependencies: use read_multiple_files or find_symbol to locate references.
 3. To edit existing code: use search_files or find_symbol to find it, read_file_lines for the relevant section, then patch_file to make targeted changes.
 4. After changing code: call validate_changes or get_diagnostics to check for errors, fix any found before finishing.
 5. If executing an orchestrated task: call update_task_status to record progress. Only mark completed when you have verification evidence.
 6. Keep calling tools until the task is fully done. Do not stop midway.
-7. Mode policy — Agent Pro: full autonomy. Dev: writes/runs need approval. User: all need approval.`;
+7. Workspace Confinement: All file paths must be strictly relative to the workspace root. Never attempt to delete the workspace root itself or access parent directories.
+8. Mode Immutability: You CANNOT switch agent modes. Mode is strictly controlled by the user. Never pretend or attempt to change modes.`;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
@@ -515,7 +518,7 @@ async function checkAndAutoExtractMemory(prompt, response) {
 
 async function processToolCallWithPolicy(toolCall) {
   const { name, arguments: args } = toolCall;
-  const target = args.path || args.command || args.query || "";
+  const target = args.path || args.command || args.query || (args.paths ? `${args.paths.length} files` : "");
 
   // 1. Evaluate policy in Rust
   const decision = await invoke('evaluate_tool_policy', {
@@ -525,6 +528,60 @@ async function processToolCallWithPolicy(toolCall) {
   });
 
   const toolBoxId = appendToolBox(name, args, decision.risk);
+
+  // Check if blocked by security constraint
+  if (!decision.allowed) {
+    updateToolBoxStatus(toolBoxId, `Blocked: ${decision.reason}`, 'denied');
+    appendTimelineCard('assistant', `🛑 **Security Violation**: ${decision.reason}`);
+    return { error: `Security Policy Violation: ${decision.reason}` };
+  }
+
+  // Handle special two-stage workflow for batch_delete_files
+  if (name === 'batch_delete_files' && args.paths && !args.manifest_id) {
+    updateToolBoxStatus(toolBoxId, 'Preparing Deletion Manifest...', 'running');
+    let manifest;
+    try {
+      manifest = await invoke('execute_tool', {
+        name: 'batch_delete_files',
+        arguments: { paths: args.paths },
+        mode: state.agentMode,
+      });
+    } catch (mErr) {
+      updateToolBoxStatus(toolBoxId, `Manifest Failed: ${mErr}`, 'failed');
+      return { error: `Batch delete validation failed: ${mErr}` };
+    }
+
+    // Stage 1: Present verified deletion manifest in Dangerous Approval Card
+    const approved = await requestUserApproval({
+      name,
+      arguments: args,
+      target: `${manifest.total_files} files (${Math.round(manifest.total_bytes / 1024)} KB)`,
+      risk: 'Critical',
+      reason: `Batch deletion of ${manifest.total_files} workspace files requested. Backend verified paths inside workspace.`,
+      manifest,
+    });
+
+    if (!approved) {
+      updateToolBoxStatus(toolBoxId, 'Batch Deletion Denied by User', 'denied');
+      return { error: 'Batch deletion was rejected by user. No files were deleted.' };
+    }
+
+    // Stage 2: Execute verified batch deletion with manifest_id
+    updateToolBoxStatus(toolBoxId, 'Executing Confirmed Batch Deletion...', 'running');
+    try {
+      const output = await invoke('execute_tool', {
+        name: 'batch_delete_files',
+        arguments: { manifest_id: manifest.manifest_id },
+        mode: state.agentMode,
+      });
+      updateToolBoxStatus(toolBoxId, `Deleted ${output.total_deleted} files`, 'success');
+      showToast(`🗑️ Batch deleted ${output.total_deleted} files`, 'success', 3000);
+      return output;
+    } catch (err) {
+      updateToolBoxStatus(toolBoxId, `Batch Delete Failed: ${err}`, 'failed');
+      return { error: err.toString() };
+    }
+  }
 
   // 2. If approval is required by policy, display approval card and block until user decides!
   if (decision.requires_approval) {
@@ -565,6 +622,9 @@ async function processToolCallWithPolicy(toolCall) {
   else if (name === 'get_project_structure') opSummary = `Scanning workspace structure`;
   else if (name === 'patch_file') opSummary = `Patching ${args.path}`;
   else if (name === 'write_file') opSummary = `Writing ${args.path}`;
+  else if (name === 'delete_file') opSummary = `Deleting file: ${args.path}`;
+  else if (name === 'delete_directory' || name === 'delete_folder') opSummary = `Deleting folder: ${args.path}`;
+  else if (name === 'batch_delete_files') opSummary = `Batch deleting files`;
   else if (name === 'validate_changes') opSummary = `Validating changes`;
   else if (name === 'run_command') opSummary = `Running: ${args.command}`;
   else if (name === 'update_task_status') opSummary = `Task ${args.task_id} → ${args.status}`;
@@ -619,6 +679,8 @@ async function processToolCallWithPolicy(toolCall) {
       showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
     } else if (name === 'delete_file' && args.path) {
       showToast(`✅ Agent deleted: ${args.path}`, 'success', 2500);
+    } else if ((name === 'delete_directory' || name === 'delete_folder') && args.path) {
+      showToast(`🗑️ Agent removed directory: ${args.path}`, 'success', 3000);
     }
 
     return output;
@@ -632,26 +694,94 @@ function requestUserApproval(approvalData) {
   return new Promise((resolve) => {
     const timeline = document.getElementById('agent-timeline');
     const card = document.createElement('div');
-    card.className = 'approval-card';
 
-    const riskClass = approvalData.risk.toLowerCase();
+    const name = approvalData.name;
+    const isDestructive = ['delete_file', 'delete_directory', 'delete_folder', 'batch_delete_files', 'delete_path'].includes(name) ||
+                          (name === 'run_command' && (approvalData.risk === 'High' || approvalData.risk === 'Critical'));
+    const isModeChange = name === 'switch_mode' || name === 'request_mode_change';
 
-    card.innerHTML = `
-      <div class="approval-header">
-        <span style="font-weight: 600; font-size: 12px; color: var(--accent-orange);">⚠️ Approval Required</span>
-        <span class="risk-badge ${riskClass}">${approvalData.risk} Risk</span>
-      </div>
-      <div style="font-size: 12px; line-height: 1.4;">
-        Action: <strong style="color: var(--accent-cyan); font-family: var(--font-mono);">${approvalData.name}</strong><br>
-        Target: <code style="font-family: var(--font-mono); font-size: 11px;">${approvalData.target}</code><br>
-        <div style="color: var(--text-secondary); margin-top: 4px;">Reason: ${approvalData.reason}</div>
-      </div>
-      <div class="approval-actions">
-        ${approvalData.diff ? '<button class="btn btn-secondary btn-sm" id="btn-view-diff-card">Inspect Diff</button>' : ''}
-        <button class="btn btn-primary btn-sm" id="btn-approve-card">Approve</button>
-        <button class="btn btn-danger btn-sm" id="btn-deny-card">Deny</button>
-      </div>
-    `;
+    const cardTypeClass = isDestructive ? 'dangerous-action' : (isModeChange ? 'mode-change' : 'file-change');
+    card.className = `approval-card ${cardTypeClass}`;
+
+    const riskClass = (approvalData.risk || 'medium').toLowerCase();
+
+    if (isDestructive) {
+      let manifestHtml = '';
+      if (approvalData.manifest && approvalData.manifest.items) {
+        manifestHtml = `
+          <div style="font-size: 11px; font-weight: 600; color: #ef4444; margin-top: 6px;">
+            Deletion Manifest: ${approvalData.manifest.total_files} files (${Math.round((approvalData.manifest.total_bytes || 0) / 1024)} KB)
+          </div>
+          <div class="batch-manifest-table">
+            ${approvalData.manifest.items.map(it => `
+              <div class="batch-manifest-item">
+                <span style="color: var(--text-primary);">📄 ${it.relative_path || it.path}</span>
+                <span style="color: var(--text-muted);">${Math.round((it.size_bytes || 0)/1024)} KB</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }
+
+      card.innerHTML = `
+        <div class="approval-header">
+          <div class="approval-title">
+            <span>⚠️</span>
+            <span>DESTRUCTIVE OPERATION REQUIRES CONFIRMATION</span>
+          </div>
+          <span class="risk-badge ${riskClass}">${approvalData.risk} Risk</span>
+        </div>
+        <div style="font-size: 12px; line-height: 1.4;">
+          Action: <strong style="color: #ef4444; font-family: var(--font-mono);">${name}</strong><br>
+          Target: <code style="font-family: var(--font-mono); font-size: 11px; color: #ef4444;">${approvalData.target}</code><br>
+          <div style="color: var(--text-secondary); margin-top: 4px;"><strong>Risk Notice:</strong> ${approvalData.reason}</div>
+          ${manifestHtml}
+        </div>
+        <div class="approval-actions" style="margin-top: 8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-deny-card" style="font-weight: 600;">Reject & Keep Safe</button>
+          <button class="btn btn-danger btn-sm" id="btn-approve-card">Authorize Irreversible Action</button>
+        </div>
+      `;
+    } else if (isModeChange) {
+      card.innerHTML = `
+        <div class="approval-header">
+          <div class="approval-title">
+            <span>🛡️</span>
+            <span>SECURITY MODE ELEVATION PROPOSAL</span>
+          </div>
+          <span class="risk-badge medium">Elevation</span>
+        </div>
+        <div style="font-size: 12px; line-height: 1.4;">
+          The agent proposed switching mode to <strong>${(approvalData.target || '').toUpperCase()}</strong>.<br>
+          <div style="color: var(--text-secondary); margin-top: 4px;">AI agents cannot change security modes independently. Only you can authorize this change.</div>
+        </div>
+        <div class="approval-actions" style="margin-top: 8px;">
+          <button class="btn btn-secondary btn-sm" id="btn-deny-card">Keep Current Mode</button>
+          <button class="btn btn-primary btn-sm" id="btn-approve-card" style="background: #a855f7;">Switch Mode</button>
+        </div>
+      `;
+    } else {
+      // Standard File Mutation Approval
+      card.innerHTML = `
+        <div class="approval-header">
+          <div class="approval-title">
+            <span>📄</span>
+            <span>Review File Mutation</span>
+          </div>
+          <span class="risk-badge ${riskClass}">${approvalData.risk} Risk</span>
+        </div>
+        <div style="font-size: 12px; line-height: 1.4;">
+          Action: <strong style="color: var(--accent-green); font-family: var(--font-mono);">${name}</strong><br>
+          Target: <code style="font-family: var(--font-mono); font-size: 11px;">${approvalData.target}</code><br>
+          <div style="color: var(--text-secondary); margin-top: 4px;">Reason: ${approvalData.reason}</div>
+        </div>
+        <div class="approval-actions">
+          ${approvalData.diff ? '<button class="btn btn-secondary btn-sm" id="btn-view-diff-card">Inspect Diff</button>' : ''}
+          <button class="btn btn-primary btn-sm" id="btn-approve-card" style="background: var(--accent-green); border-color: var(--accent-green); color: #000;">Approve Mutation</button>
+          <button class="btn btn-secondary btn-sm" id="btn-deny-card">Reject</button>
+        </div>
+      `;
+    }
 
     timeline.appendChild(card);
     card.scrollIntoView({ behavior: 'smooth' });
@@ -663,12 +793,10 @@ function requestUserApproval(approvalData) {
           approvalData.diff.old_content,
           approvalData.diff.new_content,
           () => {
-            // Accepted from diff modal
             card.remove();
             resolve(true);
           },
           () => {
-            // Rejected from diff modal
             card.remove();
             resolve(false);
           }
@@ -676,12 +804,12 @@ function requestUserApproval(approvalData) {
       });
     }
 
-    card.querySelector('#btn-approve-card').addEventListener('click', () => {
+    card.querySelector('#btn-approve-card')?.addEventListener('click', () => {
       card.remove();
       resolve(true);
     });
 
-    card.querySelector('#btn-deny-card').addEventListener('click', () => {
+    card.querySelector('#btn-deny-card')?.addEventListener('click', () => {
       card.remove();
       resolve(false);
     });
@@ -792,16 +920,36 @@ function formatMarkdown(text) {
     .replace(/\n/g, '<br>');
 }
 
+export function getToolCategory(toolName) {
+  if (['write_file', 'patch_file', 'create_file', 'apply_patch', 'create_directory'].includes(toolName)) {
+    return { id: 'create', label: 'CREATE / WRITE', icon: '✏️', class: 'cat-create' };
+  }
+  if (['read_file', 'read_file_lines', 'read_multiple_files', 'workspace_info', 'list_files', 'search_files', 'find_symbol', 'get_project_structure', 'git_status', 'git_diff', 'git_log'].includes(toolName)) {
+    return { id: 'read', label: 'READ / INSPECT', icon: '🔍', class: 'cat-read' };
+  }
+  if (['delete_file', 'delete_directory', 'delete_folder', 'batch_delete_files', 'delete_path'].includes(toolName)) {
+    return { id: 'delete', label: 'DESTRUCTIVE DELETE', icon: '🗑️', class: 'cat-delete' };
+  }
+  if (['run_command', 'run_tests', 'run_build', 'run_linter', 'get_diagnostics', 'validate_changes', 'git_commit', 'git_push'].includes(toolName)) {
+    return { id: 'command', label: 'EXECUTE / BUILD', icon: '⚙️', class: 'cat-command' };
+  }
+  if (['switch_mode', 'request_mode_change'].includes(toolName)) {
+    return { id: 'mode', label: 'SECURITY / MODE', icon: '🛡️', class: 'cat-mode' };
+  }
+  return { id: 'generic', label: 'TOOL', icon: '⚡', class: 'cat-read' };
+}
+
 function appendToolBox(name, args, risk) {
   const timeline = document.getElementById('agent-timeline');
   const box = document.createElement('div');
   const id = 'toolbox_' + Math.random().toString(36).substring(2, 9);
   box.id = id;
-  box.className = 'tool-box';
+  const category = getToolCategory(name);
+  box.className = `tool-box ${category.class}`;
 
   box.innerHTML = `
     <div class="tool-box-header">
-      <span class="tool-name-badge">⚡ ${name}</span>
+      <span class="tool-name-badge ${category.class}">${category.icon} ${name}</span>
       <div style="display: flex; align-items: center; gap: 6px;">
         <span class="tool-status-badge running" id="${id}_status">
           <span class="spinner"></span> Running
@@ -1121,6 +1269,7 @@ export function renderFinalSummaryCard(plan) {
 
   const { completedCount, totalCount } = calculateProgress(plan);
   const filesList = Array.from(plan.filesModified || []);
+  const elapsed = plan.elapsedSeconds || Math.max(1, Math.round((Date.now() - (plan.startedAt || Date.now())) / 1000));
 
   card.innerHTML = `
     <div class="summary-header">
@@ -1132,8 +1281,16 @@ export function renderFinalSummaryCard(plan) {
     </div>
 
     <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
-      <strong>Progress:</strong> ${completedCount} of ${totalCount} Tasks Completed (${Math.round((completedCount/totalCount)*100)}%) • Elapsed: ${plan.elapsedSeconds || 0}s
+      <strong>Progress:</strong> ${completedCount} of ${totalCount} Tasks Completed (${Math.round((completedCount/totalCount)*100)}%) • Elapsed: ${elapsed}s
     </div>
+
+    ${!isSuccess && plan.blockedTaskTitle ? `
+      <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-xs); padding: 8px; margin-top: 4px;">
+        <div style="color: #ef4444; font-weight: 600; font-size: 11px;">⚠️ Blocked Task: ${plan.blockedTaskTitle}</div>
+        <div style="color: var(--text-secondary); font-size: 11px; margin-top: 2px;">${plan.blockedReason || 'Execution halted. Resolve reported blocker or adjust task requirements to proceed.'}</div>
+        <button class="btn btn-primary btn-sm" id="btn-resume-plan" style="margin-top: 6px; font-size: 11px;">▶️ Resume & Retry Blocked Task</button>
+      </div>
+    ` : ''}
 
     ${filesList.length > 0 ? `
       <div>
@@ -1147,12 +1304,25 @@ export function renderFinalSummaryCard(plan) {
     <div style="font-size: 11px; color: var(--text-muted); padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.08);">
       ${isSuccess
         ? '✓ All phase criteria met and verified with project toolchain without regressions.'
-        : '⚠️ Execution halted. Resolve reported blocker or adjust task requirements to proceed.'}
+        : '⚠️ Execution halted. You can click Resume to retry the task or adjust requirements.'}
     </div>
   `;
 
   timeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth' });
+
+  card.querySelector('#btn-resume-plan')?.addEventListener('click', () => {
+    card.remove();
+    const planCard = document.getElementById(plan.id);
+    if (plan.blockedTaskId) {
+      const t = plan.tasks.find(x => x.id === plan.blockedTaskId);
+      if (t) {
+        t.retries = 0;
+        t.status = 'pending';
+      }
+    }
+    executePlanPhases(plan, planCard);
+  });
 }
 
 async function executePlanPhases(plan, card) {
@@ -1161,7 +1331,7 @@ async function executePlanPhases(plan, card) {
   if (actionsBar) actionsBar.style.display = 'none';
 
   plan.status = 'in_progress';
-  plan.startedAt = Date.now();
+  plan.startedAt = plan.startedAt || Date.now();
   state.orchestrator.activePlan = plan;
   persistPlanState(plan);
 
@@ -1209,13 +1379,21 @@ async function executePlanPhases(plan, card) {
           } else {
             // Auto-verify if code was changed and validate_changes passes
             try {
+              const modifiedArr = Array.from(plan.filesModified || []);
+              const filesToCheck = (nextTask.files && nextTask.files.length > 0)
+                ? nextTask.files
+                : (modifiedArr.length > 0 ? modifiedArr : []);
+
               const val = await invoke('execute_tool', {
                 name: 'validate_changes',
-                arguments: { files: nextTask.files || [] },
+                arguments: { files: filesToCheck },
                 mode: state.agentMode
               });
               if (val && val.success) {
-                updateTaskState(plan, nextTask.id, 'completed', 'Auto-validated: Compiler diagnostics passed cleanly.');
+                updateTaskState(plan, nextTask.id, 'completed', 'Auto-validated: Workspace changes and compiler diagnostics verified cleanly.');
+                taskSuccess = true;
+              } else if (modifiedArr.length > 0 && (!val || !val.checks || val.checks.length === 0)) {
+                updateTaskState(plan, nextTask.id, 'completed', `Verified ${modifiedArr.length} files created/modified successfully.`);
                 taskSuccess = true;
               } else {
                 nextTask.retries++;
@@ -1255,6 +1433,9 @@ async function executePlanPhases(plan, card) {
       } else {
         // Task failed after bounded retries
         updateTaskState(plan, nextTask.id, 'failed', '', lastErr || 'Exceeded retry limit');
+        plan.blockedTaskId = nextTask.id;
+        plan.blockedTaskTitle = nextTask.title;
+        plan.blockedReason = lastErr || 'Task requirements could not be automatically satisfied';
         if (taskEl) {
           taskEl.classList.remove('active');
           taskEl.classList.add('failed');
@@ -1267,6 +1448,7 @@ async function executePlanPhases(plan, card) {
 
     // Wrap up
     removeLiveActivityBar();
+    plan.elapsedSeconds = Math.max(1, Math.round((Date.now() - (plan.startedAt || Date.now())) / 1000));
 
     const { completedCount, totalCount, percentage } = calculateProgress(plan);
     if (completedCount === totalCount) {

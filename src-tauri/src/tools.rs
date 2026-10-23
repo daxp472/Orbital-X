@@ -474,6 +474,62 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                     "required": ["task_id", "status"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_file",
+                "description": "Delete a single regular file from the workspace. Strictly prevents deleting the workspace root or directories. Journals the deletion for safety.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Workspace-relative file path to delete"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_directory",
+                "description": "Safely delete a directory and its contents within the workspace. Strictly prohibits deleting the workspace root or parent directories. Requires explicit user approval.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Workspace-relative directory path to delete"
+                        },
+                        "recursive": {
+                            "type": "boolean",
+                            "description": "Set to true to delete non-empty directory and its contents"
+                        }
+                    },
+                    "required": ["path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "batch_delete_files",
+                "description": "Propose and execute deletion of multiple files within the workspace in a verified two-stage workflow. Generates a preview manifest for user confirmation, then re-validates targets immediately before deletion. Does not accept directories.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "paths": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "List of workspace-relative file paths to delete"
+                        }
+                    },
+                    "required": ["paths"]
+                }
+            }
         }
     ])
 }

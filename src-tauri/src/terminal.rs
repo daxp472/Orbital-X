@@ -227,10 +227,10 @@ impl TerminalService {
     ) -> Result<CommandResult, String> {
         let start = Instant::now();
 
-        // Safety check: block explicitly elevated or system-destroying commands
-        let lower = command_str.to_lowercase();
-        if lower.contains("format ") || lower.contains("rmdir /s /q c:") || lower.contains("del /f /s /q c:") {
-            return Err("Execution Blocked: Destructive command detected by Orbital X safety policy.".into());
+        // Safety check: block explicitly prohibited, elevated or system-destroying commands
+        let classification = crate::policy::CommandClassifier::classify(command_str);
+        if let crate::policy::CommandClassification::Prohibited(reason) = classification {
+            return Err(format!("Execution Blocked: Destructive command detected by Orbital X safety policy ({}).", reason));
         }
 
         #[cfg(target_os = "windows")]
