@@ -12,6 +12,9 @@ import { initExtensions } from './components/extensions.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
+import { showToast } from './services/notifications.js';
+
+window.showToast = showToast;
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Orbital X Desktop IDE initializing...");
@@ -32,7 +35,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 3. Initialize UI Subsystems
-  initAgent();
+  await initAgent();
+  const splash = document.getElementById('splash-screen');
+  if (splash) {
+    setTimeout(() => {
+      splash.classList.add('hidden');
+    }, 1500);
+  }
   initChatSessions();
   initTerminal();
   initUsageDashboard();
@@ -46,6 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initActivityRail();
   initResizers();
   initGlobalShortcuts();
+  initWindowControls();
+  initShortcutsHelpOverlay();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
@@ -111,6 +122,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         renderTabs();
         const emptyState = document.getElementById('editor-empty-state');
         if (emptyState) emptyState.style.display = 'flex';
+        const breadcrumbElem = document.getElementById('editor-breadcrumb');
+        if (breadcrumbElem) breadcrumbElem.textContent = '';
 
         // 3. Load workspace and update file tree
         await loadWorkspace(selected);
@@ -203,6 +216,19 @@ function initActivityRail() {
     if (panel) {
       panel.classList.toggle('hidden');
       btn?.classList.toggle('active', !panel.classList.contains('hidden'));
+    }
+  });
+
+  // Toggle Terminal Panel from rail
+  document.getElementById('rail-terminal')?.addEventListener('click', () => {
+    const bottom = document.getElementById('bottom-panel');
+    const isCollapsed = bottom?.classList.contains('collapsed');
+    if (isCollapsed) {
+      bottom?.classList.remove('collapsed');
+      document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
+      document.getElementById('terminal-command-input')?.focus();
+    } else {
+      bottom?.classList.add('collapsed');
     }
   });
 
@@ -338,7 +364,7 @@ function initGlobalShortcuts() {
       document.getElementById('btn-toggle-sidebar')?.click();
     }
     // Ctrl + L: Focus Agent Chat Input (VS Code / Cursor / Antigravity standard)
-    else if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+    else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       const agentPanel = document.getElementById('agent-panel');
       const btnToggleAgent = document.getElementById('btn-toggle-agent');
@@ -394,3 +420,98 @@ async function performSearch(query) {
     container.innerHTML = `<div style="color: var(--accent-red); font-size: 12px;">Search error: ${e}</div>`;
   }
 }
+
+function initWindowControls() {
+  const getWin = async () => {
+    try {
+      if (window.__TAURI__?.window?.getCurrentWindow) {
+        return window.__TAURI__.window.getCurrentWindow();
+      }
+      const winModule = await import('@tauri-apps/api/window');
+      return winModule.getCurrentWindow ? winModule.getCurrentWindow() : null;
+    } catch {
+      return null;
+    }
+  };
+
+  document.getElementById('win-close')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.close) {
+      await win.close();
+    } else {
+      console.log("Window close clicked");
+    }
+  });
+
+  document.getElementById('win-minimize')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.minimize) {
+      await win.minimize();
+    } else {
+      console.log("Window minimize clicked");
+    }
+  });
+
+  document.getElementById('win-maximize')?.addEventListener('click', async () => {
+    const win = await getWin();
+    if (win?.toggleMaximize) {
+      await win.toggleMaximize();
+    } else {
+      console.log("Window maximize clicked");
+    }
+  });
+}
+
+export function openShortcutsHelp() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  if (modal) {
+    modal.style.display = 'flex';
+  }
+}
+
+export function closeShortcutsHelp() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function initShortcutsHelpOverlay() {
+  const modal = document.getElementById('modal-shortcuts-help');
+  const btnClose = document.getElementById('btn-close-shortcuts-help');
+
+  btnClose?.addEventListener('click', closeShortcutsHelp);
+
+  // Close when clicking outside modal-container (backdrop click)
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeShortcutsHelp();
+    }
+  });
+
+  // Help menu in titlebar opens shortcuts help
+  document.getElementById('menu-help')?.addEventListener('click', openShortcutsHelp);
+
+  // Global keydown: F1 or Ctrl+Shift+P to open/toggle, Escape to close
+  window.addEventListener('keydown', (e) => {
+    const isF1 = e.key === 'F1';
+    const isCmdPalette = e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p';
+
+    if (isF1 || isCmdPalette) {
+      e.preventDefault();
+      const isVisible = modal && modal.style.display !== 'none';
+      if (isVisible) {
+        closeShortcutsHelp();
+      } else {
+        openShortcutsHelp();
+      }
+    } else if (e.key === 'Escape') {
+      const isVisible = modal && modal.style.display !== 'none';
+      if (isVisible) {
+        e.preventDefault();
+        closeShortcutsHelp();
+      }
+    }
+  });
+}
+

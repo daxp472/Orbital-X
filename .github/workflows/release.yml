@@ -14,15 +14,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: 'windows-latest'
-            args: '--bundles nsis'
-          - platform: 'macos-latest'
-            args: '--bundles dmg'
-          - platform: 'ubuntu-22.04'
-            args: '--bundles appimage,deb'
+        os: [ubuntu-22.04, macos-latest, windows-latest]
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
@@ -36,11 +30,9 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Install Linux dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
@@ -58,4 +50,3 @@ jobs:
           releaseBody: 'See release notes and assets attached.'
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}

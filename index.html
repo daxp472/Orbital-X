@@ -14,10 +14,42 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+  <!-- Animated Splash / Intro Screen -->
+  <div id="splash-screen" class="splash-screen">
+    <div class="splash-content">
+      <div class="splash-logo">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="16" cy="16" r="14" stroke="url(#splash_grad)" stroke-width="2" stroke-dasharray="70 20" />
+          <ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-30 16 16)" stroke="var(--accent-cyan)" stroke-width="1.5" opacity="0.8" />
+          <path d="M11 11L21 21M21 11L11 21" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" />
+          <circle cx="16" cy="16" r="2.5" fill="var(--accent-purple)" />
+          <defs>
+            <linearGradient id="splash_grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#39c5bb" />
+              <stop offset="1" stop-color="#bc8cff" />
+            </linearGradient>
+          </defs>
+        </svg>
+      </div>
+      <div class="splash-title">Orbital X</div>
+      <div class="splash-text">Loading Orbital X...</div>
+      <div class="splash-progress-track">
+        <div class="splash-progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="app">
     <!-- Top Titlebar -->
     <header class="titlebar">
       <div class="titlebar-left">
+        <!-- Traffic Light Window Controls -->
+        <div class="window-controls traffic-lights">
+          <span class="window-control close" id="win-close" title="Close"></span>
+          <span class="window-control minimize" id="win-minimize" title="Minimize"></span>
+          <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
+        </div>
+
         <div class="titlebar-logo">
           <!-- Orbital X Original Vector Logo -->
           <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -114,7 +146,7 @@
       <aside class="activity-rail">
         <div class="rail-group">
           <!-- Explorer Icon -->
-          <div class="rail-btn active" id="rail-explorer" title="Explorer (Ctrl+Shift+E)">
+          <div class="rail-btn active" id="rail-explorer" data-tooltip="Explorer" title="Explorer (Ctrl+Shift+E)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
               <polyline points="13 2 13 9 20 9"></polyline>
@@ -122,7 +154,7 @@
           </div>
 
           <!-- Search Icon -->
-          <div class="rail-btn" id="rail-search" title="Search in Workspace (Ctrl+Shift+F)">
+          <div class="rail-btn" id="rail-search" data-tooltip="Search" title="Search in Workspace (Ctrl+Shift+F)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -130,7 +162,7 @@
           </div>
 
           <!-- Source Control Icon (with badge) -->
-          <div class="rail-btn" id="rail-source-control" title="Source Control (Ctrl+Shift+G)">
+          <div class="rail-btn" id="rail-source-control" data-tooltip="Git" title="Source Control (Ctrl+Shift+G)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="6" cy="6" r="3"></circle>
               <circle cx="6" cy="18" r="3"></circle>
@@ -142,21 +174,21 @@
           </div>
 
           <!-- Run & Debug Icon -->
-          <div class="rail-btn" id="rail-debug" title="Run and Debug (Ctrl+Shift+D)">
+          <div class="rail-btn" id="rail-debug" data-tooltip="Run & Debug" title="Run and Debug (Ctrl+Shift+D)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="5 3 19 12 5 21 5 3"></polygon>
             </svg>
           </div>
 
           <!-- Extensions Icon -->
-          <div class="rail-btn" id="rail-extensions" title="Extensions (Ctrl+Shift+X)">
+          <div class="rail-btn" id="rail-extensions" data-tooltip="Extensions" title="Extensions (Ctrl+Shift+X)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 8h4V4H4zM16 8h4V4h-4zM4 20h4v-4H4zM16 20h4v-4h-4z"></path>
             </svg>
           </div>
 
           <!-- Project Memory / Rules Icon -->
-          <div class="rail-btn" id="rail-memory" title="Project Memory & Rules (Ctrl+Shift+M)">
+          <div class="rail-btn" id="rail-memory" data-tooltip="Memory" title="Project Memory & Rules (Ctrl+Shift+M)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
@@ -164,15 +196,23 @@
             </svg>
           </div>
 
+          <!-- Terminal Icon -->
+          <div class="rail-btn" id="rail-terminal" data-tooltip="Terminal" title="Toggle Terminal (Ctrl+`)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+          </div>
+
           <!-- AI Agent Chat Icon -->
-          <div class="rail-btn" id="rail-agent" title="AI Agent Dock (Ctrl+Shift+A)">
+          <div class="rail-btn" id="rail-agent" data-tooltip="AI Assistant" title="AI Agent Dock (Ctrl+Shift+A)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
             </svg>
           </div>
 
           <!-- Token Usage Dashboard Icon -->
-          <div class="rail-btn" id="rail-usage" title="Token Usage & Analytics Dashboard">
+          <div class="rail-btn" id="rail-usage" data-tooltip="Token Usage" title="Token Usage & Analytics Dashboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
             </svg>
@@ -181,7 +221,7 @@
 
         <div class="rail-group">
           <!-- Settings Icon -->
-          <div class="rail-btn" id="rail-settings" title="Settings">
+          <div class="rail-btn" id="rail-settings" data-tooltip="Settings" title="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -362,6 +402,9 @@
           </div>
 
           <div class="editor-viewport">
+            <!-- Active File Breadcrumb Bar -->
+            <div id="editor-breadcrumb" class="editor-breadcrumb"></div>
+
             <!-- Monaco Editor Container -->
             <div id="monaco-container"></div>
 
@@ -798,6 +841,32 @@
               </div>
             </div>
           </div>
+
+          <!-- Editor & File Auto-Save -->
+          <div style="margin-top: 24px;">
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-primary-bright); margin-bottom: 8px;">Editor & Files</div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Auto Save</span>
+                <span class="settings-setting-caption">Automatically save dirty files after a period of typing inactivity.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-auto-save" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Delay (ms)</span>
+                <span class="settings-setting-caption">Time in milliseconds to wait before automatically saving active file changes.</span>
+              </div>
+              <div>
+                <input type="number" class="text-input" id="cfg-auto-save-delay" value="1000" min="100" max="30000" step="100" style="width: 100px; text-align: right;" />
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 2. MODELS & TOKENS PANE (with embedded Token Counter) -->
@@ -1085,6 +1154,111 @@
       </div>
       <div class="modal-body" id="usage-dashboard-content" style="padding: 16px; overflow-y: auto; max-height: 70vh;">
         <!-- Dynamically rendered by usage.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Global Keyboard Shortcuts Help Overlay -->
+  <div class="modal-backdrop" id="modal-shortcuts-help" style="display: none;">
+    <div class="modal-container" style="max-width: 620px; max-height: 82vh;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">⌨️</span>
+          <span style="font-weight: 600; font-size: 14px;">Keyboard Shortcuts</span>
+        </div>
+        <button class="icon-btn" id="btn-close-shortcuts-help" title="Close (Esc)" style="font-size: 16px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; overflow-y: auto;">
+        <table class="settings-shortcuts-table">
+          <thead>
+            <tr>
+              <th style="width: 55%; text-align: left;">Action</th>
+              <th style="width: 45%; text-align: right;">Shortcut</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Command Palette / Shortcuts Help</td>
+              <td><kbd>F1</kbd> or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td>
+            </tr>
+            <tr>
+              <td>Send Message</td>
+              <td><kbd>Enter</kbd></td>
+            </tr>
+            <tr>
+              <td>New Line</td>
+              <td><kbd>Shift</kbd> + <kbd>Enter</kbd></td>
+            </tr>
+            <tr>
+              <td>Focus Agent Chat Input</td>
+              <td><kbd>Ctrl</kbd> + <kbd>L</kbd></td>
+            </tr>
+            <tr>
+              <td>Toggle Agent Dock</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd></td>
+            </tr>
+            <tr>
+              <td>Open File / Quick Open</td>
+              <td><kbd>Ctrl</kbd> + <kbd>P</kbd></td>
+            </tr>
+            <tr>
+              <td>Open Folder / Workspace</td>
+              <td><kbd>Ctrl</kbd> + <kbd>O</kbd></td>
+            </tr>
+            <tr>
+              <td>Save Active File</td>
+              <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
+            </tr>
+            <tr>
+              <td>Find in Workspace</td>
+              <td><kbd>Ctrl</kbd> + <kbd>F</kbd></td>
+            </tr>
+            <tr>
+              <td>Go to Line</td>
+              <td><kbd>Ctrl</kbd> + <kbd>G</kbd></td>
+            </tr>
+            <tr>
+              <td>Go to Definition</td>
+              <td><kbd>F12</kbd></td>
+            </tr>
+            <tr>
+              <td>Select All Occurrences</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></td>
+            </tr>
+            <tr>
+              <td>Zoom In / Out / Reset</td>
+              <td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
+            </tr>
+            <tr>
+              <td>Toggle Terminal Panel</td>
+              <td><kbd>Ctrl</kbd> + <kbd>`</kbd> or <kbd>Ctrl</kbd> + <kbd>J</kbd></td>
+            </tr>
+            <tr>
+              <td>Toggle Primary Sidebar</td>
+              <td><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
+            </tr>
+            <tr>
+              <td>Source Control (Git)</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>G</kbd></td>
+            </tr>
+            <tr>
+              <td>Explorer</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd></td>
+            </tr>
+            <tr>
+              <td>Extensions</td>
+              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></td>
+            </tr>
+            <tr>
+              <td>Cycle Agent Operating Mode</td>
+              <td><kbd>Alt</kbd> + <kbd>M</kbd></td>
+            </tr>
+            <tr>
+              <td>Open Settings</td>
+              <td><kbd>Ctrl</kbd> + <kbd>,</kbd></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

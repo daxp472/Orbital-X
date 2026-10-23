@@ -5,6 +5,7 @@
 import { state, notify } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
+import { showToast } from '../services/notifications.js';
 
 let isLoopRunning = false;
 let timestampIntervalId = null;
@@ -69,7 +70,7 @@ export function initAgent() {
       const res = await invoke('undo_agent_change');
       appendTimelineCard('assistant', `↩️ ${res}`);
     } catch (e) {
-      alert("Undo failed: " + e);
+      showToast("Undo failed: " + e, 'error');
     }
   });
 
@@ -541,14 +542,21 @@ async function processToolCallWithPolicy(toolCall) {
       import('./memory.js').then(m => m.refreshMemories());
     }
 
-    // If writing a file succeeded, open or refresh it in Monaco
+    // If writing a file succeeded, notify listeners and open or refresh it in Monaco
     if (name === 'write_file' && args.path) {
+      window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
+      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
       try {
         const fileData = await invoke('read_file', { path: args.path });
         openFileInTab(fileData);
       } catch (e) {
         console.warn("Could not reload written file:", e);
       }
+    } else if (name === 'patch_file' && args.path) {
+      window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
+      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
+    } else if (name === 'delete_file' && args.path) {
+      showToast(`✅ Agent deleted: ${args.path}`, 'success', 2500);
     }
 
     return output;

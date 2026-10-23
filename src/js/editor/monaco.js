@@ -25,6 +25,8 @@ self.MonacoEnvironment = {
 let editorInstance = null;
 let diffEditorInstance = null;
 const editorModels = new Map(); // path -> monaco.editor.ITextModel
+export const tabDirtyMap = new Map(); // tabId -> boolean (tracks unsaved changes)
+let autoSaveTimer = null;
 
 export function detectLanguage(filename) {
   const ext = filename.split('.').pop().toLowerCase();
@@ -167,12 +169,99 @@ export function initMonaco(containerElement) {
     saveActiveFile();
   });
 
-  // Global window listener for Ctrl+F when editor view is active
+  // Go to Line on Ctrl+G
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyG, () => {
+    triggerGotoLine();
+  });
+
+  // Go to Definition on F12
+  editorInstance.addCommand(monaco.KeyCode.F12, () => {
+    triggerGotoDefinition();
+  });
+
+  // Select All Occurrences of Find Match on Ctrl+Shift+L
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyL, () => {
+    triggerSelectHighlights();
+  });
+
+  // Editor Zoom In: Ctrl+= / Ctrl++
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Equal, () => {
+    zoomIn();
+  });
+
+  // Editor Zoom Out: Ctrl+-
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Minus, () => {
+    zoomOut();
+  });
+
+  // Editor Zoom Reset: Ctrl+0
+  editorInstance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Digit0, () => {
+    zoomReset();
+  });
+
+  // Global window listener for editor shortcuts when editor view is active
   window.addEventListener('keydown', (e) => {
     if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
       if (editorInstance && state.editor.activeTabId) {
         e.preventDefault();
         triggerFindWidget();
+      }
+    } else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'g') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerGotoLine();
+      }
+    } else if (e.key === 'F12') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerGotoDefinition();
+      }
+    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        triggerSelectHighlights();
+      }
+    } else if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomIn();
+      }
+    } else if (e.ctrlKey && e.key === '-') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomOut();
+      }
+    } else if (e.ctrlKey && e.key === '0') {
+      if (editorInstance && state.editor.activeTabId) {
+        e.preventDefault();
+        zoomReset();
+      }
+    }
+  });
+
+  // Live File Reload / Watch: Update active tab when AI agent writes a file
+  window.addEventListener('orbital:file-written', async (e) => {
+    const writtenPath = e.detail?.path;
+    if (!writtenPath || !editorInstance) return;
+
+    const normalize = (p) => (p ? p.replace(/\\/g, '/').toLowerCase() : '');
+    const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
+    if (activeTab && normalize(activeTab.path) === normalize(writtenPath)) {
+      try {
+        const fileData = await invoke('read_file', { path: writtenPath });
+        const newContent = fileData.content;
+        const pos = editorInstance.getPosition();
+        editorInstance.setValue(newContent);
+        if (pos) {
+          editorInstance.setPosition(pos);
+        }
+        activeTab.content = newContent;
+        activeTab.originalContent = newContent;
+        activeTab.isDirty = false;
+        tabDirtyMap.set(activeTab.id, false);
+        renderTabs();
+      } catch (err) {
+        console.warn("Could not reload file on orbital:file-written:", err);
       }
     }
   });
@@ -187,6 +276,48 @@ export function triggerFindWidget() {
   if (findAction) {
     findAction.run();
   }
+}
+
+export function triggerGotoLine() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.gotoLine');
+  if (action) {
+    action.run();
+  }
+}
+
+export function triggerGotoDefinition() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.revealDefinition');
+  if (action) {
+    action.run();
+  }
+}
+
+export function triggerSelectHighlights() {
+  if (!editorInstance) return;
+  editorInstance.focus();
+  const action = editorInstance.getAction('editor.action.selectHighlights');
+  if (action) {
+    action.run();
+  }
+}
+
+export function zoomIn() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomIn', {});
+}
+
+export function zoomOut() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomOut', {});
+}
+
+export function zoomReset() {
+  if (!editorInstance) return;
+  editorInstance.trigger('keyboard', 'editor.action.fontZoomReset', {});
 }
 
 export function updateTheme(themeName) {
@@ -216,6 +347,9 @@ export function openFileInTab(fileData) {
       language: lang,
     };
     state.editor.tabs.push(tab);
+    tabDirtyMap.set(tab.id, false);
+  } else if (!tabDirtyMap.has(tab.id)) {
+    tabDirtyMap.set(tab.id, tab.isDirty || false);
   }
 
   state.editor.activeTabId = tab.id;
@@ -233,11 +367,25 @@ export function openFileInTab(fileData) {
       const currentTab = state.editor.tabs.find(t => t.path === path);
       if (currentTab) {
         const isDirty = currentVal !== currentTab.originalContent;
+        tabDirtyMap.set(currentTab.id, isDirty);
         if (currentTab.isDirty !== isDirty) {
           currentTab.isDirty = isDirty;
           renderTabs();
         }
         currentTab.content = currentVal;
+
+        // Auto-save debounce timer (like VS Code)
+        if (state.settings?.autoSave) {
+          if (autoSaveTimer) {
+            clearTimeout(autoSaveTimer);
+          }
+          const delay = typeof state.settings?.autoSaveDelay === 'number'
+            ? state.settings.autoSaveDelay
+            : 1000;
+          autoSaveTimer = setTimeout(() => {
+            saveActiveFile();
+          }, delay);
+        }
       }
     });
   }
@@ -255,8 +403,26 @@ export function openFileInTab(fileData) {
   const langElem = document.getElementById('status-language');
   if (langElem) langElem.textContent = lang.toUpperCase();
 
+  // Update breadcrumb
+  const relativePath = tab.relativePath || tab.name || tab.path || '';
+  const breadcrumbElem = document.getElementById('editor-breadcrumb');
+  if (breadcrumbElem) {
+    breadcrumbElem.textContent = relativePath.replace(/[\\/]/g, ' › ');
+  }
+
   renderTabs();
   notify('activeTab', tab);
+}
+
+export function updateBreadcrumb(tab) {
+  const breadcrumbElem = document.getElementById('editor-breadcrumb');
+  if (!breadcrumbElem) return;
+  if (!tab) {
+    breadcrumbElem.textContent = '';
+    return;
+  }
+  const relativePath = tab.relativePath || tab.name || tab.path || '';
+  breadcrumbElem.textContent = relativePath.replace(/[\\/]/g, ' › ');
 }
 
 export function closeTab(tabId) {
@@ -272,6 +438,7 @@ export function closeTab(tabId) {
   }
 
   state.editor.tabs.splice(index, 1);
+  tabDirtyMap.delete(tabId);
 
   if (state.editor.activeTabId === tabId) {
     if (state.editor.tabs.length > 0) {
@@ -284,6 +451,7 @@ export function closeTab(tabId) {
       if (emptyState) emptyState.style.display = 'flex';
       const langElem = document.getElementById('status-language');
       if (langElem) langElem.textContent = 'Plain Text';
+      updateBreadcrumb(null);
     }
   }
 
@@ -304,6 +472,8 @@ export function switchToTab(tabId) {
   const langElem = document.getElementById('status-language');
   if (langElem) langElem.textContent = tab.language.toUpperCase();
 
+  updateBreadcrumb(tab);
+
   renderTabs();
 }
 
@@ -323,6 +493,7 @@ export async function saveActiveFile() {
     activeTab.originalContent = currentContent;
     activeTab.content = currentContent;
     activeTab.isDirty = false;
+    tabDirtyMap.set(activeTab.id, false);
     renderTabs();
 
     console.log("File saved successfully:", activeTab.path, diff);
@@ -338,12 +509,13 @@ export function renderTabs() {
   container.innerHTML = '';
 
   state.editor.tabs.forEach(tab => {
+    const isDirty = tabDirtyMap.has(tab.id) ? tabDirtyMap.get(tab.id) : (tab.isDirty || false);
     const tabEl = document.createElement('div');
     tabEl.className = `tab ${tab.id === state.editor.activeTabId ? 'active' : ''}`;
     tabEl.title = tab.path;
 
     tabEl.innerHTML = `
-      ${tab.isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes">●</span>' : ''}
+      ${isDirty ? '<span class="tab-dirty-dot" title="Unsaved changes">●</span>' : ''}
       <span>${tab.name}</span>
       <span class="tab-close" data-close-id="${tab.id}">✕</span>
     `;

@@ -57,6 +57,12 @@ export const state = {
     activeTab: 'terminal',
     isCollapsed: false,
   },
+
+  // User configurable settings
+  settings: {
+    autoSave: true,
+    autoSaveDelay: 1000,
+  },
 };
 
 // Listeners for reactive updates
@@ -111,6 +117,18 @@ export function loadPersistedState() {
       const parsed = JSON.parse(savedKeys);
       state.ai.keys = { ...state.ai.keys, ...parsed };
     }
+
+    const savedAutoSave = localStorage.getItem('orbital_autosave');
+    if (savedAutoSave !== null) {
+      state.settings.autoSave = savedAutoSave === 'true';
+    }
+    const savedAutoSaveDelay = localStorage.getItem('orbital_autosave_delay');
+    if (savedAutoSaveDelay !== null) {
+      const parsedDelay = parseInt(savedAutoSaveDelay, 10);
+      if (!isNaN(parsedDelay) && parsedDelay > 0) {
+        state.settings.autoSaveDelay = parsedDelay;
+      }
+    }
   } catch (e) {
     console.warn("Could not load persisted state:", e);
   }
@@ -125,6 +143,8 @@ export function persistState() {
     localStorage.setItem('orbital_endpoint', state.ai.endpoint);
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
+    localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');
+    localStorage.setItem('orbital_autosave_delay', (state.settings.autoSaveDelay || 1000).toString());
   } catch (e) {
     console.warn("Could not persist state:", e);
   }
