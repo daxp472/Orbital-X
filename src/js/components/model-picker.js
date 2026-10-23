@@ -2,32 +2,72 @@
 // Orbital X — Model Picker Dropdown Component (model-picker.js)
 // ==========================================================================
 
-import { state, setActiveModel } from '../state/store.js';
+import { state, setActiveModel, subscribe } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 
 let dropdownEl = null;
 
 export function initModelPicker() {
   const triggerBtn = document.getElementById('composer-model-selector');
-  if (!triggerBtn) return;
+  if (triggerBtn) {
+    triggerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleDropdown('composer');
+    });
+  }
 
-  triggerBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleDropdown();
-  });
+  // Header Current Model Indicator Pill
+  setupHeaderModelPill();
 
   document.addEventListener('click', (e) => {
-    if (dropdownEl && !dropdownEl.contains(e.target) && e.target !== triggerBtn) {
+    const headerPill = document.getElementById('header-model-pill');
+    if (dropdownEl && !dropdownEl.contains(e.target) && e.target !== triggerBtn && !headerPill?.contains(e.target)) {
       closeDropdown();
+    }
+  });
+
+  // Subscribe to store notifications for reactive model updates
+  subscribe((property, payload) => {
+    if (property === 'modelChanged' || property === 'model') {
+      updateHeaderModelDisplay(payload?.model || state.ai.model);
     }
   });
 }
 
-export async function toggleDropdown() {
+function setupHeaderModelPill() {
+  const modePill = document.getElementById('header-mode-pill');
+  if (!modePill || document.getElementById('header-model-pill')) return;
+
+  const pill = document.createElement('div');
+  pill.className = 'model-pill';
+  pill.id = 'header-model-pill';
+  pill.title = 'Active Model — Click to switch model';
+  pill.innerHTML = `
+    <span class="model-pill-icon">✨</span>
+    <span id="header-model-text">${state.ai.model || 'Select Model'}</span>
+  `;
+
+  // Insert right next to mode pill
+  modePill.insertAdjacentElement('afterend', pill);
+
+  pill.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDropdown('header');
+  });
+}
+
+function updateHeaderModelDisplay(modelName) {
+  const textEl = document.getElementById('header-model-text');
+  if (textEl) {
+    textEl.textContent = modelName || state.ai.model || 'Select Model';
+  }
+}
+
+export async function toggleDropdown(source = 'composer') {
   if (dropdownEl && dropdownEl.style.display !== 'none') {
     closeDropdown();
   } else {
-    await openDropdown();
+    await openDropdown(source);
   }
 }
 
@@ -37,9 +77,19 @@ export function closeDropdown() {
   }
 }
 
-export async function openDropdown() {
+export async function openDropdown(source = 'composer') {
   if (!dropdownEl) {
     createDropdownDOM();
+  }
+
+  if (source === 'header') {
+    dropdownEl.style.top = '40px';
+    dropdownEl.style.bottom = 'auto';
+    dropdownEl.style.right = '12px';
+  } else {
+    dropdownEl.style.top = 'auto';
+    dropdownEl.style.bottom = '75px';
+    dropdownEl.style.right = '12px';
   }
 
   // Fetch local Ollama models dynamically if available
