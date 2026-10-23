@@ -1178,6 +1178,50 @@ input:checked + .settings-toggle-slider {
   background-color: var(--accent-cyan);
 }
 
+/* File Tree Right-Click Context Menu */
+.tree-context-menu {
+  position: fixed;
+  background-color: var(--bg-surface, #252526);
+  border: 1px solid var(--border-color, #454545);
+  border-radius: var(--radius-sm, 4px);
+  padding: 4px 0;
+  min-width: 170px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  z-index: 9999;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+
+.tree-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background var(--trans-fast, 0.1s);
+}
+
+.tree-context-menu-item:hover {
+  background-color: var(--bg-hover, #04395e);
+  color: #ffffff;
+}
+
+.tree-context-menu-item.danger:hover {
+  background-color: var(--accent-red, #f85149);
+  color: #ffffff;
+}
+
+.tree-context-menu-separator {
+  height: 1px;
+  background-color: var(--border-subtle, #333333);
+  margin: 4px 0;
+}
+
 input:checked + .settings-toggle-slider:before {
   transform: translateX(16px);
 }

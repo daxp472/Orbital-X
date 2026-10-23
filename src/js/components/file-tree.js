@@ -156,6 +156,17 @@ function buildNodeElement(node, parentElem, indentLevel) {
       }
     }
   });
+
+  // Right-click context menu
+  nodeRow.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    document.querySelectorAll('.tree-node.selected').forEach(el => el.classList.remove('selected'));
+    nodeRow.classList.add('selected');
+
+    showFileTreeContextMenu(e.clientX, e.clientY, node);
+  });
 }
 
 export function initFileTreeHeaderActions() {
@@ -212,3 +223,179 @@ export function initFileTreeHeaderActions() {
     container.querySelectorAll('.tree-arrow.expanded').forEach(el => el.classList.remove('expanded'));
   });
 }
+
+// ==========================================================================
+// Right-Click Context Menu Implementation
+// ==========================================================================
+
+let activeContextMenu = null;
+
+export function dismissFileTreeContextMenu() {
+  if (activeContextMenu) {
+    activeContextMenu.remove();
+    activeContextMenu = null;
+  }
+}
+
+function showFileTreeContextMenu(x, y, node) {
+  dismissFileTreeContextMenu();
+
+  const menu = document.createElement('div');
+  menu.className = 'tree-context-menu';
+  menu.id = 'file-tree-context-menu';
+
+  // Prevent browser context menu on our custom menu
+  menu.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  const items = [
+    {
+      label: 'Open',
+      icon: '📄',
+      action: async () => {
+        if (!node.is_directory) {
+          try {
+            const fileData = await invoke('read_file', { path: node.path });
+            if (fileData.is_binary) {
+              alert("Cannot view binary files in the code editor.");
+              return;
+            }
+            openFileInTab(fileData);
+          } catch (e) {
+            alert("Error opening file: " + e);
+          }
+        }
+      }
+    },
+    {
+      label: 'Copy Path',
+      icon: '📋',
+      action: () => {
+        navigator.clipboard.writeText(node.path);
+      }
+    },
+    {
+      label: 'Reveal in Explorer',
+      icon: '📂',
+      action: async () => {
+        try {
+          await invoke('run_command', { command: `explorer /select,"${node.path}"` });
+        } catch (e) {
+          console.warn("Could not reveal in explorer:", e);
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Rename...',
+      icon: '✏️',
+      action: async () => {
+        const newName = prompt(`Rename "${node.name}" to:`, node.name);
+        if (!newName || !newName.trim() || newName.trim() === node.name) return;
+        const trimmed = newName.trim();
+        const lastSlash = Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'));
+        const dir = lastSlash !== -1 ? node.path.substring(0, lastSlash) : '';
+        const newPath = dir ? `${dir}/${trimmed}` : trimmed;
+        try {
+          await invoke('execute_tool', {
+            name: 'rename_file',
+            arguments: { from: node.path, to: newPath },
+            mode: 'agent_pro'
+          });
+          await refreshFileTree();
+        } catch (e) {
+          try {
+            await invoke('run_command', {
+              command: `powershell -Command "Rename-Item -LiteralPath '${node.path}' -NewName '${trimmed}'"`
+            });
+            await refreshFileTree();
+          } catch (err) {
+            alert("Rename failed: " + err);
+          }
+        }
+      }
+    },
+    {
+      label: 'Delete',
+      icon: '🗑️',
+      danger: true,
+      action: async () => {
+        const confirmed = confirm(`Are you sure you want to delete "${node.name}"?`);
+        if (!confirmed) return;
+        try {
+          await invoke('execute_tool', {
+            name: 'delete_file',
+            arguments: { path: node.path },
+            mode: 'agent_pro'
+          });
+          await refreshFileTree();
+        } catch (e) {
+          try {
+            await invoke('run_command', {
+              command: `powershell -Command "Remove-Item -LiteralPath '${node.path}' -Recurse -Force"`
+            });
+            await refreshFileTree();
+          } catch (err) {
+            alert("Delete failed: " + err);
+          }
+        }
+      }
+    }
+  ];
+
+  items.forEach(item => {
+    if (item.type === 'separator') {
+      const sep = document.createElement('div');
+      sep.className = 'tree-context-menu-separator';
+      menu.appendChild(sep);
+      return;
+    }
+
+    const menuItem = document.createElement('div');
+    menuItem.className = `tree-context-menu-item ${item.danger ? 'danger' : ''}`;
+    menuItem.innerHTML = `<span style="font-size: 13px; opacity: 0.85;">${item.icon}</span> <span>${item.label}</span>`;
+    menuItem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissFileTreeContextMenu();
+      item.action();
+    });
+    menu.appendChild(menuItem);
+  });
+
+  document.body.appendChild(menu);
+  activeContextMenu = menu;
+
+  // Viewport bounds detection
+  const rect = menu.getBoundingClientRect();
+  const posX = Math.min(x, window.innerWidth - rect.width - 8);
+  const posY = Math.min(y, window.innerHeight - rect.height - 8);
+  menu.style.left = `${Math.max(8, posX)}px`;
+  menu.style.top = `${Math.max(8, posY)}px`;
+
+  // Dismiss on click outside or Escape
+  const onClickOutside = (e) => {
+    if (!menu.contains(e.target)) {
+      dismissFileTreeContextMenu();
+      cleanupListeners();
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      dismissFileTreeContextMenu();
+      cleanupListeners();
+    }
+  };
+
+  const cleanupListeners = () => {
+    window.removeEventListener('click', onClickOutside);
+    window.removeEventListener('contextmenu', onClickOutside);
+    window.removeEventListener('keydown', onKeyDown);
+  };
+
+  setTimeout(() => {
+    window.addEventListener('click', onClickOutside);
+    window.addEventListener('contextmenu', onClickOutside);
+    window.addEventListener('keydown', onKeyDown);
+  }, 10);
+}
+
