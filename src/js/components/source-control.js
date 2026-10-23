@@ -158,15 +158,13 @@ export async function refreshGitStatus() {
 
       row.addEventListener('click', async () => {
         try {
+          container.querySelectorAll('.tree-node').forEach(n => {
+            n.style.background = '';
+          });
+          row.style.background = 'var(--bg-active)';
+
           const diffText = await invoke('get_git_diff', { path: change.path });
-          if (diffText && diffText.trim()) {
-            // Open Monaco diff editor
-            const fileData = await invoke('read_file', { path: change.path });
-            openDiffModal(change.path, "HEAD version\n(Run git checkout to revert)", fileData.content, () => {}, () => {});
-          } else {
-            const fileData = await invoke('read_file', { path: change.path });
-            openFileInTab(fileData);
-          }
+          showDiffPreview(change.path, diffText);
         } catch (e) {
           console.warn("Could not preview diff:", e);
         }
@@ -178,4 +176,74 @@ export async function refreshGitStatus() {
   } catch (err) {
     container.innerHTML = `<div style="padding: 10px; color: var(--accent-red); font-size: 11px;">Git error: ${err}</div>`;
   }
+}
+
+function showDiffPreview(filePath, diffText) {
+  const viewSC = document.getElementById('view-source-control');
+  if (!viewSC) return;
+
+  let diffBox = document.getElementById('git-diff-preview-container');
+  if (!diffBox) {
+    diffBox = document.createElement('div');
+    diffBox.id = 'git-diff-preview-container';
+    diffBox.style.cssText = 'border-top: 1px solid var(--border-color); display: flex; flex-direction: column; max-height: 220px; overflow: hidden; background: var(--bg-card); flex-shrink: 0;';
+
+    const commitBox = document.getElementById('git-commit-all-container');
+    if (commitBox) {
+      viewSC.insertBefore(diffBox, commitBox);
+    } else {
+      viewSC.appendChild(diffBox);
+    }
+  }
+
+  diffBox.style.display = 'flex';
+  diffBox.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; font-size: 11px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface);">
+      <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;">DIFF: ${escapeHtml(filePath)}</span>
+      <button class="icon-btn" id="btn-close-git-diff" title="Close Diff Preview" style="font-size: 12px; line-height: 1;">✕</button>
+    </div>
+    <pre class="git-diff-pre" style="flex: 1; overflow: auto; padding: 8px; font-family: var(--font-mono); font-size: 10px; line-height: 1.45; margin: 0; background: var(--bg-app); white-space: pre-wrap; word-break: break-all;"></pre>
+  `;
+
+  diffBox.querySelector('#btn-close-git-diff')?.addEventListener('click', () => {
+    diffBox.style.display = 'none';
+  });
+
+  const preEl = diffBox.querySelector('.git-diff-pre');
+  if (preEl) {
+    renderDiffColored(diffText, preEl);
+  }
+}
+
+function renderDiffColored(diffText, preElement) {
+  if (!diffText || !diffText.trim()) {
+    preElement.innerHTML = '<span style="color: var(--text-muted); font-style: italic;">(No unstaged/staged line changes)</span>';
+    return;
+  }
+
+  const lines = diffText.split('\n');
+  const coloredHtml = lines.map(line => {
+    const escaped = escapeHtml(line);
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      return `<span style="color: var(--text-muted); font-weight: bold;">${escaped}</span>`;
+    } else if (line.startsWith('+')) {
+      return `<span style="color: var(--accent-green); background: rgba(56, 138, 52, 0.15); display: block;">${escaped}</span>`;
+    } else if (line.startsWith('-')) {
+      return `<span style="color: var(--accent-red); background: rgba(241, 76, 76, 0.15); display: block;">${escaped}</span>`;
+    } else if (line.startsWith('@')) {
+      return `<span style="color: var(--accent-cyan); font-weight: bold; display: block;">${escaped}</span>`;
+    } else {
+      return `<span style="color: var(--text-muted); display: block;">${escaped}</span>`;
+    }
+  }).join('');
+
+  preElement.innerHTML = coloredHtml;
+}
+
+function escapeHtml(str) {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
