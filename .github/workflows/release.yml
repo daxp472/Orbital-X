@@ -47,6 +47,46 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Orbital X ${{ github.ref_name }}'
-          releaseBody: 'Detailed notes: RELEASE_NOTES_v${{ github.ref_name }}.md in the repository. Highlights: real extension system (theme / prompt / command packs), agent Skills, major UI polish (focus visibility, reduced motion, responsive dialogs, light-theme fixes), write_file reliability fix, hardened command and workspace security, web research tools, streaming and context management. Assets below are built by this workflow for Windows, macOS, and Linux.'
+          releaseBody: |-
+            ## The largest Orbital X release yet
+
+            A real extension system, Claude Code-style agent skills, a major accessibility & responsiveness polish pass, and the full engine overhaul (streaming, cancellation, context management, hardened security, web research) — everything since v2.2.2.
+
+            ### 🧩 Extensions — real, working, honest
+            - Declarative packs with zero code execution: **Themes** (Solar Flare, Arctic Night — runtime CSS-token overrides), **Prompt Packs** (Rust Strict Mode, Frontend Craft, Test Discipline — agent system-prompt guidance), **Command Packs** (Web Dev, Rust Dev, Git Flow — one-click runnable commands).
+            - Installed/Browse tabs, search, details with honest scope notes, import from folder, enable/disable, uninstall.
+            - Bundled registry (no marketplace claims). VS Code .vsix / code-executing extensions are explicitly **not supported** — rejected with a clear message, never faked.
+
+            ### 🛠️ Agent Skills
+            - SKILL.md instruction packs the agent discovers (context digest) and reads on demand via new list_skills / read_skill tools, gated by the existing permission engine.
+            - New Skills panel: browse, import, enable/disable, review, delete. Skills never execute code.
+
+            ### ✨ Critical UI polish
+            - Visible keyboard focus everywhere; prefers-reduced-motion respected; responsive settings dialog and status bar; light-theme settings-dialog fix; missing glass tokens added to Light / Midnight Blue / High Contrast; consistent scrollbars, selection, and disabled states.
+
+            ### 🔒 Security & correctness
+            - write_file "Missing path" fixed at the root (JSON-string/aliased tool arguments normalized; structured self-correctable errors).
+            - Strict risky-command classification in Rust: quote-aware chaining/newline/redirection/subexpression/nested-shell detection; normal dev workflows stay automatic.
+            - Strict workspace confinement: symlinked-parent write escapes blocked, symlink-skipping scans, undo revalidation; git via argument arrays (no shell injection).
+
+            ### 🌐 Web research tools
+            - web_search (DuckDuckGo — no keys, no paid usage) and fetch_page (public pages only, private hosts refused, size/time caps) with explicit UNTRUSTED EXTERNAL CONTENT wrapping.
+
+            ### ⚡ Streaming, cancellation & context intelligence
+            - Progressive token streaming from Ollama; Stop aborts the in-flight request and frees the model server-side.
+            - Configurable num_ctx / keep_alive / temperature / max tokens, auto-capped by each model's real limit from /api/show; tool-result compaction; pair-preserving context trimming; live ctx + tok/s meter.
+
+            ### 🦙 Complete local-model experience
+            - Model pulls with live progress & cancellation, delete with confirmation, model info (params, quantization, real context length, tool support), loaded-models view with VRAM.
+            - Hardware-aware fit guidance from real RAM/GPU detection (unknown stays unknown). Onboarding detects Ollama. Custom OpenAI-compatible endpoints (LM Studio, llama.cpp, vLLM).
+
+            ### 🧭 Smarter orchestration & honest progress
+            - Model-generated task plans from the actual request and repo context; evidence-gated completion; per-workspace plan restore; real-activity timeline with task counters and all six states.
+
+            ### 📦 Install
+            Windows: Orbital.X_2.2.3_x64-setup.exe (per-user or all-users) · macOS: Orbital.X_2.2.3_aarch64.dmg · Linux: .AppImage / .deb. Local AI requires Ollama — the onboarding wizard detects it and guides installation.
+
+            ### ✅ Verification
+            cargo test 36/36 · vite build pass · Windows installer built and verified locally before release. Full notes: release/notes/RELEASE_NOTES_v2.2.3.md
           releaseDraft: false
           prerelease: false

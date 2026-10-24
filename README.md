@@ -1,17 +1,18 @@
-# Orbital X — AI-Powered Desktop Coding IDE
+# Orbital X — Local-AI Desktop Coding IDE
 
 <div align="center">
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg?logo=tauri)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-1.90%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/Release-v2.0.1-emerald.svg)](https://github.com/daxp472/Orbital-X/releases)
-[![Platform](https://img.shields.io/badge/Platform-Windows_x64-0078d4.svg?logo=windows)](https://github.com/daxp472/Orbital-X/releases)
+[![Version](https://img.shields.io/badge/Release-v2.2.3-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
+[![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-0078d4.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
+[![Tests](https://img.shields.io/badge/cargo%20test-36%2F36-brightgreen.svg)](.github/workflows/ci.yml)
 
-**A high-performance, memory-conscious, autonomous AI coding environment built on Tauri 2 and modern web standards.**  
-*Native speed. 100% local model support. Durable workspace memory.*
+**A fast, memory-conscious, autonomous AI coding IDE powered by your own local models.**
+*Native speed · Streaming responses · 100% private inference · Rust-enforced safety*
 
-[Key Features](#key-features) • [Installation](#installation) • [Operating Modes](#operating-modes) • [Local AI with Ollama](#local-ai-with-ollama) • [Architecture](#architecture) • [Contributing](#contributing)
+[Download](#-installation) • [Features](#-key-features) • [Operating Modes](#-operating-modes) • [Local AI](#-local-ai-with-ollama) • [Extensions & Skills](#-extensions--skills) • [Build from Source](#-building-from-source)
 
 </div>
 
@@ -19,141 +20,146 @@
 
 ## 🚀 Overview
 
-**Orbital X** combines the reliability and speed of a native desktop code editor with a deeply integrated, tool-using AI coding agent. It is designed from the ground up for developers who demand **complete data privacy**, **offline-first local model support** (via Ollama), and **zero-bloat memory performance**.
+**Orbital X** pairs a native desktop code editor with a deeply integrated, tool-using AI agent — built for developers who want **complete data privacy**, **offline-first local models** (via [Ollama](https://ollama.com)), and **zero bloat**.
 
-Unlike heavy Electron-based editors that consume gigabytes of RAM at idle, Orbital X uses **Tauri 2 + Rust** with Microsoft Edge WebView2, keeping idle memory under **120 MB** while maintaining full compatibility with Monaco Editor and VS Code-grade editing capabilities.
+While Electron editors idle at 1.5 GB+ of RAM, Orbital X runs on **Tauri 2 + Rust** with Edge WebView2 — a ~120 MB footprint with full Monaco (VS Code) editing power underneath.
+
+The agent streams tokens as they're generated, manages its own context window against your model's real limits, executes multi-step tasks through a permission-gated tool system, researches documentation on the web when needed, and reports honest, evidence-backed progress the whole way.
 
 ---
 
 ## ✨ Key Features
 
-- **⚡ Native Rust Shell:** Powered by Tauri 2. Idle memory footprint of ~100MB vs 1.5GB+ in Electron alternatives.
-- **🧠 100% Local AI Support:** First-class support for [Ollama](https://ollama.ai) — run `llama3`, `qwen2.5-coder`, `mistral`, or `deepseek-coder` completely offline on your PC with zero API fees and 100% code privacy.
-- **☁️ Cloud Provider Flexibility:** Seamlessly switch between Anthropic Claude (3.5 Sonnet), OpenAI (GPT-4o), Google Gemini (1.5 Pro / Flash), and local Ollama from a single unified model picker.
-- **🛡️ Tri-Mode Safety Policy:** Choose between **Agent Pro Mode** (autonomous tool execution), **Dev Mode** (approval cards for writes/commands), and **User Mode** (strict per-action confirmation).
-- **💾 Durable Project Memory:** Architecture decisions, entrypoints, and setup rules are automatically extracted and saved locally in `.orbital/memory.json` — your AI remembers your project across restarts.
-- **🖥️ Integrated VS Code Terminal:** Full multi-tab terminal with command history (`↑`/`↓`), built-in navigation (`cd`, `cls`), and instant hotkey toggle (`Ctrl+` `` ` `` / `Ctrl+J`).
-- **📝 Monaco Code Editor:** Full syntax highlighting for 50+ languages, line numbers, minimap, dirty tab indicators, and integrated side-by-side Monaco Diff Editor for change reviews.
-- **💬 Chat Sessions & History:** Persistent multi-session chat manager stored locally in `localStorage` — switch between past conversations or start clean tasks with a single click.
-- **🎨 Modern Developer Aesthetics:** Hand-crafted Orbit Dark, Nebula Light, and Midnight Blue themes with silky-smooth micro-animations, accessible contrast, and zero "AI slop" clutter.
+### Agent engine
+- **⚡ Live streaming + real cancellation** — Ollama responses render token-by-token; Stop aborts the in-flight request and frees the model immediately.
+- **🧠 Context intelligence** — configurable context window auto-capped by each model's *real* limit (read from `/api/show`), compacted tool results, pair-preserving history trimming, and a live `tokens/ctx · tok/s` meter.
+- **🧭 Model-generated task plans** — complex requests decompose into 2–6 verifiable, dependency-ordered tasks; tasks complete only with validation evidence; interrupted plans restore per workspace.
+- **🌐 Web research tools** — `web_search` + `fetch_page` (DuckDuckGo-backed, no keys) with explicit *untrusted content* isolation, so documentation lookups can never hijack the agent.
+
+### Local models first
+- **🦙 Full Ollama lifecycle** — pull models with live progress and cancellation, delete with confirmation, inspect params/quantization/context/tool-support, and watch what's loaded in VRAM right now.
+- **🖥️ Hardware-aware guidance** — real RAM/GPU detection with clearly-labelled fit estimates (unknown stays unknown — nothing invented).
+- **🔌 Custom OpenAI-compatible endpoints** — LM Studio, llama.cpp server, and vLLM connect through the same provider system.
+- **☁️ Cloud when you want it** — Claude, OpenAI, and Gemini adapters with your own keys.
+
+### Safety, enforced in Rust
+- **🛡️ Tri-mode policy engine** — Agent Pro / Dev / User permission matrix evaluated in the backend, never the WebView.
+- **🔒 Strict workspace confinement** — path validation, symlink/junction escape prevention, and revalidated destructive operations.
+- **⚔️ Strict command classification** — quote-aware chaining/redirection/subexpression detection; nested shells and inline-code invocations never auto-approve.
+
+### Editor & UX
+- **📝 Monaco editing** — 50+ languages, minimap, side-by-side diff review for every agent edit, one-key rollback via the change journal.
+- **🖥️ Integrated terminal** — real interactive PowerShell sessions, multi-tab, history, interrupt support.
+- **💾 Durable project memory** — architecture decisions and conventions persist per project in `.orbital/memory.json`.
+- **💬 Sessions on disk** — chat history survives restarts and localStorage quota limits.
+- **🎨 Four themes + polish** — Orbit Dark, Nebula Light, Midnight Blue, High Contrast; visible keyboard focus, reduced-motion support, and responsive layouts throughout.
+
+---
+
+## 🧩 Extensions & Skills
+
+**Extensions** are declarative packs — safe by design, zero code execution:
+- **Themes** override design tokens at runtime (bundled: *Solar Flare*, *Arctic Night*).
+- **Prompt packs** inject focused agent guidance (*Rust Strict Mode*, *Frontend Craft*, *Test Discipline*).
+- **Command packs** surface one-click runnable commands (*Web Dev*, *Rust Dev*, *Git Flow*).
+
+Browse the bundled registry or import packs from folders. VS Code `.vsix` and code-executing extensions are **not supported** — and Orbital X tells you so instead of pretending.
+
+**Skills** are Claude Code-style instruction packs (`SKILL.md` folders). Enabled skills appear in the agent's context as a digest; when a task matches, the agent reads the full skill through the permission-gated `read_skill` tool and follows it. Manage everything in the Skills panel: import, enable/disable, review, delete.
 
 ---
 
 ## 📥 Installation
 
-### Windows Setup Installer (Recommended)
+Grab the latest from the **[Releases](https://github.com/daxp472/Orbital-X/releases/latest)** page:
 
-1. Head to the **[Latest Releases](https://github.com/daxp472/Orbital-X/releases/tag/v2.0.1)** page.
-2. Download `Orbital X_2.0.1_x64-setup.exe`.
-3. Run the installer:
-   - Choose **Install for anyone (All Users)** or **Install just for me (Current User - no admin required)**.
-   - Accept the license and select your preferred install directory.
-   - Shortcuts are automatically created on your Desktop and Start Menu.
-4. Launch **Orbital X** from your Start Menu or Desktop.
+| Platform | Asset |
+|---|---|
+| **Windows 10/11 (x64)** | `Orbital.X_x64-setup.exe` — NSIS installer; per-user (no admin) or all-users |
+| **macOS (Apple Silicon)** | `.dmg` |
+| **Linux (x64)** | `.AppImage` / `.deb` |
+
+**For local AI, install [Ollama](https://ollama.com)** and pull a coding model:
+
+```powershell
+ollama pull qwen2.5-coder:7b
+```
+
+The onboarding wizard detects Ollama automatically and guides you through setup on first launch. Then just pick your model in the composer and start coding — everything runs on your machine.
 
 ---
 
 ## 🎛️ Operating Modes
 
-Orbital X features a kernel-enforced permission model evaluated inside Rust (`PolicyEngine`):
+The permission matrix is evaluated inside Rust (`PolicyEngine`) — the UI can't bypass it:
 
-| Feature / Action | 🟣 Agent Pro Mode | 🟢 Dev Mode (Default) | 🟠 User Mode |
+| Action | 🟣 Agent Pro | 🟢 Dev (Default) | 🟠 User |
 |---|---|---|---|
-| **File Reads & Searches** | Automatic | Automatic | Approval Required |
-| **Workspace Map & Symbols** | Automatic | Automatic | Approval Required |
-| **File Creation & Edits** | Automatic | **Approval Card (with Diff)** | **Approval Card (with Diff)** |
-| **Safe Build / Test Commands** | Automatic | **Approval Card** | **Approval Card** |
-| **Arbitrary Commands / Git** | Approval Required | **Approval Card** | **Approval Card** |
-| **Destructive Actions (`rmdir`, `format`)** | **Strictly Blocked** | **Strictly Blocked** | **Strictly Blocked** |
+| Reads, searches, skills, web research | Automatic | Automatic | Approval |
+| File creation & edits | Automatic | Approval + diff | Approval + diff |
+| Safe build/test commands | Automatic | Approval | Approval |
+| Arbitrary commands, git commits | Approval | Approval | Approval |
+| Destructive deletions | **Blocked / two-stage manifest** | **Blocked / two-stage manifest** | **Blocked / two-stage manifest** |
 
-> **Quick Switch:** Press `Alt + M` or click the mode pill in the top header to cycle between modes at any time.
+> Switch anytime with `Alt + M` or the mode pill in the header. *A policy layer is not an OS sandbox — Orbital X enforces tool boundaries, not system-level isolation.*
 
 ---
 
 ## 🦙 Local AI with Ollama
 
-Orbital X connects directly to your local [Ollama](https://ollama.ai) instance without any cloud proxy:
-
-1. Install and launch Ollama on your machine:
-   ```powershell
-   # Install your preferred coding model
-   ollama run qwen2.5-coder:7b
-   # or
-   ollama run llama3:latest
-   ```
-2. Open **Orbital X Settings** (`Ctrl + ,` or the gear icon in the activity rail).
-3. Under **Provider**, select `Ollama (Local)`.
-4. Ensure the endpoint is set to `http://localhost:11434` (default).
-5. Orbital X will auto-populate the dropdown with all models installed locally on your PC!
-6. Click **Save and Close**. You are now coding with 100% local, private AI.
+1. Install [Ollama](https://ollama.com) and pull a model (see above).
+2. Open **Settings** (`Ctrl + ,`) → Provider: **Ollama (Local)** — endpoint `http://localhost:11434`.
+3. Pull, inspect, and manage models right from the settings panel (progress bars, VRAM usage, real context lengths).
+4. Tune the engine: context window, keep-alive, temperature, and max response tokens — all live in **Local Inference Engine** settings.
 
 ---
 
-## ⌨️ Essential Keyboard Shortcuts
+## ⌨️ Essential Shortcuts
 
 | Shortcut | Action |
-|----------|--------|
-| `Ctrl + O` | Open Workspace Directory |
-| `Ctrl + S` | Save Active File |
-| `Ctrl + L` | Focus Agent Chat / Reveal AI Dock |
-| `Ctrl + \`` / `Ctrl + J` | Toggle Terminal Panel |
-| `Ctrl + B` | Toggle Primary Side Bar |
-| `Ctrl + Shift + A` | Toggle Agent Dock |
-| `Ctrl + Shift + G` | Open Source Control (Git) |
-| `Ctrl + Shift + E` | Open File Explorer |
-| `Ctrl + Shift + F` | Search Across Workspace |
-| `Ctrl + Shift + X` | Open Extensions Catalog |
-| `Alt + M` | Cycle Operating Mode (Dev ➔ Pro ➔ User) |
+|---|---|
+| `Ctrl + L` | Focus agent chat |
+| `Ctrl + \` ` / `Ctrl + J` | Toggle terminal |
+| `Ctrl + Shift + A` | Toggle agent dock |
+| `Ctrl + Shift + G` | Source control |
+| `Ctrl + Shift + E` / `F` | Explorer / workspace search |
+| `Ctrl + Shift + X` | Extensions |
+| `Alt + M` | Cycle operating mode |
+| `Ctrl + O` / `Ctrl + S` | Open folder / save |
+| `F1` / `Ctrl + Shift + P` | Shortcuts help |
 
 ---
 
 ## 🛠️ Building from Source
 
-### Prerequisites
-- **OS:** Windows 10/11 (64-bit)
-- **Rust Toolchain:** Rust 1.90+ (`rustup install stable`)
-- **Node.js:** Node.js 18+ and `npm`
-- **Visual Studio C++ Build Tools:** Desktop development with C++ workload
-
-### Step-by-Step Build
+**Prerequisites:** Rust 1.90+, Node.js 18+, VS C++ Build Tools (Windows).
 
 ```powershell
-# 1. Clone repository
 git clone https://github.com/daxp472/Orbital-X.git
 cd Orbital-X
-
-# 2. Install frontend dependencies
 npm install
 
-# 3. Launch in development mode
-npm run dev:tauri
-
-# 4. Package production NSIS installer
-npx tauri build --bundles nsis
+npm run dev:tauri            # development
+npx tauri build --bundles nsis   # production installer
 ```
 
-The compiled setup installer will be placed in:
-```
-src-tauri/target/release/bundle/nsis/Orbital X_2.0.1_x64-setup.exe
-```
+The installer lands in `src-tauri/target/release/bundle/nsis/`. CI runs `cargo test` + frontend builds on every push.
 
 ---
 
-## 🏛️ Architecture & Documentation
+## 🏛️ Documentation
 
-- [Architecture Guide](ARCHITECTURE.md) — Detailed diagrams, IPC command registry, data flows, and subsystem specifications.
-- [Contributing Guidelines](CONTRIBUTING.md) — Coding conventions, branching strategy, and pull request procedures.
-- [Security Policy](SECURITY.md) — Path traversal isolation, secret sanitization, and vulnerability reporting.
-- [Changelog](CHANGELOG.md) — Detailed version-by-version release history.
+- [Architecture Guide](ARCHITECTURE.md) — subsystem specs and IPC registry
+- [Release Notes](release/notes/) — version-by-version history
+- [Contributing](CONTRIBUTING.md) · [Security Policy](SECURITY.md) · [Changelog](CHANGELOG.md)
+- [Website](https://daxp472.github.io/Orbital-X/)
 
 ---
 
 ## 📄 License
 
-Orbital X is open-source software licensed under the **[MIT License](LICENSE)**.
-
----
+Open-source under the **[MIT License](LICENSE)**.
 
 <div align="center">
-Made with ❤️ by the Orbital X Community.
+Made with ❤️ for local-first AI development.
 </div>
