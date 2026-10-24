@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./src/styles/themes.css" />
   <link rel="stylesheet" href="./src/styles/layout.css" />
   <link rel="stylesheet" href="./src/styles/components.css" />
+  <link rel="stylesheet" href="./src/styles/polish.css" />
   <!-- Google Fonts: Inter and JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.2 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.3 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -175,6 +176,11 @@
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
               <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div class="rail-btn" id="rail-skills" data-tooltip="Skills" title="Agent Skills — reusable instruction packs the agent reads on demand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
             </svg>
           </div>
 
@@ -311,6 +317,23 @@
             <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">
               No durable memories yet.<br>Click '+' to record an architectural rule or setup instruction.
             </div>
+          </div>
+        </div>
+
+        <!-- Skills View -->
+        <div id="view-skills" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Agent Skills</span>
+            <div class="sidebar-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-import-skill" style="padding: 1px 8px; font-size: 10px;">📁 Import…</button>
+            </div>
+          </div>
+          <div style="padding: 8px 10px; font-size: 10px; color: var(--text-muted); line-height: 1.5; border-bottom: 1px solid var(--border-subtle);">
+            Skills are reusable instruction packs (a folder with SKILL.md). Enabled skills appear in the
+            agent's context; it reads the full skill when a task matches.
+          </div>
+          <div class="sidebar-content" id="skills-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="pack-empty">Loading skills…</div>
           </div>
         </div>
 
@@ -1294,7 +1317,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.2.2 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.2.3 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

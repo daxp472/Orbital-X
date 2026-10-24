@@ -386,7 +386,9 @@ impl PolicyEngine {
                     | "update_task_status"
                     // External research — read-only, returns clearly-labelled
                     // untrusted reference data
-                    | "web_search" | "fetch_page" => {
+                    | "web_search" | "fetch_page"
+                    // Installed skill packs — read-only instruction lookups
+                    | "list_skills" | "read_skill" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,
@@ -465,7 +467,8 @@ impl PolicyEngine {
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "git_status" | "git_diff" | "git_log"
                     | "get_diagnostics" | "validate_changes" | "update_task_status"
-                    | "web_search" | "fetch_page" => {
+                    | "web_search" | "fetch_page"
+                    | "list_skills" | "read_skill" => {
                         PolicyDecision {
                             allowed: true,
                             requires_approval: false,

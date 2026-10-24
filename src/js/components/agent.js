@@ -531,6 +531,28 @@ async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
     console.warn("Could not load memories:", e);
   }
 
+  // 1b. Enabled skill packs — a digest so the model knows what exists; the
+  // full skill body is read on demand via the read_skill tool.
+  let skillsDigest = '';
+  try {
+    const { getSkillsDigest } = await import('./skills.js');
+    skillsDigest = getSkillsDigest() || '';
+  } catch (e) {
+    console.warn('Skills digest unavailable:', e);
+  }
+
+  // 1c. Enabled prompt-pack extensions (declarative agent guidance)
+  let promptPackText = '';
+  try {
+    const { getEnabledPromptAdditions } = await import('./extensions.js');
+    const additions = getEnabledPromptAdditions();
+    if (additions.length > 0) {
+      promptPackText = '\n\n## Active instruction packs:\n' + additions.join('\n\n');
+    }
+  } catch (e) {
+    console.warn('Prompt packs unavailable:', e);
+  }
+
   // 2. Active editor context (file path only, not full content)
   let activeEditorContext = '';
   const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
@@ -551,7 +573,7 @@ IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", statu
   // natively via function calling; duplicating them here wastes local-model
   // context on every request.
   const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
-Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${taskPromptSection}
+Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${skillsDigest}${promptPackText}${taskPromptSection}
 
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 

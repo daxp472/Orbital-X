@@ -1,6 +1,8 @@
+mod extensions;
 mod memory;
 mod policy;
 mod providers;
+mod skills;
 mod terminal;
 mod tools;
 mod usage;
@@ -836,6 +838,16 @@ async fn execute_tool(
             let max_chars = arguments.get("max_chars").and_then(|m| m.as_u64()).unwrap_or(0) as usize;
             websearch::fetch_page(url, max_chars).await
         }
+        // Skills are instruction packs read by the agent on demand — read-only
+        "list_skills" => Ok(serde_json::Value::Array(skills::SkillService::list())),
+        "read_skill" => {
+            let identifier = arguments
+                .get("name")
+                .or_else(|| arguments.get("id"))
+                .and_then(|v| v.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"read_skill\",\"message\":\"read_skill requires a 'name' string (from list_skills).\"}")?;
+            skills::SkillService::read(identifier)
+        }
         _ => Err(format!("Unrecognized tool: {}", name)),
     }
 }
@@ -1365,6 +1377,64 @@ fn get_hardware_info() -> Result<HardwareInfo, String> {
     })
 }
 
+// ============================================================================
+// Extension management (declarative packs — theme / prompt-pack / command-pack)
+// ============================================================================
+
+#[tauri::command]
+fn list_installed_extensions() -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(extensions::ExtensionService::list_installed()))
+}
+
+#[tauri::command]
+fn install_extension_from_manifest(manifest: serde_json::Value) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::install_from_manifest(&manifest)
+}
+
+#[tauri::command]
+fn install_extension_from_folder(path: String) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::install_from_folder(&path)
+}
+
+#[tauri::command]
+fn uninstall_extension(id: String) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::uninstall(&id)
+}
+
+#[tauri::command]
+fn set_extension_enabled(id: String, enabled: bool) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::set_enabled(&id, enabled)
+}
+
+// ============================================================================
+// Skill management (instruction packs for the agent)
+// ============================================================================
+
+#[tauri::command]
+fn list_skills() -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(skills::SkillService::list()))
+}
+
+#[tauri::command]
+fn read_skill(id: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::read(&id)
+}
+
+#[tauri::command]
+fn install_skill_from_folder(path: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::install_from_folder(&path)
+}
+
+#[tauri::command]
+fn delete_skill(id: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::delete(&id)
+}
+
+#[tauri::command]
+fn set_skill_enabled(id: String, enabled: bool) -> Result<serde_json::Value, String> {
+    skills::SkillService::set_enabled(&id, enabled)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState {
@@ -1421,7 +1491,17 @@ pub fn run() {
             ollama_delete_model,
             ollama_model_info,
             ollama_running_models,
-            get_hardware_info
+            get_hardware_info,
+            list_installed_extensions,
+            install_extension_from_manifest,
+            install_extension_from_folder,
+            uninstall_extension,
+            set_extension_enabled,
+            list_skills,
+            read_skill,
+            install_skill_from_folder,
+            delete_skill,
+            set_skill_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

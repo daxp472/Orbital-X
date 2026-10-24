@@ -47,6 +47,6 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Orbital X ${{ github.ref_name }}'
-          releaseBody: 'See release notes and assets attached.'
+          releaseBody: 'Detailed notes: RELEASE_NOTES_v${{ github.ref_name }}.md in the repository. Highlights: real extension system (theme / prompt / command packs), agent Skills, major UI polish (focus visibility, reduced motion, responsive dialogs, light-theme fixes), write_file reliability fix, hardened command and workspace security, web research tools, streaming and context management. Assets below are built by this workflow for Windows, macOS, and Linux.'
           releaseDraft: false
           prerelease: false

@@ -9,6 +9,7 @@ import { initOnboarding } from './onboarding/wizard.js';
 import { initModelPicker } from './components/model-picker.js';
 import { initSourceControl, refreshGitStatus } from './components/source-control.js';
 import { initExtensions } from './components/extensions.js';
+import { initSkills, renderSkillsPanel } from './components/skills.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
@@ -83,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModelPicker();
   initSourceControl();
   initExtensions();
+  initSkills();
   initFileTreeHeaderActions();
   initActivityRail();
   initResizers();
@@ -217,6 +219,7 @@ function initActivityRail() {
     { id: 'rail-debug', view: 'view-debug' },
     { id: 'rail-extensions', view: 'view-extensions' },
     { id: 'rail-memory', view: 'view-memory' },
+    { id: 'rail-skills', view: 'view-skills' },
   ];
 
   const sidebar = document.getElementById('sidebar');
@@ -238,6 +241,10 @@ function initActivityRail() {
         const viewElem = document.getElementById(item.view);
         if (viewElem) viewElem.style.display = 'flex';
         if (item.id === 'rail-memory') refreshMemories();
+        if (item.id === 'rail-skills') renderSkillsPanel();
+        if (item.id === 'rail-extensions') {
+          import('./components/extensions.js').then(m => m.renderPanel());
+        }
         if (item.id === 'rail-source-control') refreshGitStatus();
       }
     });
@@ -586,7 +593,7 @@ function initAboutModal() {
     setTimeout(() => {
       btnCheckUpdates.textContent = '✓ Up to Date';
       import('./services/notifications.js').then(m => {
-        m.showToast('Orbital X is up to date (v2.2.2 Latest Release)', 'success');
+        m.showToast('Orbital X is up to date (v2.2.3 Latest Release)', 'success');
       });
       setTimeout(() => {
         btnCheckUpdates.textContent = 'Check for Updates';

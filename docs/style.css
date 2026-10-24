@@ -1299,3 +1299,41 @@ body {
   white-space: nowrap;
 }
 
+
+/* ==========================================================================
+   v2.2.3 polish pass — accessibility & motion (appended)
+   ========================================================================== */
+a:focus-visible,
+button:focus-visible,
+.btn:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-cyan, #39c5bb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+::selection {
+  background: rgba(57, 197, 187, 0.3);
+}
+
+/* Download cards stack gracefully on small screens */
+@media (max-width: 720px) {
+  .download-cards {
+    flex-direction: column;
+  }
+  .download-card .btn {
+    width: 100% !important;
+  }
+}

@@ -555,6 +555,34 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                     "required": ["url"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "list_skills",
+                "description": "List installed skill packs (reusable instruction sets for specific technologies or workflows). Each entry has a name, description, and whenToUse hint. If a task matches a skill, read it before proceeding.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_skill",
+                "description": "Read the full instructions of an installed skill by name (from list_skills). Follow the skill's guidance for tasks it covers.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Skill name or id from list_skills"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            }
         }
     ])
 }
