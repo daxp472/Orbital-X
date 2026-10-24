@@ -399,7 +399,7 @@ function toolResultForContext(name, args, result) {
 // Dispatch (streaming + cancellation)
 // ============================================================================
 
-async function dispatchAgentTurn(messages, { onToken, onStatus } = {}) {
+export async function dispatchAgentTurn(messages, { onToken, onStatus } = {}) {
   const provider = state.ai.provider;
   const model = state.ai.model || state.ai.defaultModels[provider];
   const apiKey = state.ai.keys[provider] || '';
