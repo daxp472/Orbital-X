@@ -168,6 +168,16 @@ async function getInvoke() {
         return null;
       case 'save_chat_sessions':
         return true;
+      case 'ollama_pull_model':
+        return { success: true, status: 'success' };
+      case 'ollama_delete_model':
+        return { success: true };
+      case 'ollama_model_info':
+        return { name: args.name, context_length: null, parameter_size: null, quantization: null, supports_tools: null };
+      case 'ollama_running_models':
+        return { models: [] };
+      case 'get_hardware_info':
+        return { totalRamBytes: null, gpus: [] };
       default:
         return { success: true };
     }

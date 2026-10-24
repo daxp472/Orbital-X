@@ -218,7 +218,15 @@ async function loadProviderModels(provider) {
 
     const detectedContainer = container.querySelector('#ollama-detected-models');
 
-    // Query Ollama local models via Tauri
+    // Query Ollama local models via Tauri (+ running state from /api/ps)
+    let runningModels = new Map();
+    try {
+      const ps = await invoke('ollama_running_models', { endpoint: state.ai.endpoint });
+      for (const m of (ps?.models || [])) {
+        runningModels.set(m.name || m.model, m);
+      }
+    } catch (e) { /* /api/ps unavailable on older Ollama — badges simply omitted */ }
+
     try {
       const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
       detectedContainer.innerHTML = '';
@@ -233,6 +241,20 @@ async function loadProviderModels(provider) {
         models.forEach(modelName => {
           const item = document.createElement('div');
           const isSelected = state.ai.provider === 'ollama' && state.ai.model === modelName;
+          const runInfo = runningModels.get(modelName);
+          const info = (state.ai.modelInfo || {})[modelName];
+
+          const badges = [];
+          if (runInfo) badges.push('<span style="color: var(--accent-green); font-size: 9px;">● loaded</span>');
+          if (info) {
+            const bits = [];
+            if (info.parameterSize) bits.push(info.parameterSize + (info.quantization ? ` ${info.quantization}` : ''));
+            if (info.contextLength) bits.push(`${Number(info.contextLength).toLocaleString()} ctx`);
+            if (bits.length) badges.push(`<span style="color: var(--text-muted); font-size: 9px;">${bits.join(' · ')}</span>`);
+            if (info.supportsTools === true) badges.push('<span style="color: var(--accent-green); font-size: 9px;">tools ✓</span>');
+            else if (info.supportsTools === false) badges.push('<span style="color: var(--accent-orange); font-size: 9px;">tools ✗</span>');
+          }
+
           item.style.cssText = `
             padding: 6px 10px;
             border-radius: 4px;
@@ -243,10 +265,14 @@ async function loadProviderModels(provider) {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 6px;
           `;
           item.innerHTML = `
-            <strong>${modelName}</strong>
-            ${isSelected ? '<span style="color: var(--accent-cyan); font-size: 11px;">✓ Active</span>' : ''}
+            <strong style="min-width: 0; overflow: hidden; text-overflow: ellipsis;">${modelName}</strong>
+            <span style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+              ${badges.join('')}
+              ${isSelected ? '<span style="color: var(--accent-cyan); font-size: 11px;">✓ Active</span>' : ''}
+            </span>
           `;
           item.addEventListener('click', () => {
             selectModel('ollama', modelName);
@@ -333,4 +359,24 @@ function renderPredefinedList(container, provider, models) {
 function selectModel(provider, modelName) {
   setActiveModel(provider, modelName);
   closeDropdown();
+
+  // Cache real model facts (context length, tool support) from /api/show so
+  // the engine can cap num_ctx to what the model actually supports.
+  if (provider === 'ollama' && !(state.ai.modelInfo || {})[modelName]) {
+    invoke('ollama_model_info', { name: modelName, endpoint: state.ai.endpoint })
+      .then((info) => {
+        if (!info || (!info.context_length && !info.parameter_size)) return;
+        state.ai.modelInfo = state.ai.modelInfo || {};
+        state.ai.modelInfo[modelName] = {
+          contextLength: info.context_length || null,
+          parameterSize: info.parameter_size || null,
+          quantization: info.quantization || null,
+          supportsTools: info.supports_tools ?? null,
+        };
+        try {
+          localStorage.setItem('orbital_model_info', JSON.stringify(state.ai.modelInfo));
+        } catch (e) { /* quota — cache is best-effort */ }
+      })
+      .catch(() => { /* /api/show unavailable — unknown stays unknown */ });
+  }
 }

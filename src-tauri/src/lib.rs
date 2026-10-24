@@ -987,6 +987,339 @@ fn save_chat_sessions(sessions: serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
+// ============================================================================
+// Ollama model lifecycle management (pull / delete / inspect / running)
+// ============================================================================
+
+fn ollama_base(endpoint: Option<String>) -> String {
+    endpoint.unwrap_or_else(|| "http://localhost:11434".into())
+}
+
+/// Streams `ollama pull` progress over the channel: NDJSON lines from
+/// /api/pull carry {"status", "digest", "total", "completed"}. No fixed total
+/// timeout — large downloads legitimately take a long time — but each read is
+/// bounded, and the pull is cancellable through the shared token registry
+/// (which aborts the HTTP stream and stops the download).
+#[tauri::command]
+async fn ollama_pull_model(
+    name: String,
+    endpoint: Option<String>,
+    pull_id: String,
+    on_event: Channel<serde_json::Value>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    use futures_util::StreamExt;
+
+    let url = format!("{}/api/pull", ollama_base(endpoint).trim_end_matches('/'));
+    let cancel = CancellationToken::new();
+    if let Ok(mut ops) = state.active_ops.lock() {
+        ops.insert(pull_id.clone(), cancel.clone());
+    }
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let payload = serde_json::json!({ "name": name, "stream": true });
+
+    let send_status = |value: serde_json::Value| {
+        let _ = on_event.send(value);
+    };
+
+    let result: Result<serde_json::Value, String> = async {
+        let resp = client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("Could not reach Ollama at {}: {}", url, e))?;
+
+        if !resp.status().is_success() {
+            let status_code = resp.status().as_u16();
+            let err = resp.text().await.unwrap_or_default();
+            return Err(format!("Ollama pull failed (HTTP {}): {}", status_code, err));
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut buf = String::new();
+        let mut last_status = String::new();
+
+        loop {
+            let chunk = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => {
+                    // Dropping the stream closes the connection and stops the download
+                    send_status(serde_json::json!({"type": "cancelled"}));
+                    return Ok(serde_json::json!({"success": false, "cancelled": true, "status": "Cancelled by user"}));
+                }
+                item = tokio::time::timeout(
+                    std::time::Duration::from_secs(120),
+                    stream.next(),
+                ) => item.map_err(|_| "Pull stalled (no progress for 2 minutes)".to_string())?,
+            };
+
+            let Some(chunk) = chunk else { break };
+            let chunk = chunk.map_err(|e| format!("Pull stream failed: {}", e))?;
+            buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            while let Some(pos) = buf.find('\n') {
+                let line: String = buf.drain(..=pos).collect();
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+
+                if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+                    return Err(format!("Ollama pull error: {}", err));
+                }
+
+                let status = v.get("status").and_then(|s| s.as_str()).unwrap_or_default().to_string();
+                if status != last_status && !status.is_empty() {
+                    last_status = status.clone();
+                }
+
+                let total = v.get("total").and_then(|t| t.as_u64());
+                let completed = v.get("completed").and_then(|c| c.as_u64());
+                let percent = match (total, completed) {
+                    (Some(t), Some(c)) if t > 0 => Some(((c as f64 / t as f64) * 1000.0).round() / 10.0),
+                    _ => None,
+                };
+
+                send_status(serde_json::json!({
+                    "type": "pull_status",
+                    "status": status,
+                    "digest": v.get("digest").and_then(|d| d.as_str()),
+                    "total": total,
+                    "completed": completed,
+                    "percent": percent,
+                }));
+
+                if status == "success" {
+                    return Ok(serde_json::json!({"success": true, "status": "success"}));
+                }
+            }
+        }
+
+        // Stream ended without an explicit success line — treat as failure
+        Err("Pull stream ended before completion".into())
+    }
+    .await;
+
+    if let Ok(mut ops) = state.active_ops.lock() {
+        ops.remove(&pull_id);
+    }
+    result
+}
+
+/// Removes a downloaded model (DELETE /api/delete).
+#[tauri::command]
+async fn ollama_delete_model(name: String, endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/delete", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .delete(&url)
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| format!("Delete request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status_code = resp.status().as_u16();
+        let err = resp.text().await.unwrap_or_default();
+        return Ok(serde_json::json!({ "success": false, "error": format!("HTTP {}: {}", status_code, err) }));
+    }
+    Ok(serde_json::json!({ "success": true }))
+}
+
+/// Model facts from /api/show. Only fields the API actually supplies are
+/// returned; anything absent stays null and the UI must not invent values.
+#[tauri::command]
+async fn ollama_model_info(name: String, endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/show", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| format!("Model info request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status_code = resp.status().as_u16();
+        let err = resp.text().await.unwrap_or_default();
+        return Err(format!("Model info unavailable (HTTP {}): {}", status_code, err));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+
+    // Context length: prefer model_info entries like "<family>.context_length",
+    // then a "num_ctx N" line in the parameters string (Modelfile override)
+    let mut context_length: Option<u64> = None;
+    if let Some(info) = json.get("model_info").and_then(|m| m.as_object()) {
+        for (k, v) in info {
+            if k.ends_with(".context_length") {
+                if let Some(n) = v.as_u64() {
+                    context_length = Some(context_length.map_or(n, |prev: u64| prev.max(n)));
+                }
+            }
+        }
+    }
+    if context_length.is_none() {
+        if let Some(params) = json.get("parameters").and_then(|p| p.as_str()) {
+            for line in params.lines() {
+                let mut parts = line.split_whitespace();
+                if parts.next() == Some("num_ctx") {
+                    if let Some(n) = parts.next().and_then(|s| s.parse::<u64>().ok()) {
+                        context_length = Some(n);
+                    }
+                }
+            }
+        }
+    }
+
+    let details = json.get("details").cloned().unwrap_or_default();
+    let capabilities: Vec<String> = json
+        .get("capabilities")
+        .and_then(|c| c.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    // null when the server doesn't report capabilities — the UI must show
+    // "unknown", never invent support
+    let supports_tools = if json.get("capabilities").is_some() {
+        serde_json::json!(capabilities.iter().any(|c| c == "tools"))
+    } else {
+        serde_json::Value::Null
+    };
+
+    Ok(serde_json::json!({
+        "name": name,
+        "context_length": context_length,
+        "parameter_size": details.get("parameter_size").and_then(|p| p.as_str()),
+        "quantization": details.get("quantization_level").and_then(|q| q.as_str()),
+        "family": details.get("family").and_then(|f| f.as_str()),
+        "families": details.get("families").and_then(|f| f.as_array()).map(|arr| {
+            arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+        }),
+        "capabilities": capabilities,
+        "supports_tools": supports_tools,
+        "modified_at": json.get("modified_at").and_then(|m| m.as_str()),
+    }))
+}
+
+/// Models currently loaded in memory/VRAM (GET /api/ps).
+#[tauri::command]
+async fn ollama_running_models(endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/ps", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not query Ollama running models: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let models: Vec<serde_json::Value> = json
+        .get("models")
+        .and_then(|m| m.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "name": m.get("name").and_then(|n| n.as_str()),
+                        "model": m.get("model").and_then(|n| n.as_str()),
+                        "size_bytes": m.get("size").and_then(|s| s.as_u64()),
+                        "size_vram_bytes": m.get("size_vram").and_then(|s| s.as_u64()),
+                        "expires_at": m.get("expires_at").and_then(|s| s.as_str()),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({ "models": models }))
+}
+
+// ============================================================================
+// Hardware awareness — used for honest model-fit guidance. Only reports what
+// the OS actually exposes; missing values stay null.
+// ============================================================================
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuInfo {
+    pub name: String,
+    pub vram_bytes: Option<u64>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareInfo {
+    pub total_ram_bytes: Option<u64>,
+    pub gpus: Vec<GpuInfo>,
+}
+
+#[cfg(windows)]
+fn detect_gpus() -> Vec<GpuInfo> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    let mut gpus = Vec::new();
+    // Display adapter class {4d36e968-...}: each subkey 0000..000N is an
+    // adapter with DriverDesc (name) and HardwareInformation.qwMemorySize
+    // (QWORD VRAM in bytes — correct for >4GB cards, unlike AdapterRAM).
+    let class_path = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    let Ok(class) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(class_path) else {
+        return gpus;
+    };
+
+    for idx in 0..=16 {
+        let Ok(sub) = class.open_subkey(format!("{:04}", idx)) else { continue };
+        let name: Option<String> = sub.get_value("DriverDesc").ok();
+        let vram: Option<u64> = sub
+            .open_subkey("HardwareInformation")
+            .ok()
+            .and_then(|hw| hw.get_value("qwMemorySize").ok());
+        if let Some(name) = name {
+            if !name.is_empty() {
+                gpus.push(GpuInfo { name, vram_bytes: vram.filter(|v| *v > 0) });
+            }
+        }
+    }
+    gpus
+}
+
+#[cfg(not(windows))]
+fn detect_gpus() -> Vec<GpuInfo> {
+    Vec::new()
+}
+
+#[tauri::command]
+fn get_hardware_info() -> Result<HardwareInfo, String> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let total_ram = sys.total_memory(); // bytes in sysinfo 0.30
+    Ok(HardwareInfo {
+        total_ram_bytes: if total_ram > 0 { Some(total_ram) } else { None },
+        gpus: detect_gpus(),
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState {
@@ -1038,7 +1371,12 @@ pub fn run() {
             get_git_diff,
             get_ollama_models,
             load_chat_sessions,
-            save_chat_sessions
+            save_chat_sessions,
+            ollama_pull_model,
+            ollama_delete_model,
+            ollama_model_info,
+            ollama_running_models,
+            get_hardware_info
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

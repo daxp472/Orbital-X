@@ -896,9 +896,16 @@
                 <label class="form-label">API Key</label>
                 <input type="password" class="input-text" id="cfg-openai-key" placeholder="sk-..." />
               </div>
-              <div class="form-group">
+              <div class="form-group" style="margin-bottom: 6px;">
                 <label class="form-label">Default Model</label>
                 <input type="text" class="input-text" id="cfg-openai-model" value="gpt-4o" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Custom Base URL (optional — LM Studio, llama.cpp, vLLM…)</label>
+                <input type="text" class="input-text" id="cfg-openai-baseurl" placeholder="http://localhost:1234/v1" />
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+                  Leave empty for the official OpenAI API. Compatible local servers use their /v1 endpoint.
+                </div>
               </div>
             </div>
 
@@ -931,6 +938,42 @@
               <div class="form-group">
                 <label class="form-label">Default Model</label>
                 <input type="text" class="input-text" id="cfg-ollama-model" value="llama3" />
+              </div>
+              <!-- Ollama model manager is injected here at runtime -->
+              <div id="ollama-manager-container"></div>
+            </div>
+
+            <!-- Local Inference Engine settings -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>Local Inference Engine</strong>
+                <span style="font-size: 10px; color: var(--text-muted);">applies to Ollama dispatches</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                  <label class="form-label">Context Window (num_ctx)</label>
+                  <input type="number" class="input-text" id="cfg-num-ctx" value="8192" min="1024" max="131072" step="1024" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Keep Model Loaded</label>
+                  <select class="select-input" id="cfg-keep-alive">
+                    <option value="5m">5 minutes</option>
+                    <option value="30m" selected>30 minutes</option>
+                    <option value="2h">2 hours</option>
+                    <option value="forever">Until app closes</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Temperature</label>
+                  <input type="number" class="input-text" id="cfg-temperature" value="0.7" min="0" max="2" step="0.05" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max Response Tokens</label>
+                  <input type="number" class="input-text" id="cfg-num-predict" value="2048" min="128" max="32768" step="128" />
+                </div>
+              </div>
+              <div style="font-size: 10px; color: var(--text-muted);">
+                The effective context is automatically capped by each model's real limit (read from Ollama) — never above what the model supports.
               </div>
             </div>
           </div>
