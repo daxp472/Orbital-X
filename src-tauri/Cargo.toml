@@ -1,6 +1,6 @@
 [package]
 name = "orbital-x"
-version = "2.2.1"
+version = "2.2.2"
 description = "Orbital X AI-powered Desktop Coding IDE"
 authors = ["Orbital X Team"]
 edition = "2024"
