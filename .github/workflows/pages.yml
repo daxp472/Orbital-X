@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - gemini/studio
     paths:
       - 'docs/**'
       - '.github/workflows/pages.yml'
