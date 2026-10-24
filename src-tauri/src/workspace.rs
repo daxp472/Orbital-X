@@ -4,10 +4,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-/// Strips Windows verbatim prefix (\\?\) so paths can be safely compared
+/// Strips Windows verbatim prefix (\\?\, \\?\UNC\, or //?/) so paths can be safely compared
 pub fn strip_verbatim_prefix(path: &Path) -> PathBuf {
     let s = path.to_string_lossy();
-    if let Some(stripped) = s.strip_prefix(r"\\?\") {
+    let norm = s.replace('/', "\\");
+    if let Some(stripped) = norm.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{}", stripped))
+    } else if let Some(stripped) = norm.strip_prefix(r"\\?\") {
+        PathBuf::from(stripped)
+    } else if let Some(stripped) = s.strip_prefix("//?/") {
         PathBuf::from(stripped)
     } else {
         path.to_path_buf()
@@ -102,15 +107,16 @@ impl WorkspaceService {
             return Err("Target path is not a directory".into());
         }
 
-        let name = canonical
+        let clean_canonical = strip_verbatim_prefix(&canonical);
+        let name = clean_canonical
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_else(|| "Workspace".into());
 
-        self.root = Some(canonical.clone());
+        self.root = Some(clean_canonical.clone());
 
         // Quick scan to detect languages and file count
-        let meta = self.scan_metadata(&canonical, &name);
+        let meta = self.scan_metadata(&clean_canonical, &name);
         Ok(meta)
     }
 
@@ -129,10 +135,13 @@ impl WorkspaceService {
             return Err("Security Violation: Target path cannot be empty.".into());
         }
 
-        let candidate = if Path::new(trimmed).is_absolute() {
-            strip_verbatim_prefix(Path::new(trimmed))
+        let target_path_buf = PathBuf::from(trimmed);
+        let clean_target = strip_verbatim_prefix(&target_path_buf);
+
+        let candidate = if clean_target.is_absolute() {
+            clean_target
         } else {
-            clean_root.join(trimmed)
+            clean_root.join(clean_target)
         };
 
         // Normalize path by resolving components
@@ -151,7 +160,8 @@ impl WorkspaceService {
             }
         }
 
-        let norm_str = normalized.to_string_lossy().replace('\\', "/").to_lowercase();
+        let clean_norm = strip_verbatim_prefix(&normalized);
+        let norm_str = clean_norm.to_string_lossy().replace('\\', "/").to_lowercase();
         let root_str = clean_root.to_string_lossy().replace('\\', "/").to_lowercase();
 
         // Exact match or subpath check (must have trailing slash boundary to prevent prefix spoofing)
@@ -169,10 +179,10 @@ impl WorkspaceService {
         }
 
         // If the path already exists, verify real canonical path to defeat symlink/junction redirection
-        if normalized.exists() {
-            if let Ok(canonical_target) = normalized.canonicalize() {
-                let clean_target = strip_verbatim_prefix(&canonical_target);
-                let target_str = clean_target.to_string_lossy().replace('\\', "/").to_lowercase();
+        if clean_norm.exists() {
+            if let Ok(canonical_target) = clean_norm.canonicalize() {
+                let clean_canonical_target = strip_verbatim_prefix(&canonical_target);
+                let target_str = clean_canonical_target.to_string_lossy().replace('\\', "/").to_lowercase();
                 let target_inside = if target_str == root_str {
                     true
                 } else if target_str.starts_with(&root_str) {
@@ -187,7 +197,7 @@ impl WorkspaceService {
             }
         }
 
-        Ok(normalized)
+        Ok(clean_norm)
     }
 
     /// Explicitly guards the workspace root against deletion
@@ -213,12 +223,14 @@ impl WorkspaceService {
     }
 
     fn build_tree(&self, current: &Path, root: &Path, depth: usize, max_depth: usize) -> FileTreeNode {
-        let name = current.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        let path_str = current.to_string_lossy().replace('\\', "/");
-        let rel_path = current.strip_prefix(root).unwrap_or(current).to_string_lossy().replace('\\', "/");
+        let clean_cur = strip_verbatim_prefix(current);
+        let clean_rt = strip_verbatim_prefix(root);
+        let name = clean_cur.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        let path_str = clean_cur.to_string_lossy().replace('\\', "/");
+        let rel_path = clean_cur.strip_prefix(&clean_rt).unwrap_or(&clean_cur).to_string_lossy().replace('\\', "/");
 
-        if current.is_file() {
-            let size = fs::metadata(current).map(|m| m.len()).ok();
+        if clean_cur.is_file() {
+            let size = fs::metadata(&clean_cur).map(|m| m.len()).ok();
             return FileTreeNode {
                 name,
                 path: path_str,
@@ -231,7 +243,7 @@ impl WorkspaceService {
 
         let mut children = Vec::new();
         if depth < max_depth {
-            if let Ok(entries) = fs::read_dir(current) {
+            if let Ok(entries) = fs::read_dir(&clean_cur) {
                 let mut dir_entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
                 dir_entries.sort_by_key(|e| {
                     let is_dir = e.file_type().map(|t| t.is_dir()).unwrap_or(false);
@@ -1040,6 +1052,18 @@ mod tests {
         // Legitimate relative path inside workspace
         let ok_path = ws.resolve_and_validate("src/lib.rs");
         assert!(ok_path.is_ok());
+
+        // Legitimate absolute path with forward slashes
+        let abs_fwd = format!("{}/src/lib.rs", cur.to_string_lossy().replace('\\', "/"));
+        assert!(ws.resolve_and_validate(&abs_fwd).is_ok());
+
+        // Verbatim prefix with forward slashes
+        let verbatim_fwd = format!("//?/{}/src/lib.rs", cur.to_string_lossy().replace('\\', "/"));
+        assert!(ws.resolve_and_validate(&verbatim_fwd).is_ok());
+
+        // Verbatim prefix with backslashes
+        let verbatim_back = format!(r"\\?\{}\src\lib.rs", cur.to_string_lossy());
+        assert!(ws.resolve_and_validate(&verbatim_back).is_ok());
 
         // Path traversal attack outside workspace
         let attack = ws.resolve_and_validate("../../Windows/System32/cmd.exe");

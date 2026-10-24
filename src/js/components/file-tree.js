@@ -5,6 +5,7 @@
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openFileInTab } from '../editor/monaco.js';
+import { showToast } from '../services/notifications.js';
 
 export function getFileIcon(filename, isDir, isExpanded) {
   if (isDir) {
@@ -147,12 +148,13 @@ function buildNodeElement(node, parentElem, indentLevel) {
       try {
         const fileData = await invoke('read_file', { path: node.path });
         if (fileData.is_binary) {
-          alert("Cannot view binary files in the code editor.");
+          showToast("Cannot view binary files in the code editor.", "warning");
           return;
         }
         openFileInTab(fileData);
       } catch (err) {
-        alert("Error opening file: " + err);
+        console.error("Error opening file:", err);
+        showToast("Error opening file: " + err, "error");
       }
     }
   });
