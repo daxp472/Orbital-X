@@ -89,6 +89,9 @@ pub struct WorkspaceService {
     root: Option<PathBuf>,
     change_journal: Vec<AgentChangeEntry>,
     pending_manifests: HashMap<String, BatchDeleteManifest>,
+    /// Metadata scanned once at set_root; served to get_workspace_meta without
+    /// re-walking the tree on every IPC call.
+    cached_meta: Option<WorkspaceMeta>,
 }
 
 impl WorkspaceService {
@@ -97,6 +100,7 @@ impl WorkspaceService {
             root: None,
             change_journal: Vec::new(),
             pending_manifests: HashMap::new(),
+            cached_meta: None,
         }
     }
 
@@ -117,11 +121,16 @@ impl WorkspaceService {
 
         // Quick scan to detect languages and file count
         let meta = self.scan_metadata(&clean_canonical, &name);
+        self.cached_meta = Some(meta.clone());
         Ok(meta)
     }
 
     pub fn get_root(&self) -> Option<PathBuf> {
         self.root.clone()
+    }
+
+    pub fn cached_meta(&self) -> Option<&WorkspaceMeta> {
+        self.cached_meta.as_ref()
     }
 
     /// Validates that a target path is strictly within the permitted workspace root.
@@ -549,6 +558,16 @@ impl WorkspaceService {
         let root = self.root.as_ref().unwrap();
         let rel = full_path.strip_prefix(root).unwrap_or(&full_path).to_string_lossy().replace('\\', "/");
 
+        // Guard against reading huge files fully into memory just to slice them
+        if let Ok(meta) = fs::metadata(&full_path) {
+            if meta.len() > 3 * 1024 * 1024 {
+                return Err(format!(
+                    "File '{}' is {}MB — exceeds the 3MB read limit. Use search_files or find_symbol to locate the relevant section first.",
+                    path_str, meta.len() / (1024 * 1024)
+                ));
+            }
+        }
+
         let content = fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
         let total_lines = content.lines().count();
         let start = start_line.saturating_sub(1); // 0-indexed
@@ -582,9 +601,20 @@ impl WorkspaceService {
             return Err(format!("File not found for patching: {}", path_str));
         };
 
+        // Models sometimes emit inverted or zero ranges. Validate instead of
+        // panicking inside drain(..): a panic here would poison the workspace
+        // Mutex and break every subsequent file operation until restart.
+        let start_line = start_line.max(1);
+        if end_line < start_line {
+            return Err(format!(
+                "Invalid patch range: end_line ({}) must be greater than or equal to start_line ({}).",
+                end_line, start_line
+            ));
+        }
+
         let mut lines: Vec<&str> = old_content.lines().collect();
         let total = lines.len();
-        let start_idx = start_line.saturating_sub(1).min(total);
+        let start_idx = (start_line - 1).min(total);
         let end_idx = end_line.min(total);
 
         let new_lines: Vec<&str> = new_content.lines().collect();
@@ -593,10 +623,16 @@ impl WorkspaceService {
             lines.insert(start_idx + i, l);
         }
 
-        // Preserve trailing newline
         let mut final_content = lines.join("\n");
+        // Preserve the original trailing newline if there was one
         if old_content.ends_with('\n') {
             final_content.push('\n');
+        }
+        // Preserve Windows CRLF line endings: joining with \n would otherwise
+        // rewrite every line of the file and flood the git diff.
+        let had_crlf = old_content.contains("\r\n") && !old_content.contains("\n\r");
+        if had_crlf && !final_content.contains('\r') {
+            final_content = final_content.replace('\n', "\r\n");
         }
 
         let diff = self.compute_diff(path_str, &old_content, &final_content);
@@ -671,15 +707,26 @@ impl WorkspaceService {
         let query_lower = query.to_lowercase();
         let mut matches = Vec::new();
 
-        for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
             if matches.len() >= max_results {
                 break;
             }
 
             let path = entry.path();
-            let fname = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
-            if fname == ".git" || fname == "node_modules" || fname == "target" || fname == "dist" {
-                continue;
+            let fname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+
+            // Skip the whole subtree of bulky/generated directories — checking
+            // only the entry name still descended into node_modules children.
+            if entry.file_type().is_dir() {
+                if fname == ".git" || fname == "node_modules" || fname == "target" || fname == "dist" || fname == ".orbital" {
+                    it.skip_current_dir();
+                    continue;
+                }
+                if fname.starts_with('.') && entry.depth() > 0 {
+                    it.skip_current_dir();
+                    continue;
+                }
             }
 
             if path.is_file() {
@@ -742,6 +789,17 @@ impl WorkspaceService {
                             "success": false
                         }));
                         continue;
+                    }
+
+                    if let Ok(meta) = full_path.metadata() {
+                        if meta.len() > 3 * 1024 * 1024 {
+                            results.push(serde_json::json!({
+                                "path": path_str,
+                                "error": format!("File is {}MB — exceeds the 3MB read limit", meta.len() / (1024 * 1024)),
+                                "success": false
+                            }));
+                            continue;
+                        }
                     }
 
                     match fs::read(&full_path) {
@@ -817,17 +875,22 @@ impl WorkspaceService {
         let want_defs = symbol_type == "definition" || symbol_type == "all" || symbol_type.is_empty();
         let want_refs = symbol_type == "reference" || symbol_type == "all";
 
-        for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
             if results.len() >= max_res {
                 break;
             }
             let path = entry.path();
             if !path.is_file() {
+                let dname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                if dname == "node_modules" || dname == "target" || dname == "dist" || dname == ".git" || dname == ".orbital" {
+                    it.skip_current_dir();
+                }
                 continue;
             }
 
             let fname = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
-            if fname.starts_with('.') || fname == "node_modules" || fname == "target" || fname == "dist" || fname == "package-lock.json" || fname == "Cargo.lock" {
+            if fname.starts_with('.') || fname == "package-lock.json" || fname == "Cargo.lock" {
                 continue;
             }
 

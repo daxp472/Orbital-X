@@ -400,9 +400,13 @@ async function performSearch(query) {
     matches.forEach(m => {
       const item = document.createElement('div');
       item.style.cssText = 'padding: 6px; border-radius: 4px; background: var(--bg-surface); margin-bottom: 4px; cursor: pointer; font-size: 11px;';
+      // File snippets are untrusted workspace content — escape before innerHTML
+      const esc = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       item.innerHTML = `
-        <div style="font-weight: 600; color: var(--accent-cyan);">${m.file}${m.line ? `:${m.line}` : ''}</div>
-        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); margin-top: 2px;">${m.snippet}</div>
+        <div style="font-weight: 600; color: var(--accent-cyan);">${esc(m.file)}${m.line ? `:${esc(m.line)}` : ''}</div>
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); margin-top: 2px;">${esc(m.snippet)}</div>
       `;
 
       item.addEventListener('click', async () => {

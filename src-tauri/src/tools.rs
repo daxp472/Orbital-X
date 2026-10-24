@@ -478,23 +478,6 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
-                "name": "delete_file",
-                "description": "Delete a single regular file from the workspace. Strictly prevents deleting the workspace root or directories. Journals the deletion for safety.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {
-                            "type": "string",
-                            "description": "Workspace-relative file path to delete"
-                        }
-                    },
-                    "required": ["path"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "delete_directory",
                 "description": "Safely delete a directory and its contents within the workspace. Strictly prohibits deleting the workspace root or parent directories. Requires explicit user approval.",
                 "parameters": {

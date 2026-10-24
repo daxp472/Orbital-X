@@ -219,14 +219,103 @@ impl InteractiveTerminalManager {
 pub struct TerminalService;
 
 impl TerminalService {
+    /// Shared one-shot process execution with timeout. Callers prepare the
+    /// Command; safety classification is the caller's responsibility.
+    async fn execute_prepared(
+        mut cmd: Command,
+        display: &str,
+        timeout_secs: u64,
+    ) -> Result<CommandResult, String> {
+        let start = Instant::now();
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+
+        let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn process: {}", e))?;
+
+        let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
+
+        let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
+        let execution = async {
+            let mut out_str = String::new();
+            let mut err_str = String::new();
+
+            // Read both pipes concurrently to avoid the classic pipe-buffer
+            // deadlock when a child writes heavily to stderr while stdout is open.
+            let (out_res, err_res) = tokio::join!(
+                async {
+                    if let Some(mut stream) = stdout {
+                        let mut buf = Vec::new();
+                        let _ = stream.read_to_end(&mut buf).await;
+                        Some(String::from_utf8_lossy(&buf).to_string())
+                    } else {
+                        None
+                    }
+                },
+                async {
+                    if let Some(mut stream) = stderr {
+                        let mut buf = Vec::new();
+                        let _ = stream.read_to_end(&mut buf).await;
+                        Some(String::from_utf8_lossy(&buf).to_string())
+                    } else {
+                        None
+                    }
+                }
+            );
+            if let Some(o) = out_res {
+                out_str = o;
+            }
+            if let Some(e) = err_res {
+                err_str = e;
+            }
+
+            let status = child.wait().await;
+            (status, out_str, err_str)
+        };
+
+        match tokio::time::timeout(timeout_duration, execution).await {
+            Ok((status_res, stdout_text, stderr_text)) => {
+                let duration_ms = start.elapsed().as_millis();
+                let exit_code = match status_res {
+                    Ok(s) => s.code(),
+                    Err(_) => None,
+                };
+                let success = exit_code == Some(0);
+
+                Ok(CommandResult {
+                    command: display.to_string(),
+                    exit_code,
+                    stdout: stdout_text,
+                    stderr: stderr_text,
+                    duration_ms,
+                    timed_out: false,
+                    success,
+                })
+            }
+            Err(_) => {
+                let _ = child.kill().await;
+                let duration_ms = start.elapsed().as_millis();
+
+                Ok(CommandResult {
+                    command: display.to_string(),
+                    exit_code: None,
+                    stdout: String::new(),
+                    stderr: format!("Process timed out after {} seconds.", timeout_secs),
+                    duration_ms,
+                    timed_out: true,
+                    success: false,
+                })
+            }
+        }
+    }
+
     /// Safe one-shot execution used by Agent tools (with policy inspection and timeouts)
     pub async fn run_command(
         command_str: &str,
         cwd: &str,
         timeout_secs: u64,
     ) -> Result<CommandResult, String> {
-        let start = Instant::now();
-
         // Safety check: block explicitly prohibited, elevated or system-destroying commands
         let classification = crate::policy::CommandClassifier::classify(command_str);
         if let crate::policy::CommandClassification::Prohibited(reason) = classification {
@@ -247,69 +336,25 @@ impl TerminalService {
         cmd.args(["-c", command_str]);
 
         cmd.current_dir(cwd);
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        Self::execute_prepared(cmd, command_str, timeout_secs).await
+    }
 
-        let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn process: {}", e))?;
-
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-
-        let timeout_duration = std::time::Duration::from_secs(timeout_secs);
-
-        let execution = async {
-            let mut out_str = String::new();
-            let mut err_str = String::new();
-
-            if let Some(mut stream) = stdout {
-                let mut buf = Vec::new();
-                let _ = stream.read_to_end(&mut buf).await;
-                out_str = String::from_utf8_lossy(&buf).to_string();
-            }
-
-            if let Some(mut stream) = stderr {
-                let mut buf = Vec::new();
-                let _ = stream.read_to_end(&mut buf).await;
-                err_str = String::from_utf8_lossy(&buf).to_string();
-            }
-
-            let status = child.wait().await;
-            (status, out_str, err_str)
-        };
-
-        match tokio::time::timeout(timeout_duration, execution).await {
-            Ok((status_res, stdout_text, stderr_text)) => {
-                let duration_ms = start.elapsed().as_millis();
-                let exit_code = match status_res {
-                    Ok(s) => s.code(),
-                    Err(_) => None,
-                };
-                let success = exit_code == Some(0);
-
-                Ok(CommandResult {
-                    command: command_str.to_string(),
-                    exit_code,
-                    stdout: stdout_text,
-                    stderr: stderr_text,
-                    duration_ms,
-                    timed_out: false,
-                    success,
-                })
-            }
-            Err(_) => {
-                let _ = child.kill().await;
-                let duration_ms = start.elapsed().as_millis();
-
-                Ok(CommandResult {
-                    command: command_str.to_string(),
-                    exit_code: None,
-                    stdout: String::new(),
-                    stderr: format!("Process timed out after {} seconds.", timeout_secs),
-                    duration_ms,
-                    timed_out: true,
-                    success: false,
-                })
-            }
-        }
+    /// Runs git with an argument array — never through a shell. Commit
+    /// messages, branch names and paths are passed as single argv entries, so
+    /// they can never inject shell syntax. The policy layer still gates the
+    /// calling tool (git_commit requires approval); this removes the injection
+    /// path that string interpolation used to have.
+    pub async fn run_git(
+        args: &[&str],
+        cwd: &str,
+        timeout_secs: u64,
+    ) -> Result<CommandResult, String> {
+        let mut cmd = Command::new("git");
+        cmd.args(args);
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.current_dir(cwd);
+        let display = format!("git {}", args.join(" "));
+        Self::execute_prepared(cmd, &display, timeout_secs).await
     }
 }

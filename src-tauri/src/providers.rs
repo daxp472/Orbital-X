@@ -31,6 +31,11 @@ pub struct ProviderResponse {
     pub tool_calls: Vec<ToolCall>,
     pub finish_reason: Option<String>,
     pub usage: Option<TokenUsage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<GenMetrics>,
+    /// True when the turn ended because the user cancelled it.
+    #[serde(default)]
+    pub cancelled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +44,32 @@ pub struct ConnectionTestResult {
     pub provider: String,
     pub message: String,
     pub models_available: Vec<String>,
+}
+
+/// Per-request inference options supplied by the frontend (user settings +
+/// model-aware defaults). All fields optional; providers apply what they support.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DispatchOptions {
+    /// Context window size for local models (Ollama num_ctx). None = let the
+    /// frontend resolve a model-aware default before sending.
+    pub num_ctx: Option<u64>,
+    /// Ollama keep-alive duration ("5m", "30m", "2h", "forever"). None = "30m".
+    pub keep_alive: Option<String>,
+    pub temperature: Option<f64>,
+    pub top_p: Option<f64>,
+    /// Cap on generated tokens per turn (Ollama num_predict / OpenAI max_tokens).
+    pub num_predict: Option<u64>,
+}
+
+/// Generation performance metrics captured from the provider response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenMetrics {
+    pub tokens_per_second: Option<f64>,
+    pub prompt_tokens_per_second: Option<f64>,
+    pub total_duration_ms: Option<u64>,
+    pub load_duration_ms: Option<u64>,
 }
 
 pub struct ProviderService;
@@ -286,6 +317,7 @@ impl ProviderService {
         base_url: Option<String>,
         messages: Vec<ChatMessage>,
         tools_def: serde_json::Value,
+        options: &DispatchOptions,
     ) -> Result<ProviderResponse, String> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(300)) // 5 min for local Ollama cold starts
@@ -296,54 +328,7 @@ impl ProviderService {
             "ollama" => {
                 let url = base_url.unwrap_or_else(|| "http://localhost:11434".into());
                 let chat_endpoint = format!("{}/api/chat", url.trim_end_matches('/'));
-
-                let ollama_msgs: Vec<serde_json::Value> = messages
-                    .iter()
-                    .map(|m| {
-                        if m.role == "tool" {
-                            // Ollama uses role=tool with plain content (no tool_call_id needed)
-                            serde_json::json!({
-                                "role": "tool",
-                                "content": m.content
-                            })
-                        } else {
-                            let mut msg_obj = serde_json::json!({
-                                "role": m.role,
-                                "content": m.content
-                            });
-                            if let Some(calls) = &m.tool_calls {
-                                let tc_json: Vec<serde_json::Value> = calls.iter().map(|c| {
-                                    serde_json::json!({
-                                        "function": {
-                                            "name": c.name,
-                                            "arguments": c.arguments
-                                        }
-                                    })
-                                }).collect();
-                                msg_obj["tool_calls"] = serde_json::Value::Array(tc_json);
-                            }
-                            msg_obj
-                        }
-                    })
-                    .collect();
-
-                let mut payload = serde_json::json!({
-                    "model": if model.is_empty() { "llama3" } else { model },
-                    "messages": ollama_msgs,
-                    "stream": false,
-                    // Keep model loaded in memory for the full agent loop (-1 = indefinite)
-                    "keep_alive": -1,
-                    "options": {
-                        // Ensure sufficient context window for multi-turn tool calling
-                        "num_ctx": 8192
-                    }
-                });
-
-                if let Some(arr) = tools_def.as_array() {
-                    if !arr.is_empty() {
-                        payload["tools"] = tools_def.clone();
-                    }
-                }
+                let payload = build_ollama_payload(model, &messages, tools_def, options, false);
 
                 let resp = client
                     .post(&chat_endpoint)
@@ -358,57 +343,7 @@ impl ProviderService {
                 }
 
                 let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-                let msg = json.get("message").cloned().unwrap_or_default();
-                let content = msg.get("content").and_then(|c| c.as_str()).unwrap_or_default().to_string();
-
-                let mut tool_calls = Vec::new();
-                if let Some(calls) = msg.get("tool_calls").and_then(|c| c.as_array()) {
-                    for (i, call) in calls.iter().enumerate() {
-                        if let Some(func) = call.get("function") {
-                            let name = func.get("name").and_then(|n| n.as_str()).unwrap_or_default().to_string();
-                            let args = func.get("arguments").cloned().unwrap_or(serde_json::json!({}));
-                            tool_calls.push(ToolCall {
-                                id: format!("ollama_call_{}", i),
-                                name,
-                                arguments: args,
-                            });
-                        }
-                    }
-                }
-
-                if tool_calls.is_empty() {
-                    if let Some(fallback_calls) = extract_json_tool_calls(&content) {
-                        tool_calls = fallback_calls;
-                    }
-                }
-
-                let prompt_tokens = json.get("prompt_eval_count").and_then(|v| v.as_u64());
-                let completion_tokens = json.get("eval_count").and_then(|v| v.as_u64());
-                let usage = match (prompt_tokens, completion_tokens) {
-                    (Some(p), Some(c)) => Some(TokenUsage {
-                        prompt_tokens: p,
-                        completion_tokens: c,
-                        total_tokens: p + c,
-                        is_estimated: false,
-                    }),
-                    _ => {
-                        let est_p = ((messages.iter().map(|m| m.content.len()).sum::<usize>()) / 4).max(1) as u64;
-                        let est_c = (content.len() / 4).max(1) as u64;
-                        Some(TokenUsage {
-                            prompt_tokens: est_p,
-                            completion_tokens: est_c,
-                            total_tokens: est_p + est_c,
-                            is_estimated: true,
-                        })
-                    }
-                };
-
-                Ok(ProviderResponse {
-                    content,
-                    tool_calls,
-                    finish_reason: json.get("done_reason").and_then(|r| r.as_str()).map(|s| s.to_string()),
-                    usage,
-                })
+                Ok(parse_ollama_response(&json, &messages))
             }
 
             "openai" => {
@@ -453,6 +388,12 @@ impl ProviderService {
                     "model": if model.is_empty() { "gpt-4o" } else { model },
                     "messages": openai_msgs
                 });
+                if let Some(t) = options.temperature {
+                    payload["temperature"] = serde_json::json!(t);
+                }
+                if let Some(np) = options.num_predict {
+                    payload["max_tokens"] = serde_json::json!(np);
+                }
 
                 if let Some(arr) = tools_def.as_array() {
                     if !arr.is_empty() {
@@ -522,6 +463,8 @@ impl ProviderService {
                     tool_calls,
                     finish_reason,
                     usage,
+                    metrics: None,
+                    cancelled: false,
                 })
             }
 
@@ -577,9 +520,12 @@ impl ProviderService {
 
                 let mut payload = serde_json::json!({
                     "model": target_model,
-                    "max_tokens": 4096,
+                    "max_tokens": options.num_predict.unwrap_or(4096),
                     "messages": anthropic_msgs
                 });
+                if let Some(t) = options.temperature {
+                    payload["temperature"] = serde_json::json!(t);
+                }
 
                 if !system_prompt.is_empty() {
                     payload["system"] = serde_json::json!(system_prompt);
@@ -664,6 +610,8 @@ impl ProviderService {
                     tool_calls,
                     finish_reason,
                     usage,
+                    metrics: None,
+                    cancelled: false,
                 })
             }
 
@@ -732,12 +680,343 @@ impl ProviderService {
                     tool_calls: vec![],
                     finish_reason: Some("stop".into()),
                     usage,
+                    metrics: None,
+                    cancelled: false,
                 })
             }
 
             _ => Err(format!("Unsupported provider: {}", provider)),
         }
     }
+}
+
+// ============================================================================
+// Ollama payload/response helpers (shared by streaming and blocking paths)
+// ============================================================================
+
+fn ollama_keep_alive_value(options: &DispatchOptions) -> serde_json::Value {
+    match options.keep_alive.as_deref() {
+        Some("forever") | Some("-1") => serde_json::json!(-1),
+        Some(d) if !d.is_empty() => serde_json::json!(d),
+        // Default: release the model after 30 minutes of inactivity instead of
+        // pinning every used model in VRAM/RAM indefinitely.
+        _ => serde_json::json!("30m"),
+    }
+}
+
+pub fn build_ollama_payload(
+    model: &str,
+    messages: &[ChatMessage],
+    tools_def: serde_json::Value,
+    options: &DispatchOptions,
+    stream: bool,
+) -> serde_json::Value {
+    let ollama_msgs: Vec<serde_json::Value> = messages
+        .iter()
+        .map(|m| {
+            if m.role == "tool" {
+                // Ollama uses role=tool with plain content (no tool_call_id needed)
+                serde_json::json!({
+                    "role": "tool",
+                    "content": m.content
+                })
+            } else {
+                let mut msg_obj = serde_json::json!({
+                    "role": m.role,
+                    "content": m.content
+                });
+                if let Some(calls) = &m.tool_calls {
+                    let tc_json: Vec<serde_json::Value> = calls
+                        .iter()
+                        .map(|c| {
+                            serde_json::json!({
+                                "function": {
+                                    "name": c.name,
+                                    "arguments": c.arguments
+                                }
+                            })
+                        })
+                        .collect();
+                    msg_obj["tool_calls"] = serde_json::Value::Array(tc_json);
+                }
+                msg_obj
+            }
+        })
+        .collect();
+
+    let mut gen_options = serde_json::json!({});
+    if let Some(nc) = options.num_ctx {
+        gen_options["num_ctx"] = serde_json::json!(nc);
+    }
+    if let Some(t) = options.temperature {
+        gen_options["temperature"] = serde_json::json!(t);
+    }
+    if let Some(tp) = options.top_p {
+        gen_options["top_p"] = serde_json::json!(tp);
+    }
+    if let Some(np) = options.num_predict {
+        gen_options["num_predict"] = serde_json::json!(np);
+    }
+
+    let mut payload = serde_json::json!({
+        "model": if model.is_empty() { "llama3" } else { model },
+        "messages": ollama_msgs,
+        "stream": stream,
+        "keep_alive": ollama_keep_alive_value(options),
+        "options": gen_options,
+    });
+
+    if let Some(arr) = tools_def.as_array() {
+        if !arr.is_empty() {
+            payload["tools"] = tools_def.clone();
+        }
+    }
+    payload
+}
+
+fn parse_ollama_tool_calls(msg: &serde_json::Value) -> Vec<ToolCall> {
+    let mut tool_calls = Vec::new();
+    if let Some(calls) = msg.get("tool_calls").and_then(|c| c.as_array()) {
+        for (i, call) in calls.iter().enumerate() {
+            if let Some(func) = call.get("function") {
+                let name = func
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let args = func
+                    .get("arguments")
+                    .cloned()
+                    .unwrap_or(serde_json::json!({}));
+                tool_calls.push(ToolCall {
+                    id: format!("ollama_call_{}", i),
+                    name,
+                    arguments: args,
+                });
+            }
+        }
+    }
+    tool_calls
+}
+
+fn estimate_usage(messages: &[ChatMessage], content: &str) -> TokenUsage {
+    let est_p = ((messages.iter().map(|m| m.content.len()).sum::<usize>()) / 4).max(1) as u64;
+    let est_c = (content.len() / 4).max(1) as u64;
+    TokenUsage {
+        prompt_tokens: est_p,
+        completion_tokens: est_c,
+        total_tokens: est_p + est_c,
+        is_estimated: true,
+    }
+}
+
+fn metrics_from_durations(json: &serde_json::Value) -> Option<GenMetrics> {
+    let total_ns = json.get("total_duration").and_then(|v| v.as_u64())?;
+    let eval_ns = json.get("eval_duration").and_then(|v| v.as_u64());
+    let prompt_eval_ns = json.get("prompt_eval_duration").and_then(|v| v.as_u64());
+    let eval_count = json.get("eval_count").and_then(|v| v.as_u64());
+    let prompt_count = json.get("prompt_eval_count").and_then(|v| v.as_u64());
+
+    let tps = eval_ns
+        .filter(|d| *d > 0)
+        .and_then(|d| eval_count.map(|c| (c as f64) / (d as f64 / 1e9)));
+    let ptps = prompt_eval_ns
+        .filter(|d| *d > 0)
+        .and_then(|d| prompt_count.map(|c| (c as f64) / (d as f64 / 1e9)));
+
+    Some(GenMetrics {
+        tokens_per_second: tps.map(|v| (v * 10.0).round() / 10.0),
+        prompt_tokens_per_second: ptps.map(|v| (v * 10.0).round() / 10.0),
+        total_duration_ms: Some(total_ns / 1_000_000),
+        load_duration_ms: json
+            .get("load_duration")
+            .and_then(|v| v.as_u64())
+            .map(|d| d / 1_000_000),
+    })
+}
+
+/// Normalize a full (non-streamed) /api/chat response into ProviderResponse.
+pub fn parse_ollama_response(json: &serde_json::Value, messages: &[ChatMessage]) -> ProviderResponse {
+    let msg = json.get("message").cloned().unwrap_or_default();
+    let content = msg
+        .get("content")
+        .and_then(|c| c.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let mut tool_calls = parse_ollama_tool_calls(&msg);
+    if tool_calls.is_empty() {
+        if let Some(fallback_calls) = extract_json_tool_calls(&content) {
+            tool_calls = fallback_calls;
+        }
+    }
+
+    let prompt_tokens = json.get("prompt_eval_count").and_then(|v| v.as_u64());
+    let completion_tokens = json.get("eval_count").and_then(|v| v.as_u64());
+    let usage = match (prompt_tokens, completion_tokens) {
+        (Some(p), Some(c)) => Some(TokenUsage {
+            prompt_tokens: p,
+            completion_tokens: c,
+            total_tokens: p + c,
+            is_estimated: false,
+        }),
+        _ => Some(estimate_usage(messages, &content)),
+    };
+
+    ProviderResponse {
+        content,
+        tool_calls,
+        finish_reason: json
+            .get("done_reason")
+            .and_then(|r| r.as_str())
+            .map(|s| s.to_string()),
+        usage,
+        metrics: metrics_from_durations(json),
+        cancelled: false,
+    }
+}
+
+/// Streams an Ollama /api/chat response as NDJSON lines.
+///
+/// - Emits `{"type":"status",...}` / `{"type":"token","text":...}` events through
+///   `on_event` as generation progresses.
+/// - Honours `cancel`: dropping out of this function closes the HTTP stream,
+///   which stops Ollama's generation and frees the model for the next request.
+/// - Returns the assembled ProviderResponse once the stream completes.
+///   If cancelled mid-stream, returns a response with `cancelled: true`
+///   containing whatever partial content was produced.
+pub async fn stream_ollama_turn(
+    base_url: &str,
+    model: &str,
+    messages: Vec<ChatMessage>,
+    tools_def: serde_json::Value,
+    options: &DispatchOptions,
+    cancel: tokio_util::sync::CancellationToken,
+    mut on_event: impl FnMut(serde_json::Value),
+) -> Result<ProviderResponse, String> {
+    use futures_util::StreamExt;
+
+    let chat_endpoint = format!("{}/api/chat", base_url.trim_end_matches('/'));
+    let payload = build_ollama_payload(model, &messages, tools_def, options, true);
+
+    // No total timeout: a cold model load can legitimately take minutes on CPU.
+    // Connect timeout keeps dead endpoints from hanging forever; each stream
+    // read is bounded below so a stalled connection cannot hang the agent.
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+    on_event(serde_json::json!({"type": "status", "text": "Connecting to Ollama…"}));
+
+    let resp = client
+        .post(&chat_endpoint)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let err = resp.text().await.unwrap_or_default();
+        return Err(format!("Ollama error: {}", err));
+    }
+
+    on_event(serde_json::json!({"type": "status", "text": "Generating…"}));
+
+    let mut stream = resp.bytes_stream();
+    let mut buf = String::new();
+    let mut content = String::new();
+    let mut tool_calls: Vec<ToolCall> = Vec::new();
+    let mut final_json: Option<serde_json::Value> = None;
+
+    loop {
+        let chunk = tokio::select! {
+            biased;
+            _ = cancel.cancelled() => {
+                // Dropping `stream` here closes the connection, which tells
+                // Ollama to stop generating instead of finishing in the dark.
+                return Ok(ProviderResponse {
+                    content,
+                    tool_calls: vec![],
+                    finish_reason: Some("cancelled".into()),
+                    usage: None,
+                    metrics: None,
+                    cancelled: true,
+                });
+            }
+            item = tokio::time::timeout(
+                std::time::Duration::from_secs(600),
+                stream.next(),
+            ) => item.map_err(|_| "Ollama stream stalled (no data for 10 minutes)".to_string())?,
+        };
+
+        let Some(chunk) = chunk else { break };
+        let chunk = chunk.map_err(|e| format!("Ollama stream read failed: {}", e))?;
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+
+        while let Some(pos) = buf.find('\n') {
+            let line: String = buf.drain(..=pos).collect();
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else {
+                continue; // tolerate malformed keep-alive lines
+            };
+
+            if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+                return Err(format!("Ollama stream error: {}", err));
+            }
+
+            if let Some(msg) = v.get("message") {
+                if let Some(txt) = msg.get("content").and_then(|c| c.as_str()) {
+                    if !txt.is_empty() {
+                        content.push_str(txt);
+                        on_event(serde_json::json!({"type": "token", "text": txt}));
+                    }
+                }
+                for call in parse_ollama_tool_calls(msg) {
+                    // Later chunks may repeat the full call list; replace in order.
+                    if !tool_calls.iter().any(|c| c.name == call.name) {
+                        tool_calls.push(call);
+                    }
+                }
+            }
+
+            if v.get("done").and_then(|d| d.as_bool()).unwrap_or(false) {
+                final_json = Some(v.clone());
+            }
+        }
+    }
+
+    let final_json = final_json.unwrap_or_else(|| serde_json::json!({}));
+
+    // Final chunk carries the full message (with any tool_calls) + counters.
+    let final_msg = final_json.get("message").cloned().unwrap_or_default();
+    if let Some(full) = final_msg.get("content").and_then(|c| c.as_str()) {
+        if full.len() > content.len() {
+            content = full.to_string();
+        }
+    }
+    let streamed_calls = parse_ollama_tool_calls(&final_msg);
+    if !streamed_calls.is_empty() {
+        tool_calls = streamed_calls;
+    }
+    if tool_calls.is_empty() {
+        if let Some(fallback_calls) = extract_json_tool_calls(&content) {
+            tool_calls = fallback_calls;
+        }
+    }
+
+    let mut response = parse_ollama_response(&final_json, &messages);
+    if response.content.is_empty() && !content.is_empty() {
+        response.content = content.clone();
+    }
+    response.tool_calls = tool_calls;
+    if response.usage.is_none() {
+        response.usage = Some(estimate_usage(&messages, &content));
+    }
+    Ok(response)
 }
 
 fn extract_json_tool_calls(content: &str) -> Option<Vec<ToolCall>> {
