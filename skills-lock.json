@@ -7,6 +7,12 @@
       "skillPath": "SKILL.md",
       "computedHash": "91293554cc653b2f8757decdf429325cf4f045c952027b2d6b4fa3b73083ad4d"
     },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "106acf230014cbb43ca34e6410371321b56ca742f9ee0442e8ec05bf02eb0384"
+    },
     "gravitas": {
       "source": "udaysharmadev/Gravitas",
       "sourceType": "github",
