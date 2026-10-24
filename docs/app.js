@@ -1,5 +1,6 @@
 // ==========================================================================
 // Orbital X — Official Showcase Website Client (app.js)
+// Apple Design System & Interactive Hardware Advisor
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,9 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initModeSwitcher();
   initCopyButtons();
   initFPSSimulator();
+  initHardwareAdvisor();
+  initTierFilterTabs();
 });
 
-// 1. Detect User OS & update main CTA
+// 1. Detect User OS & update main CTA with verified v2.2.2 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -22,10 +25,10 @@ function initOSDetection() {
     ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_x64-setup.exe';
   } else if (ua.includes('mac')) {
     ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_x64.dmg';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_aarch64.dmg';
   } else if (ua.includes('linux')) {
     ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/orbital-x_2.2.2_amd64.AppImage';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_amd64.AppImage';
   } else {
     ctaLabel.textContent = 'Download Orbital X (v2.2.2)';
     ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.2.2';
@@ -92,7 +95,7 @@ function initModeSwitcher() {
   });
 }
 
-// 3. One-Click Copy to Clipboard
+// 3. One-Click Copy to Clipboard with Tactile Feedback
 function initCopyButtons() {
   document.querySelectorAll('[data-copy]').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -101,8 +104,12 @@ function initCopyButtons() {
         await navigator.clipboard.writeText(textToCopy);
         const originalText = btn.textContent;
         btn.textContent = '✓ Copied!';
+        btn.style.borderColor = 'var(--accent-cyan)';
+        btn.style.color = '#ffffff';
         setTimeout(() => {
           btn.textContent = originalText;
+          btn.style.borderColor = '';
+          btn.style.color = '';
         }, 2000);
       } catch (err) {
         console.error('Failed to copy:', err);
@@ -131,4 +138,95 @@ function initFPSSimulator() {
   }
 
   requestAnimationFrame(countFrames);
+}
+
+// 5. Interactive Hardware Fit Advisor & VRAM Sizer
+function initHardwareAdvisor() {
+  let selectedVRAM = 8;
+  let selectedRAM = 16;
+
+  const vramPills = document.querySelectorAll('#vram-pills .pill-choice');
+  const ramPills = document.querySelectorAll('#ram-pills .pill-choice');
+  const summaryText = document.getElementById('hw-status-text');
+  const modelCards = document.querySelectorAll('.model-card');
+
+  function updateFit() {
+    // Update summary text
+    let summaryDesc = 'Balanced Developer Rig';
+    if (selectedRAM < 16) summaryDesc = '⚠️ Insufficient RAM (Upgrade to 16GB Recommended)';
+    else if (selectedVRAM >= 16 && selectedRAM >= 32) summaryDesc = '🚀 High-Performance Workstation';
+    else if (selectedVRAM >= 12) summaryDesc = '⚡ Excellent GPU Accelerated Machine';
+
+    if (summaryText) {
+      summaryText.textContent = `Hardware: ${selectedVRAM} GB VRAM • ${selectedRAM} GB RAM (${summaryDesc})`;
+    }
+
+    modelCards.forEach(card => {
+      const vramReq = parseFloat(card.dataset.vramReq || '8');
+      const ramReq = parseFloat(card.dataset.ramReq || '16');
+      const fitBadge = card.querySelector('.fit-badge');
+      if (!fitBadge) return;
+
+      // Reset badge classes
+      fitBadge.className = 'fit-badge';
+
+      if (selectedRAM < 16) {
+        fitBadge.classList.add('fit-heavy');
+        fitBadge.textContent = 'Low RAM (Freeze Risk)';
+      } else if (selectedVRAM >= vramReq) {
+        fitBadge.classList.add('fit-optimal');
+        fitBadge.textContent = '100% GPU VRAM';
+      } else if (selectedVRAM >= vramReq * 0.45 && selectedRAM >= ramReq) {
+        fitBadge.classList.add('fit-hybrid');
+        fitBadge.textContent = 'Hybrid CPU/GPU';
+      } else {
+        fitBadge.classList.add('fit-heavy');
+        fitBadge.textContent = 'VRAM Shortage';
+      }
+    });
+  }
+
+  vramPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      vramPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      selectedVRAM = parseFloat(pill.dataset.vram || '8');
+      updateFit();
+    });
+  });
+
+  ramPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      ramPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      selectedRAM = parseFloat(pill.dataset.ram || '16');
+      updateFit();
+    });
+  });
+
+  updateFit();
+}
+
+// 6. Tier Filter Tabs for Model Cards
+function initTierFilterTabs() {
+  const tabs = document.querySelectorAll('.tier-tab-btn');
+  const cards = document.querySelectorAll('.model-card');
+
+  if (!tabs.length || !cards.length) return;
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const selectedTier = tab.dataset.tier;
+
+      cards.forEach(card => {
+        if (selectedTier === 'all' || card.dataset.tier === selectedTier) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+  });
 }
