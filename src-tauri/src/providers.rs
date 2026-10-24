@@ -774,6 +774,46 @@ pub fn build_ollama_payload(
     payload
 }
 
+/// Normalizes tool-call arguments into a JSON object.
+///
+/// Root cause of the `write_file — Missing path` failures: some Ollama
+/// versions/model templates return `function.arguments` as a JSON *string*
+/// (OpenAI wire style) instead of an object, and local models emitting
+/// manual JSON tool calls sometimes use `parameters`/`input` instead of
+/// `arguments`. Anything not an object made `arguments.get("path")` return
+/// None downstream. Everything converges through here — native calls,
+/// streamed calls, and the JSON fallback parser.
+fn normalize_tool_arguments(val: &serde_json::Value) -> serde_json::Value {
+    match val {
+        serde_json::Value::Object(_) => val.clone(),
+        serde_json::Value::String(s) => {
+            let trimmed = s.trim();
+            // Models occasionally wrap the arguments JSON in a markdown fence
+            let cleaned = trimmed
+                .strip_prefix("```json")
+                .or_else(|| trimmed.strip_prefix("```"))
+                .unwrap_or(trimmed)
+                .trim()
+                .trim_end_matches("```")
+                .trim();
+            if cleaned.is_empty() {
+                return serde_json::json!({});
+            }
+            match serde_json::from_str::<serde_json::Value>(cleaned) {
+                Ok(parsed) => normalize_tool_arguments(&parsed),
+                Err(_) => {
+                    // Not valid JSON — do not guess fields; an empty object
+                    // lets execute_tool return its structured "missing path"
+                    // error so the model can correct the format.
+                    serde_json::json!({})
+                }
+            }
+        }
+        // Null / numbers / bools / arrays are not argument maps
+        _ => serde_json::json!({}),
+    }
+}
+
 fn parse_ollama_tool_calls(msg: &serde_json::Value) -> Vec<ToolCall> {
     let mut tool_calls = Vec::new();
     if let Some(calls) = msg.get("tool_calls").and_then(|c| c.as_array()) {
@@ -784,10 +824,13 @@ fn parse_ollama_tool_calls(msg: &serde_json::Value) -> Vec<ToolCall> {
                     .and_then(|n| n.as_str())
                     .unwrap_or_default()
                     .to_string();
-                let args = func
+                // Prefer "arguments"; accept "parameters"/"input" (aliases
+                // some model templates emit). Normalize strings to objects.
+                let raw_args = func
                     .get("arguments")
-                    .cloned()
-                    .unwrap_or(serde_json::json!({}));
+                    .or_else(|| func.get("parameters"))
+                    .or_else(|| func.get("input"));
+                let args = raw_args.map(normalize_tool_arguments).unwrap_or_else(|| serde_json::json!({}));
                 tool_calls.push(ToolCall {
                     id: format!("ollama_call_{}", i),
                     name,
@@ -1059,7 +1102,15 @@ fn extract_json_tool_calls(content: &str) -> Option<Vec<ToolCall>> {
 
 fn parse_val_to_tool_call(val: &serde_json::Value, idx: usize) -> Option<ToolCall> {
     if let Some(name) = val.get("name").and_then(|n| n.as_str()) {
-        let args = val.get("arguments").cloned().unwrap_or_else(|| val.clone());
+        let raw_args = val
+            .get("arguments")
+            .or_else(|| val.get("parameters"))
+            .or_else(|| val.get("input"));
+        let args = match raw_args {
+            Some(a) => normalize_tool_arguments(a),
+            // The object itself is the argument map ({"name":"write_file","path":...})
+            None => normalize_tool_arguments(val),
+        };
         return Some(ToolCall {
             id: format!("parsed_call_{}", idx),
             name: name.to_string(),
@@ -1071,6 +1122,7 @@ fn parse_val_to_tool_call(val: &serde_json::Value, idx: usize) -> Option<ToolCal
         if let Some(obj) = args.as_object_mut() {
             obj.remove("tool");
         }
+        let args = normalize_tool_arguments(&args);
         return Some(ToolCall {
             id: format!("parsed_call_{}", idx),
             name: tool.to_string(),
@@ -1078,4 +1130,88 @@ fn parse_val_to_tool_call(val: &serde_json::Value, idx: usize) -> Option<ToolCal
         });
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_string_arguments_normalized_to_object() {
+        // The exact shape that produced "write_file — Missing path":
+        // Ollama returning function.arguments as a JSON string
+        let msg = serde_json::json!({
+            "tool_calls": [{
+                "function": {
+                    "name": "write_file",
+                    "arguments": "{\"path\": \"src/main.rs\", \"content\": \"fn main() {}\"}"
+                }
+            }]
+        });
+        let calls = parse_ollama_tool_calls(&msg);
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "write_file");
+        assert_eq!(calls[0].arguments.get("path").and_then(|p| p.as_str()), Some("src/main.rs"));
+        assert_eq!(calls[0].arguments.get("content").and_then(|c| c.as_str()), Some("fn main() {}"));
+    }
+
+    #[test]
+    fn test_fenced_string_arguments_normalized() {
+        let msg = serde_json::json!({
+            "tool_calls": [{
+                "function": {
+                    "name": "read_file",
+                    "arguments": "```json\n{\"path\": \"lib.rs\"}\n```"
+                }
+            }]
+        });
+        let calls = parse_ollama_tool_calls(&msg);
+        assert_eq!(calls[0].arguments.get("path").and_then(|p| p.as_str()), Some("lib.rs"));
+    }
+
+    #[test]
+    fn test_parameters_alias_accepted() {
+        let msg = serde_json::json!({
+            "tool_calls": [{
+                "function": {
+                    "name": "write_file",
+                    "parameters": { "path": "a.txt", "content": "x" }
+                }
+            }]
+        });
+        let calls = parse_ollama_tool_calls(&msg);
+        assert_eq!(calls[0].arguments.get("path").and_then(|p| p.as_str()), Some("a.txt"));
+    }
+
+    #[test]
+    fn test_fallback_json_with_inline_args() {
+        // Local model emitting manual JSON where the object itself is the arg map
+        let content = "I'll write the file now.\n```json\n{\"name\":\"write_file\",\"path\":\"x.py\",\"content\":\"print(1)\"}\n```";
+        let calls = extract_json_tool_calls(content).expect("should parse");
+        assert_eq!(calls[0].name, "write_file");
+        assert_eq!(calls[0].arguments.get("path").and_then(|p| p.as_str()), Some("x.py"));
+    }
+
+    #[test]
+    fn test_unparseable_string_arguments_yield_empty_object() {
+        // Never invent a path — dispatcher returns its structured error instead
+        let msg = serde_json::json!({
+            "tool_calls": [{
+                "function": { "name": "write_file", "arguments": "not json at all" }
+            }]
+        });
+        let calls = parse_ollama_tool_calls(&msg);
+        assert!(calls[0].arguments.as_object().map(|o| o.is_empty()).unwrap_or(false));
+    }
+
+    #[test]
+    fn test_object_arguments_pass_through() {
+        let msg = serde_json::json!({
+            "tool_calls": [{
+                "function": { "name": "list_files", "arguments": { "max_depth": 3 } }
+            }]
+        });
+        let calls = parse_ollama_tool_calls(&msg);
+        assert_eq!(calls[0].arguments.get("max_depth").and_then(|d| d.as_u64()), Some(3));
+    }
 }

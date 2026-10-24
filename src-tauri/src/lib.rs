@@ -42,6 +42,32 @@ fn cancelled_response() -> ProviderResponse {
     }
 }
 
+/// Resolves the path argument of a tool call.
+///
+/// Models occasionally emit `file_path`/`filePath` instead of the declared
+/// `path`; those aliases are unambiguous and accepted. Anything else fails
+/// with a structured error that tells the model exactly which keys it sent,
+/// so a correctable format mistake can be recovered on the next turn
+/// (arguments that arrived as JSON strings are already normalized to
+/// objects in providers.rs before dispatch).
+fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a str, String> {
+    for key in ["path", "file_path", "filePath"] {
+        if let Some(p) = arguments.get(key).and_then(|v| v.as_str()) {
+            if !p.trim().is_empty() {
+                return Ok(p);
+            }
+        }
+    }
+    let received = match arguments.as_object() {
+        Some(obj) if !obj.is_empty() => obj.keys().cloned().collect::<Vec<_>>().join(", "),
+        Some(_) => "(empty)".to_string(),
+        None => "(non-object arguments)".to_string(),
+    };
+    Err(format!(
+        "{{\"error\":\"invalid_arguments\",\"tool\":\"{tool}\",\"message\":\"{tool} requires a non-empty 'path' string (workspace-relative, e.g. src/main.rs). Arguments received had keys: [{received}]. Re-issue the tool call as JSON with a proper 'path' field.\"}}"
+    ))
+}
+
 #[tauri::command]
 fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
     let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -361,21 +387,23 @@ async fn execute_tool(
             Ok(serde_json::to_value(tree).unwrap_or_default())
         }
         "read_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "read_file")?;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let res = ws.read_file(path)?;
             Ok(serde_json::to_value(res).unwrap_or_default())
         }
         "read_file_lines" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "read_file_lines")?;
             let start = arguments.get("start_line").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             ws.read_file_lines(path, start, end)
         }
         "write_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
-            let content = arguments.get("content").and_then(|c| c.as_str()).ok_or("Missing content")?;
+            let path = tool_path_arg(&arguments, "write_file")?;
+            let content = arguments.get("content").and_then(|c| c.as_str()).ok_or(
+                "{\"error\":\"invalid_arguments\",\"tool\":\"write_file\",\"message\":\"write_file requires 'content' (the complete file body as a string) alongside 'path'.\"}",
+            )?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent edit");
 
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -383,7 +411,7 @@ async fn execute_tool(
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "patch_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "patch_file")?;
             let start = arguments.get("start_line").and_then(|v| v.as_u64()).ok_or("Missing start_line")? as usize;
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).ok_or("Missing end_line")? as usize;
             let new_content = arguments.get("new_content").and_then(|c| c.as_str()).ok_or("Missing new_content")?;
@@ -393,13 +421,13 @@ async fn execute_tool(
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "delete_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "delete_file")?;
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let msg = ws.delete_file(path)?;
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "delete_directory" | "delete_folder" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "delete_directory")?;
             let recursive = arguments.get("recursive").and_then(|r| r.as_bool()).unwrap_or(true);
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let res = ws.delete_directory(path, recursive)?;
@@ -432,7 +460,7 @@ async fn execute_tool(
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "create_directory" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "create_directory")?;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             ws.create_directory(path)?;
             Ok(serde_json::json!({ "success": true, "path": path }))

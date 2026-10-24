@@ -90,7 +90,7 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                             "description": "Concise summary of why this file is being written (for the change journal)"
                         }
                     },
-                    "required": ["path", "content", "description"]
+                    "required": ["path", "content"]
                 }
             }
         },
