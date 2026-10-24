@@ -846,7 +846,9 @@ export function appendTimelineCard(role, text, timestamp = Date.now()) {
   card.className = `timeline-card ${role === 'user' ? 'user-msg' : 'assistant-msg'}`;
 
   const badgeClass = role === 'user' ? 'user' : 'assistant';
-  const badgeLabel = role === 'user' ? '👤 YOU' : '⚡ ORBITAL AGENT';
+  const badgeLabel = role === 'user'
+    ? '👤 YOU'
+    : '<img src="/logo.png" alt="Orbital X" style="width: 13px; height: 13px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 6px rgba(57, 197, 187, 0.5); vertical-align: middle; margin-right: 4px;" /> ORBITAL AGENT';
   const providerMeta = role === 'assistant'
     ? `<span style="font-size: 10px; opacity: 0.7; font-weight: normal; margin-left: 6px;">• ${state.ai.provider} (${state.ai.model || 'default'})</span>`
     : '';

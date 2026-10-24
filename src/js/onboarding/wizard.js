@@ -76,6 +76,9 @@ function renderStep() {
   if (currentStep === 1) {
     body.innerHTML = `
       <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+        <div style="position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center;">
+          <img src="/logo.png" alt="Orbital X" style="width: 58px; height: 58px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 24px rgba(57, 197, 187, 0.55), 0 0 48px rgba(188, 140, 255, 0.35);" />
+        </div>
         <div style="font-size: 20px; font-weight: 700; color: var(--text-primary);">Welcome to Orbital X</div>
         <div style="font-size: 13px; color: var(--text-secondary); max-width: 440px; line-height: 1.5;">
           A memory-conscious, autonomous AI coding environment built with Rust and modern web standards.

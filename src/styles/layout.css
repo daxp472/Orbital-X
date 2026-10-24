@@ -58,13 +58,41 @@ body {
 .titlebar-logo {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-weight: 600;
   color: var(--text-primary-bright);
-  padding: 3px 6px;
-  margin-right: 4px;
+  padding: 3px 8px;
+  margin-right: 6px;
   border-radius: var(--radius-sm);
-  transition: background var(--trans-fast);
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  user-select: none;
+}
+
+.titlebar-logo:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.titlebar-logo-img {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 0 10px rgba(57, 197, 187, 0.55);
+  transition: transform var(--trans-spring);
+}
+
+.titlebar-logo:hover .titlebar-logo-img {
+  transform: rotate(20deg) scale(1.12);
+}
+
+.titlebar-brand-name {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #ffffff 40%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
 }
 
 .titlebar-logo svg {
