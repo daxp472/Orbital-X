@@ -5,6 +5,7 @@
 import { state, persistState } from '../state/store.js';
 import { applyTheme } from '../components/settings.js';
 import { switchMode } from '../components/agent.js';
+import { invoke } from '../services/tauri.js';
 
 let currentStep = 1;
 const totalSteps = 4;
@@ -100,13 +101,18 @@ function renderStep() {
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
-          <label style="display: flex; align-items: center; gap: 10px; background: var(--bg-surface); padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color);">
-            <input type="radio" name="ob-provider" value="ollama" ${state.ai.provider === 'ollama' ? 'checked' : ''} />
-            <div>
-              <strong>Ollama (Local Inference)</strong>
-              <div style="font-size: 11px; color: var(--text-secondary);">100% private, runs entirely on your hardware via localhost:11434.</div>
-            </div>
-          </label>
+        <label style="display: flex; align-items: center; gap: 10px; background: var(--bg-surface); padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color);">
+          <input type="radio" name="ob-provider" value="ollama" ${state.ai.provider === 'ollama' ? 'checked' : ''} />
+          <div>
+            <strong>Ollama (Local Inference)</strong>
+            <div style="font-size: 11px; color: var(--text-secondary);">100% private, runs entirely on your hardware via localhost:11434.</div>
+          </div>
+        </label>
+
+        <div id="ob-ollama-status" style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--bg-surface); border: 1px solid var(--border-subtle); font-size: 11px;">
+          <span id="ob-ollama-status-text" style="color: var(--text-muted);">Checking whether Ollama is running…</span>
+          <button class="btn btn-secondary btn-sm" id="ob-ollama-recheck" style="margin-left: auto; padding: 2px 8px; font-size: 10px;">Re-check</button>
+        </div>
 
           <label style="display: flex; align-items: center; gap: 10px; background: var(--bg-surface); padding: 10px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color);">
             <input type="radio" name="ob-provider" value="anthropic" ${state.ai.provider === 'anthropic' ? 'checked' : ''} />
@@ -133,6 +139,33 @@ function renderStep() {
         persistState();
       });
     });
+
+    const statusText = body.querySelector('#ob-ollama-status-text');
+    const recheckBtn = body.querySelector('#ob-ollama-recheck');
+    const runCheck = async () => {
+      if (!statusText) return;
+      statusText.textContent = 'Checking whether Ollama is running…';
+      statusText.style.color = 'var(--text-muted)';
+      try {
+        const res = await invoke('test_provider_connection', {
+          provider: 'ollama',
+          apiKey: '',
+          model: '',
+          baseUrl: state.ai.endpoint,
+        });
+        if (res && res.success) {
+          statusText.innerHTML = `✓ Ollama is running — ${res.models_available.length} model${res.models_available.length === 1 ? '' : 's'} installed. Local coding is ready.`;
+          statusText.style.color = 'var(--accent-green)';
+        } else {
+          throw new Error(res?.message || 'not reachable');
+        }
+      } catch (e) {
+        statusText.innerHTML = `✗ Ollama was not detected at <code>${state.ai.endpoint}</code>. Install it from <strong>ollama.com</strong> (or <code>winget install Ollama.Ollama</code>), start it, then re-check. You can still finish setup and use cloud providers meanwhile.`;
+        statusText.style.color = 'var(--accent-orange)';
+      }
+    };
+    recheckBtn?.addEventListener('click', runCheck);
+    runCheck();
   } else if (currentStep === 3) {
     body.innerHTML = `
       <div style="display: flex; flex-direction: column; gap: 12px;">

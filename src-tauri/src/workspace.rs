@@ -89,6 +89,9 @@ pub struct WorkspaceService {
     root: Option<PathBuf>,
     change_journal: Vec<AgentChangeEntry>,
     pending_manifests: HashMap<String, BatchDeleteManifest>,
+    /// Metadata scanned once at set_root; served to get_workspace_meta without
+    /// re-walking the tree on every IPC call.
+    cached_meta: Option<WorkspaceMeta>,
 }
 
 impl WorkspaceService {
@@ -97,6 +100,7 @@ impl WorkspaceService {
             root: None,
             change_journal: Vec::new(),
             pending_manifests: HashMap::new(),
+            cached_meta: None,
         }
     }
 
@@ -117,6 +121,7 @@ impl WorkspaceService {
 
         // Quick scan to detect languages and file count
         let meta = self.scan_metadata(&clean_canonical, &name);
+        self.cached_meta = Some(meta.clone());
         Ok(meta)
     }
 
@@ -124,11 +129,16 @@ impl WorkspaceService {
         self.root.clone()
     }
 
+    pub fn cached_meta(&self) -> Option<&WorkspaceMeta> {
+        self.cached_meta.as_ref()
+    }
+
     /// Validates that a target path is strictly within the permitted workspace root.
     /// Defeats symlink/junction escapes, Windows \\?\ prefix disparities, and prefix-collision bypasses.
     pub fn resolve_and_validate(&self, target_path: &str) -> Result<PathBuf, String> {
         let root = self.root.as_ref().ok_or("No workspace is currently open")?;
         let clean_root = strip_verbatim_prefix(root);
+        let root_str = clean_root.to_string_lossy().replace('\\', "/").to_lowercase();
 
         let trimmed = target_path.trim();
         if trimmed.is_empty() {
@@ -161,43 +171,51 @@ impl WorkspaceService {
         }
 
         let clean_norm = strip_verbatim_prefix(&normalized);
-        let norm_str = clean_norm.to_string_lossy().replace('\\', "/").to_lowercase();
-        let root_str = clean_root.to_string_lossy().replace('\\', "/").to_lowercase();
-
-        // Exact match or subpath check (must have trailing slash boundary to prevent prefix spoofing)
-        let is_inside = if norm_str == root_str {
-            true
-        } else if norm_str.starts_with(&root_str) {
-            let next_char = norm_str[root_str.len()..].chars().next();
-            next_char == Some('/')
-        } else {
-            false
-        };
-
-        if !is_inside {
+        if !Self::is_inside(&clean_norm, &root_str) {
             return Err(format!("Security Violation: Path '{}' is outside workspace boundary.", target_path));
         }
 
-        // If the path already exists, verify real canonical path to defeat symlink/junction redirection
-        if clean_norm.exists() {
-            if let Ok(canonical_target) = clean_norm.canonicalize() {
-                let clean_canonical_target = strip_verbatim_prefix(&canonical_target);
-                let target_str = clean_canonical_target.to_string_lossy().replace('\\', "/").to_lowercase();
-                let target_inside = if target_str == root_str {
-                    true
-                } else if target_str.starts_with(&root_str) {
-                    let next_char = target_str[root_str.len()..].chars().next();
-                    next_char == Some('/')
-                } else {
-                    false
-                };
-                if !target_inside {
+        // Revalidate against the REAL filesystem to defeat redirection:
+        // - for existing paths, canonicalize and re-check
+        // - for new paths, canonicalize the deepest EXISTING ancestor — a
+        //   not-yet-existing target under a symlinked parent directory would
+        //   otherwise pass the string check and write outside the workspace
+        let probe = if clean_norm.exists() {
+            clean_norm.clone()
+        } else {
+            let mut p = clean_norm.clone();
+            while !p.exists() {
+                match p.parent() {
+                    Some(parent) if parent != p => p = parent.to_path_buf(),
+                    _ => break,
+                }
+            }
+            p
+        };
+
+        if probe.exists() {
+            if let Ok(canonical_probe) = probe.canonicalize() {
+                let clean_canonical = strip_verbatim_prefix(&canonical_probe);
+                if !Self::is_inside(&clean_canonical, &root_str) {
                     return Err("Security Violation: Symlink or filesystem redirection escapes workspace root.".into());
                 }
             }
         }
 
         Ok(clean_norm)
+    }
+
+    /// Case-insensitive (Windows-aware) containment check with a path-separator
+    /// boundary so `C:\work` does not contain `C:\workspace`.
+    fn is_inside(path: &Path, root_str: &str) -> bool {
+        let p_str = path.to_string_lossy().replace('\\', "/").to_lowercase();
+        if p_str == root_str {
+            return true;
+        }
+        if p_str.starts_with(root_str) {
+            return p_str[root_str.len()..].chars().next() == Some('/');
+        }
+        false
     }
 
     /// Explicitly guards the workspace root against deletion
@@ -228,6 +246,20 @@ impl WorkspaceService {
         let name = clean_cur.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let path_str = clean_cur.to_string_lossy().replace('\\', "/");
         let rel_path = clean_cur.strip_prefix(&clean_rt).unwrap_or(&clean_cur).to_string_lossy().replace('\\', "/");
+
+        // Never descend into or display through symlinks/junctions — the link
+        // target may live outside the workspace.
+        let is_symlink = fs::symlink_metadata(&clean_cur).map(|m| m.file_type().is_symlink()).unwrap_or(false);
+        if is_symlink {
+            return FileTreeNode {
+                name,
+                path: path_str,
+                relative_path: rel_path,
+                is_directory: false,
+                size_bytes: None,
+                children: Some(vec![]),
+            };
+        }
 
         if clean_cur.is_file() {
             let size = fs::metadata(&clean_cur).map(|m| m.len()).ok();
@@ -549,6 +581,16 @@ impl WorkspaceService {
         let root = self.root.as_ref().unwrap();
         let rel = full_path.strip_prefix(root).unwrap_or(&full_path).to_string_lossy().replace('\\', "/");
 
+        // Guard against reading huge files fully into memory just to slice them
+        if let Ok(meta) = fs::metadata(&full_path) {
+            if meta.len() > 3 * 1024 * 1024 {
+                return Err(format!(
+                    "File '{}' is {}MB — exceeds the 3MB read limit. Use search_files or find_symbol to locate the relevant section first.",
+                    path_str, meta.len() / (1024 * 1024)
+                ));
+            }
+        }
+
         let content = fs::read_to_string(&full_path).map_err(|e| e.to_string())?;
         let total_lines = content.lines().count();
         let start = start_line.saturating_sub(1); // 0-indexed
@@ -582,9 +624,20 @@ impl WorkspaceService {
             return Err(format!("File not found for patching: {}", path_str));
         };
 
+        // Models sometimes emit inverted or zero ranges. Validate instead of
+        // panicking inside drain(..): a panic here would poison the workspace
+        // Mutex and break every subsequent file operation until restart.
+        let start_line = start_line.max(1);
+        if end_line < start_line {
+            return Err(format!(
+                "Invalid patch range: end_line ({}) must be greater than or equal to start_line ({}).",
+                end_line, start_line
+            ));
+        }
+
         let mut lines: Vec<&str> = old_content.lines().collect();
         let total = lines.len();
-        let start_idx = start_line.saturating_sub(1).min(total);
+        let start_idx = (start_line - 1).min(total);
         let end_idx = end_line.min(total);
 
         let new_lines: Vec<&str> = new_content.lines().collect();
@@ -593,10 +646,16 @@ impl WorkspaceService {
             lines.insert(start_idx + i, l);
         }
 
-        // Preserve trailing newline
         let mut final_content = lines.join("\n");
+        // Preserve the original trailing newline if there was one
         if old_content.ends_with('\n') {
             final_content.push('\n');
+        }
+        // Preserve Windows CRLF line endings: joining with \n would otherwise
+        // rewrite every line of the file and flood the git diff.
+        let had_crlf = old_content.contains("\r\n") && !old_content.contains("\n\r");
+        if had_crlf && !final_content.contains('\r') {
+            final_content = final_content.replace('\n', "\r\n");
         }
 
         let diff = self.compute_diff(path_str, &old_content, &final_content);
@@ -651,6 +710,16 @@ impl WorkspaceService {
         let entry = self.change_journal.pop().ok_or("No agent changes to undo")?;
         let full_path = PathBuf::from(&entry.path);
 
+        // Revalidate the journaled path against the CURRENT workspace root —
+        // the journal survives workspace switches, and undoing into a
+        // different (or unbounded) location must not be possible.
+        if let Err(e) = self.resolve_and_validate(&entry.path) {
+            return Err(format!(
+                "Cannot undo change to {}: it is outside the current workspace boundary ({}). The journal entry was preserved.",
+                entry.path, e
+            ));
+        }
+
         match entry.before_content {
             Some(prev_content) => {
                 fs::write(&full_path, prev_content).map_err(|e| e.to_string())?;
@@ -671,15 +740,33 @@ impl WorkspaceService {
         let query_lower = query.to_lowercase();
         let mut matches = Vec::new();
 
-        for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
             if matches.len() >= max_results {
                 break;
             }
 
-            let path = entry.path();
-            let fname = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
-            if fname == ".git" || fname == "node_modules" || fname == "target" || fname == "dist" {
+            // Skip symlinks entirely (file or directory) — following them could
+            // read content outside the workspace boundary.
+            if entry.file_type().is_symlink() {
+                it.skip_current_dir();
                 continue;
+            }
+
+            let path = entry.path();
+            let fname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+
+            // Skip the whole subtree of bulky/generated directories — checking
+            // only the entry name still descended into node_modules children.
+            if entry.file_type().is_dir() {
+                if fname == ".git" || fname == "node_modules" || fname == "target" || fname == "dist" || fname == ".orbital" {
+                    it.skip_current_dir();
+                    continue;
+                }
+                if fname.starts_with('.') && entry.depth() > 0 {
+                    it.skip_current_dir();
+                    continue;
+                }
             }
 
             if path.is_file() {
@@ -742,6 +829,17 @@ impl WorkspaceService {
                             "success": false
                         }));
                         continue;
+                    }
+
+                    if let Ok(meta) = full_path.metadata() {
+                        if meta.len() > 3 * 1024 * 1024 {
+                            results.push(serde_json::json!({
+                                "path": path_str,
+                                "error": format!("File is {}MB — exceeds the 3MB read limit", meta.len() / (1024 * 1024)),
+                                "success": false
+                            }));
+                            continue;
+                        }
                     }
 
                     match fs::read(&full_path) {
@@ -817,17 +915,26 @@ impl WorkspaceService {
         let want_defs = symbol_type == "definition" || symbol_type == "all" || symbol_type.is_empty();
         let want_refs = symbol_type == "reference" || symbol_type == "all";
 
-        for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
             if results.len() >= max_res {
                 break;
             }
             let path = entry.path();
             if !path.is_file() {
+                let dname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                if dname == "node_modules" || dname == "target" || dname == "dist" || dname == ".git" || dname == ".orbital" {
+                    it.skip_current_dir();
+                }
+                continue;
+            }
+            // Skip symlinked files — targets may live outside the workspace
+            if entry.file_type().is_symlink() {
                 continue;
             }
 
             let fname = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
-            if fname.starts_with('.') || fname == "node_modules" || fname == "target" || fname == "dist" || fname == "package-lock.json" || fname == "Cargo.lock" {
+            if fname.starts_with('.') || fname == "package-lock.json" || fname == "Cargo.lock" {
                 continue;
             }
 
@@ -922,6 +1029,10 @@ impl WorkspaceService {
                 for entry in dir_entries {
                     let fname = entry.file_name().to_string_lossy().to_string();
                     if fname.starts_with('.') || fname == "node_modules" || fname == "target" || fname == "dist" || fname == ".orbital" {
+                        continue;
+                    }
+                    // Skip symlinks — targets may escape the workspace
+                    if entry.file_type().map(|t| t.is_symlink()).unwrap_or(false) {
                         continue;
                     }
                     let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
@@ -1078,5 +1189,86 @@ mod tests {
         let root_del_attempt = ws.ensure_not_workspace_root(&root);
         assert!(root_del_attempt.is_err());
         assert!(root_del_attempt.unwrap_err().contains("Deleting the workspace root directory is strictly prohibited"));
+    }
+
+    #[test]
+    fn test_new_file_under_symlinked_parent_blocked() {
+        // A not-yet-existing target under a symlinked directory must be
+        // rejected: the string form stays inside the root, but the write
+        // would land outside via the link.
+        let tmp = std::env::temp_dir().join(format!("orbital_ws_test_{}", std::process::id()));
+        let ws_dir = tmp.join("workspace");
+        let outside_dir = tmp.join("outside");
+        let _ = fs::create_dir_all(&ws_dir);
+        let _ = fs::create_dir_all(&outside_dir);
+        // Marker file proving an escape would reach outside content
+        let _ = fs::write(outside_dir.join("secret.txt"), "secret");
+
+        let link = ws_dir.join("link");
+        let link_created = create_dir_link(&link, &outside_dir);
+        if !link_created {
+            // Junction/symlink creation requires privileges in some
+            // environments — skip honestly rather than fake a pass.
+            let _ = fs::remove_dir_all(&tmp);
+            eprintln!("SKIPPED: could not create directory link (insufficient privileges)");
+            return;
+        }
+
+        let mut ws = WorkspaceService::new();
+        ws.set_root(&ws_dir.to_string_lossy()).unwrap();
+
+        // Existing path through the link must be blocked
+        let existing = ws.resolve_and_validate("link/secret.txt");
+        assert!(existing.is_err(), "existing file through symlink must be blocked");
+
+        // NEW path under the symlinked parent must also be blocked
+        let new_file = ws.resolve_and_validate("link/escaped.txt");
+        assert!(new_file.is_err(), "new file under symlinked parent must be blocked");
+        assert!(new_file.unwrap_err().contains("Symlink or filesystem redirection"));
+
+        // Sibling new file (no symlink involved) still works
+        assert!(ws.resolve_and_validate("normal/new.txt").is_ok());
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_undo_rejected_outside_current_workspace() {
+        let tmp = std::env::temp_dir().join(format!("orbital_undo_test_{}", std::process::id()));
+        let ws_a = tmp.join("ws_a");
+        let ws_b = tmp.join("ws_b");
+        let _ = fs::create_dir_all(&ws_a);
+        let _ = fs::create_dir_all(&ws_b);
+
+        let mut ws = WorkspaceService::new();
+        ws.set_root(&ws_a.to_string_lossy()).unwrap();
+        ws.write_file("tracked.txt", "v1", "test").unwrap();
+        assert!(ws.undo_last_change().is_ok());
+        ws.write_file("tracked.txt", "v2", "test").unwrap();
+
+        // Switch workspace: the journaled path now points outside ws_b
+        ws.set_root(&ws_b.to_string_lossy()).unwrap();
+        let undo_result = ws.undo_last_change();
+        assert!(undo_result.is_err());
+        assert!(undo_result.unwrap_err().contains("outside the current workspace boundary"));
+
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    fn create_dir_link(link: &Path, target: &Path) -> bool {
+        #[cfg(target_os = "windows")]
+        {
+            // Junctions (mklink /J) do not require administrator privileges
+            let out = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(target)
+                .output();
+            matches!(out, Ok(o) if o.status.success())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            std::os::unix::fs::symlink(target, link).is_ok()
+        }
     }
 }

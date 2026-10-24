@@ -1,6 +1,6 @@
 [package]
 name = "orbital-x"
-version = "2.2.2"
+version = "2.2.3"
 description = "Orbital X AI-powered Desktop Coding IDE"
 authors = ["Orbital X Team"]
 edition = "2024"
@@ -21,10 +21,16 @@ tauri = { version = "2.12.4", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+futures-util = "0.3"
 reqwest = { version = "0.12", features = ["json", "stream"] }
+sysinfo = "0.30"
 chrono = { version = "0.4", features = ["serde"] }
 similar = { version = "2.6", features = ["inline"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 walkdir = "2.5"
 regex = "1.11"
 dirs = "5.0"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"

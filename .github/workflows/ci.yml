@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'gemini/**']
+  pull_request:
+    branches: [main, 'gemini/**']
+
+jobs:
+  backend:
+    name: Rust checks & tests
+    # Windows runner: matches the product's primary target and avoids the
+    # webkit2gtk system-dependency rabbit hole of Linux Tauri builds.
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Compile checks (no feature-gated surprises)
+        run: cargo check --all-targets
+
+      - name: Run unit tests (policy engine, workspace security, usage)
+        run: cargo test
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend (catches broken imports & syntax)
+        run: npm run build

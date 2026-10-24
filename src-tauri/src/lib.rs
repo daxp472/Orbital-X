@@ -1,17 +1,27 @@
+mod extensions;
 mod memory;
 mod policy;
 mod providers;
+mod skills;
 mod terminal;
 mod tools;
 mod usage;
+mod websearch;
 mod workspace;
 
 use memory::MemoryService;
 use policy::{AgentMode, PolicyDecision, PolicyEngine};
-use providers::{ChatMessage, ConnectionTestResult, ProviderResponse, ProviderService};
+use providers::{
+    stream_ollama_turn, ChatMessage, ConnectionTestResult, DispatchOptions, ProviderResponse,
+    ProviderService,
+};
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
+use tauri::ipc::Channel;
 use tauri::State;
 use terminal::{CommandResult, InteractiveSessionInfo, InteractiveTerminalManager, TerminalService};
+use tokio_util::sync::CancellationToken;
 use usage::{TokenUsageRecord, TokenUsageStats, UsageService};
 use workspace::{FileDiff, FileReadResult, FileTreeNode, WorkspaceMeta, WorkspaceService};
 
@@ -19,6 +29,46 @@ pub struct AppState {
     pub workspace: Mutex<WorkspaceService>,
     pub active_mode: Mutex<AgentMode>,
     pub terminal_mgr: InteractiveTerminalManager,
+    /// Cancellation tokens for cancellable long-running operations (agent
+    /// turns, model pulls), keyed by an id supplied by the frontend.
+    pub active_ops: Mutex<HashMap<String, CancellationToken>>,
+}
+
+fn cancelled_response() -> ProviderResponse {
+    ProviderResponse {
+        content: String::new(),
+        tool_calls: vec![],
+        finish_reason: Some("cancelled".into()),
+        usage: None,
+        metrics: None,
+        cancelled: true,
+    }
+}
+
+/// Resolves the path argument of a tool call.
+///
+/// Models occasionally emit `file_path`/`filePath` instead of the declared
+/// `path`; those aliases are unambiguous and accepted. Anything else fails
+/// with a structured error that tells the model exactly which keys it sent,
+/// so a correctable format mistake can be recovered on the next turn
+/// (arguments that arrived as JSON strings are already normalized to
+/// objects in providers.rs before dispatch).
+fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a str, String> {
+    for key in ["path", "file_path", "filePath"] {
+        if let Some(p) = arguments.get(key).and_then(|v| v.as_str()) {
+            if !p.trim().is_empty() {
+                return Ok(p);
+            }
+        }
+    }
+    let received = match arguments.as_object() {
+        Some(obj) if !obj.is_empty() => obj.keys().cloned().collect::<Vec<_>>().join(", "),
+        Some(_) => "(empty)".to_string(),
+        None => "(non-object arguments)".to_string(),
+    };
+    Err(format!(
+        "{{\"error\":\"invalid_arguments\",\"tool\":\"{tool}\",\"message\":\"{tool} requires a non-empty 'path' string (workspace-relative, e.g. src/main.rs). Arguments received had keys: [{received}]. Re-issue the tool call as JSON with a proper 'path' field.\"}}"
+    ))
 }
 
 #[tauri::command]
@@ -30,19 +80,9 @@ fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMe
 #[tauri::command]
 fn get_workspace_meta(state: State<'_, AppState>) -> Result<Option<WorkspaceMeta>, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-    match ws.get_root() {
-        Some(root) => {
-            let name = root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Workspace".into());
-            let meta = WorkspaceMeta {
-                root_path: root.to_string_lossy().replace('\\', "/"),
-                name,
-                total_files: 0,
-                languages_detected: vec![],
-            };
-            Ok(Some(meta))
-        }
-        None => Ok(None),
-    }
+    // Metadata (file count, languages) is scanned once at set_root and cached;
+    // this used to always report 0 files / no languages.
+    Ok(ws.cached_meta().cloned())
 }
 
 #[tauri::command]
@@ -141,9 +181,59 @@ async fn agent_dispatch_turn(
     model: String,
     base_url: Option<String>,
     messages: Vec<ChatMessage>,
+    options: Option<DispatchOptions>,
+    turn_id: Option<String>,
+    // NOTE: Tauri's Channel cannot be Option — the frontend must always pass
+    // a channel (non-Ollama providers simply never emit events on it).
+    on_event: Channel<serde_json::Value>,
+    state: State<'_, AppState>,
 ) -> Result<ProviderResponse, String> {
+    let options = options.unwrap_or_default();
     let tool_schemas = tools::get_available_tool_schemas();
-    let res = ProviderService::dispatch_turn(&provider, &api_key, &model, base_url, messages, tool_schemas).await?;
+
+    // Register a cancellation token for this turn so the Stop button can
+    // abort the in-flight request (for Ollama this also stops generation
+    // server-side by closing the stream, freeing the model immediately).
+    let cancel = CancellationToken::new();
+    if let Some(id) = &turn_id {
+        if let Ok(mut ops) = state.active_ops.lock() {
+            ops.insert(id.clone(), cancel.clone());
+        }
+    }
+
+    let emit = |value: serde_json::Value| {
+        let _ = on_event.send(value);
+    };
+
+    let result = if provider.eq_ignore_ascii_case("ollama") {
+        let url = base_url
+            .clone()
+            .unwrap_or_else(|| "http://localhost:11434".into());
+        stream_ollama_turn(&url, &model, messages.clone(), tool_schemas.clone(), &options, cancel.clone(), emit).await
+    } else {
+        let fut = ProviderService::dispatch_turn(
+            &provider,
+            &api_key,
+            &model,
+            base_url.clone(),
+            messages.clone(),
+            tool_schemas.clone(),
+            &options,
+        );
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => Ok(cancelled_response()),
+            res = fut => res,
+        }
+    };
+
+    if let Some(id) = &turn_id {
+        if let Ok(mut ops) = state.active_ops.lock() {
+            ops.remove(id);
+        }
+    }
+
+    let res = result?;
 
     if let Some(u) = &res.usage {
         let record = TokenUsageRecord {
@@ -156,12 +246,25 @@ async fn agent_dispatch_turn(
             total_tokens: u.total_tokens,
             is_estimated: u.is_estimated,
             category: "agent_turn".into(),
-            status: "completed".into(),
+            status: if res.cancelled { "cancelled".into() } else { "completed".into() },
         };
         let _ = UsageService::record_usage(record);
     }
 
     Ok(res)
+}
+
+/// Aborts a running agent turn (or model pull) by id. Returns true if an
+/// operation was found and signalled.
+#[tauri::command]
+fn cancel_agent_operation(op_id: String, state: State<'_, AppState>) -> Result<bool, String> {
+    let mut ops = state.active_ops.lock().map_err(|e| e.to_string())?;
+    if let Some(token) = ops.remove(&op_id) {
+        token.cancel();
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 #[tauri::command]
@@ -287,21 +390,23 @@ async fn execute_tool(
             Ok(serde_json::to_value(tree).unwrap_or_default())
         }
         "read_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "read_file")?;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let res = ws.read_file(path)?;
             Ok(serde_json::to_value(res).unwrap_or_default())
         }
         "read_file_lines" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "read_file_lines")?;
             let start = arguments.get("start_line").and_then(|v| v.as_u64()).unwrap_or(1) as usize;
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             ws.read_file_lines(path, start, end)
         }
         "write_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
-            let content = arguments.get("content").and_then(|c| c.as_str()).ok_or("Missing content")?;
+            let path = tool_path_arg(&arguments, "write_file")?;
+            let content = arguments.get("content").and_then(|c| c.as_str()).ok_or(
+                "{\"error\":\"invalid_arguments\",\"tool\":\"write_file\",\"message\":\"write_file requires 'content' (the complete file body as a string) alongside 'path'.\"}",
+            )?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent edit");
 
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -309,7 +414,7 @@ async fn execute_tool(
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "patch_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "patch_file")?;
             let start = arguments.get("start_line").and_then(|v| v.as_u64()).ok_or("Missing start_line")? as usize;
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).ok_or("Missing end_line")? as usize;
             let new_content = arguments.get("new_content").and_then(|c| c.as_str()).ok_or("Missing new_content")?;
@@ -319,13 +424,13 @@ async fn execute_tool(
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "delete_file" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "delete_file")?;
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let msg = ws.delete_file(path)?;
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "delete_directory" | "delete_folder" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "delete_directory")?;
             let recursive = arguments.get("recursive").and_then(|r| r.as_bool()).unwrap_or(true);
             let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
             let res = ws.delete_directory(path, recursive)?;
@@ -358,7 +463,7 @@ async fn execute_tool(
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "create_directory" => {
-            let path = arguments.get("path").and_then(|p| p.as_str()).ok_or("Missing path")?;
+            let path = tool_path_arg(&arguments, "create_directory")?;
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             ws.create_directory(path)?;
             Ok(serde_json::json!({ "success": true, "path": path }))
@@ -461,7 +566,8 @@ async fn execute_tool(
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
             };
-            let res = TerminalService::run_command("git status --short --branch", &cwd, 10).await?;
+            // Argument-array execution: no shell, no interpolation to inject into
+            let res = TerminalService::run_git(&["status", "--porcelain=v1", "-b"], &cwd, 10).await?;
             let mut branch = String::new();
             let mut modified = Vec::new();
             let mut staged = Vec::new();
@@ -496,12 +602,12 @@ async fn execute_tool(
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
             };
-            let add_res = TerminalService::run_command("git add .", &cwd, 15).await?;
+            let add_res = TerminalService::run_git(&["add", "."], &cwd, 15).await?;
             if !add_res.success {
                 return Ok(serde_json::json!({ "success": false, "error": add_res.stderr }));
             }
-            let escaped = message.replace('"', "\\\"");
-            let commit_res = TerminalService::run_command(&format!("git commit -m \"{}\"", escaped), &cwd, 15).await?;
+            // Message passed as a single argv entry — shell metacharacters are inert
+            let commit_res = TerminalService::run_git(&["commit", "-m", message], &cwd, 15).await?;
             Ok(serde_json::json!({
                 "success": commit_res.success,
                 "output": commit_res.stdout,
@@ -518,18 +624,19 @@ async fn execute_tool(
                 ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
             };
 
-            let mut cmd = String::from("git diff");
+            let mut git_args: Vec<&str> = vec!["diff"];
             if stat_only {
-                cmd.push_str(" --stat");
+                git_args.push("--stat");
             }
             if staged {
-                cmd.push_str(" --cached");
+                git_args.push("--cached");
             }
             if let Some(p) = path {
-                cmd.push_str(&format!(" -- \"{}\"", p.replace('"', "")));
+                git_args.push("--");
+                git_args.push(p);
             }
 
-            let res = TerminalService::run_command(&cmd, &cwd, 15).await?;
+            let res = TerminalService::run_git(&git_args, &cwd, 15).await?;
             let lines: Vec<&str> = res.stdout.lines().collect();
             let total_lines = lines.len();
             let max_lines = 300;
@@ -715,6 +822,32 @@ async fn execute_tool(
             let mems = MemoryService::search_memories(&root, query);
             Ok(serde_json::json!(mems))
         }
+        "web_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(|q| q.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"web_search\",\"message\":\"web_search requires a 'query' string.\"}")?;
+            let max_res = arguments.get("max_results").and_then(|m| m.as_u64()).unwrap_or(5) as usize;
+            websearch::web_search(query, max_res).await
+        }
+        "fetch_page" => {
+            let url = arguments
+                .get("url")
+                .and_then(|u| u.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"fetch_page\",\"message\":\"fetch_page requires a 'url' string (public http/https).\"}")?;
+            let max_chars = arguments.get("max_chars").and_then(|m| m.as_u64()).unwrap_or(0) as usize;
+            websearch::fetch_page(url, max_chars).await
+        }
+        // Skills are instruction packs read by the agent on demand — read-only
+        "list_skills" => Ok(serde_json::Value::Array(skills::SkillService::list())),
+        "read_skill" => {
+            let identifier = arguments
+                .get("name")
+                .or_else(|| arguments.get("id"))
+                .and_then(|v| v.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"read_skill\",\"message\":\"read_skill requires a 'name' string (from list_skills).\"}")?;
+            skills::SkillService::read(identifier)
+        }
         _ => Err(format!("Unrecognized tool: {}", name)),
     }
 }
@@ -778,7 +911,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
         }
     };
 
-    let res = TerminalService::run_command("git status --porcelain=v1 -b", &cwd, 10).await?;
+    let res = TerminalService::run_git(&["status", "--porcelain=v1", "-b"], &cwd, 10).await?;
     if !res.success {
         return Ok(GitStatusResult {
             is_repo: false,
@@ -819,14 +952,12 @@ async fn git_stage_and_commit(message: String, state: State<'_, AppState>) -> Re
         return Err("Commit message cannot be empty".into());
     }
 
-    let add_res = TerminalService::run_command("git add .", &cwd, 15).await?;
+    let add_res = TerminalService::run_git(&["add", "."], &cwd, 15).await?;
     if !add_res.success {
         return Err(format!("git add failed: {}", add_res.stderr));
     }
 
-    let escaped_msg = message.replace('"', "\\\"");
-    let commit_cmd = format!("git commit -m \"{}\"", escaped_msg);
-    let commit_res = TerminalService::run_command(&commit_cmd, &cwd, 15).await?;
+    let commit_res = TerminalService::run_git(&["commit", "-m", &message], &cwd, 15).await?;
 
     if !commit_res.success {
         return Err(format!("git commit failed: {}", commit_res.stderr));
@@ -842,12 +973,11 @@ async fn get_git_diff(path: Option<String>, state: State<'_, AppState>) -> Resul
         ws.get_root().ok_or("No workspace open")?.to_string_lossy().to_string()
     };
 
-    let cmd = match path {
-        Some(p) => format!("git diff \"{}\"", p),
-        None => "git diff".to_string(),
+    let git_args: Vec<&str> = match path.as_deref() {
+        Some(p) => vec!["diff", "--", p],
+        None => vec!["diff"],
     };
-
-    let res = TerminalService::run_command(&cmd, &cwd, 15).await?;
+    let res = TerminalService::run_git(&git_args, &cwd, 15).await?;
     Ok(res.stdout)
 }
 
@@ -880,12 +1010,438 @@ async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, Stri
     Ok(models)
 }
 
+// ============================================================================
+// Chat session persistence — localStorage is quota-limited in the WebView and
+// silently dropped history on QuotaExceededError. Sessions live as JSON on
+// disk under ~/.orbital/ instead, written atomically via tmp+rename.
+// ============================================================================
+
+fn chat_sessions_path() -> PathBuf {
+    let dir = dirs::home_dir()
+        .map(|h| h.join(".orbital"))
+        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join("chat_sessions.json")
+}
+
+#[tauri::command]
+fn load_chat_sessions() -> Result<serde_json::Value, String> {
+    match std::fs::read(chat_sessions_path()) {
+        Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string()),
+        // Missing file = no history yet; null tells the frontend to fall back
+        // to its bootstrap default rather than treating this as an error.
+        Err(_) => Ok(serde_json::Value::Null),
+    }
+}
+
+#[tauri::command]
+fn save_chat_sessions(sessions: serde_json::Value) -> Result<(), String> {
+    let path = chat_sessions_path();
+    let tmp = path.with_extension("json.tmp");
+    let serialized = serde_json::to_string(&sessions).map_err(|e| e.to_string())?;
+    std::fs::write(&tmp, serialized).map_err(|e| format!("Failed to write chat sessions: {}", e))?;
+    std::fs::rename(&tmp, &path).map_err(|e| format!("Failed to finalize chat sessions: {}", e))?;
+    Ok(())
+}
+
+// ============================================================================
+// Ollama model lifecycle management (pull / delete / inspect / running)
+// ============================================================================
+
+fn ollama_base(endpoint: Option<String>) -> String {
+    endpoint.unwrap_or_else(|| "http://localhost:11434".into())
+}
+
+/// Streams `ollama pull` progress over the channel: NDJSON lines from
+/// /api/pull carry {"status", "digest", "total", "completed"}. No fixed total
+/// timeout — large downloads legitimately take a long time — but each read is
+/// bounded, and the pull is cancellable through the shared token registry
+/// (which aborts the HTTP stream and stops the download).
+#[tauri::command]
+async fn ollama_pull_model(
+    name: String,
+    endpoint: Option<String>,
+    pull_id: String,
+    on_event: Channel<serde_json::Value>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    use futures_util::StreamExt;
+
+    let url = format!("{}/api/pull", ollama_base(endpoint).trim_end_matches('/'));
+    let cancel = CancellationToken::new();
+    if let Ok(mut ops) = state.active_ops.lock() {
+        ops.insert(pull_id.clone(), cancel.clone());
+    }
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let payload = serde_json::json!({ "name": name, "stream": true });
+
+    let send_status = |value: serde_json::Value| {
+        let _ = on_event.send(value);
+    };
+
+    let result: Result<serde_json::Value, String> = async {
+        let resp = client
+            .post(&url)
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("Could not reach Ollama at {}: {}", url, e))?;
+
+        if !resp.status().is_success() {
+            let status_code = resp.status().as_u16();
+            let err = resp.text().await.unwrap_or_default();
+            return Err(format!("Ollama pull failed (HTTP {}): {}", status_code, err));
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut buf = String::new();
+        let mut last_status = String::new();
+
+        loop {
+            let chunk = tokio::select! {
+                biased;
+                _ = cancel.cancelled() => {
+                    // Dropping the stream closes the connection and stops the download
+                    send_status(serde_json::json!({"type": "cancelled"}));
+                    return Ok(serde_json::json!({"success": false, "cancelled": true, "status": "Cancelled by user"}));
+                }
+                item = tokio::time::timeout(
+                    std::time::Duration::from_secs(120),
+                    stream.next(),
+                ) => item.map_err(|_| "Pull stalled (no progress for 2 minutes)".to_string())?,
+            };
+
+            let Some(chunk) = chunk else { break };
+            let chunk = chunk.map_err(|e| format!("Pull stream failed: {}", e))?;
+            buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            while let Some(pos) = buf.find('\n') {
+                let line: String = buf.drain(..=pos).collect();
+                let line = line.trim();
+                if line.is_empty() { continue; }
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(line) else { continue };
+
+                if let Some(err) = v.get("error").and_then(|e| e.as_str()) {
+                    return Err(format!("Ollama pull error: {}", err));
+                }
+
+                let status = v.get("status").and_then(|s| s.as_str()).unwrap_or_default().to_string();
+                if status != last_status && !status.is_empty() {
+                    last_status = status.clone();
+                }
+
+                let total = v.get("total").and_then(|t| t.as_u64());
+                let completed = v.get("completed").and_then(|c| c.as_u64());
+                let percent = match (total, completed) {
+                    (Some(t), Some(c)) if t > 0 => Some(((c as f64 / t as f64) * 1000.0).round() / 10.0),
+                    _ => None,
+                };
+
+                send_status(serde_json::json!({
+                    "type": "pull_status",
+                    "status": status,
+                    "digest": v.get("digest").and_then(|d| d.as_str()),
+                    "total": total,
+                    "completed": completed,
+                    "percent": percent,
+                }));
+
+                if status == "success" {
+                    return Ok(serde_json::json!({"success": true, "status": "success"}));
+                }
+            }
+        }
+
+        // Stream ended without an explicit success line — treat as failure
+        Err("Pull stream ended before completion".into())
+    }
+    .await;
+
+    if let Ok(mut ops) = state.active_ops.lock() {
+        ops.remove(&pull_id);
+    }
+    result
+}
+
+/// Removes a downloaded model (DELETE /api/delete).
+#[tauri::command]
+async fn ollama_delete_model(name: String, endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/delete", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .delete(&url)
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| format!("Delete request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status_code = resp.status().as_u16();
+        let err = resp.text().await.unwrap_or_default();
+        return Ok(serde_json::json!({ "success": false, "error": format!("HTTP {}: {}", status_code, err) }));
+    }
+    Ok(serde_json::json!({ "success": true }))
+}
+
+/// Model facts from /api/show. Only fields the API actually supplies are
+/// returned; anything absent stays null and the UI must not invent values.
+#[tauri::command]
+async fn ollama_model_info(name: String, endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/show", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({ "name": name }))
+        .send()
+        .await
+        .map_err(|e| format!("Model info request failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status_code = resp.status().as_u16();
+        let err = resp.text().await.unwrap_or_default();
+        return Err(format!("Model info unavailable (HTTP {}): {}", status_code, err));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+
+    // Context length: prefer model_info entries like "<family>.context_length",
+    // then a "num_ctx N" line in the parameters string (Modelfile override)
+    let mut context_length: Option<u64> = None;
+    if let Some(info) = json.get("model_info").and_then(|m| m.as_object()) {
+        for (k, v) in info {
+            if k.ends_with(".context_length") {
+                if let Some(n) = v.as_u64() {
+                    context_length = Some(context_length.map_or(n, |prev: u64| prev.max(n)));
+                }
+            }
+        }
+    }
+    if context_length.is_none() {
+        if let Some(params) = json.get("parameters").and_then(|p| p.as_str()) {
+            for line in params.lines() {
+                let mut parts = line.split_whitespace();
+                if parts.next() == Some("num_ctx") {
+                    if let Some(n) = parts.next().and_then(|s| s.parse::<u64>().ok()) {
+                        context_length = Some(n);
+                    }
+                }
+            }
+        }
+    }
+
+    let details = json.get("details").cloned().unwrap_or_default();
+    let capabilities: Vec<String> = json
+        .get("capabilities")
+        .and_then(|c| c.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    // null when the server doesn't report capabilities — the UI must show
+    // "unknown", never invent support
+    let supports_tools = if json.get("capabilities").is_some() {
+        serde_json::json!(capabilities.iter().any(|c| c == "tools"))
+    } else {
+        serde_json::Value::Null
+    };
+
+    Ok(serde_json::json!({
+        "name": name,
+        "context_length": context_length,
+        "parameter_size": details.get("parameter_size").and_then(|p| p.as_str()),
+        "quantization": details.get("quantization_level").and_then(|q| q.as_str()),
+        "family": details.get("family").and_then(|f| f.as_str()),
+        "families": details.get("families").and_then(|f| f.as_array()).map(|arr| {
+            arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<_>>()
+        }),
+        "capabilities": capabilities,
+        "supports_tools": supports_tools,
+        "modified_at": json.get("modified_at").and_then(|m| m.as_str()),
+    }))
+}
+
+/// Models currently loaded in memory/VRAM (GET /api/ps).
+#[tauri::command]
+async fn ollama_running_models(endpoint: Option<String>) -> Result<serde_json::Value, String> {
+    let url = format!("{}/api/ps", ollama_base(endpoint).trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not query Ollama running models: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("HTTP error {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let models: Vec<serde_json::Value> = json
+        .get("models")
+        .and_then(|m| m.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "name": m.get("name").and_then(|n| n.as_str()),
+                        "model": m.get("model").and_then(|n| n.as_str()),
+                        "size_bytes": m.get("size").and_then(|s| s.as_u64()),
+                        "size_vram_bytes": m.get("size_vram").and_then(|s| s.as_u64()),
+                        "expires_at": m.get("expires_at").and_then(|s| s.as_str()),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({ "models": models }))
+}
+
+// ============================================================================
+// Hardware awareness — used for honest model-fit guidance. Only reports what
+// the OS actually exposes; missing values stay null.
+// ============================================================================
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GpuInfo {
+    pub name: String,
+    pub vram_bytes: Option<u64>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareInfo {
+    pub total_ram_bytes: Option<u64>,
+    pub gpus: Vec<GpuInfo>,
+}
+
+#[cfg(windows)]
+fn detect_gpus() -> Vec<GpuInfo> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    let mut gpus = Vec::new();
+    // Display adapter class {4d36e968-...}: each subkey 0000..000N is an
+    // adapter with DriverDesc (name) and HardwareInformation.qwMemorySize
+    // (QWORD VRAM in bytes — correct for >4GB cards, unlike AdapterRAM).
+    let class_path = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    let Ok(class) = RegKey::predef(HKEY_LOCAL_MACHINE).open_subkey(class_path) else {
+        return gpus;
+    };
+
+    for idx in 0..=16 {
+        let Ok(sub) = class.open_subkey(format!("{:04}", idx)) else { continue };
+        let name: Option<String> = sub.get_value("DriverDesc").ok();
+        let vram: Option<u64> = sub
+            .open_subkey("HardwareInformation")
+            .ok()
+            .and_then(|hw| hw.get_value("qwMemorySize").ok());
+        if let Some(name) = name {
+            if !name.is_empty() {
+                gpus.push(GpuInfo { name, vram_bytes: vram.filter(|v| *v > 0) });
+            }
+        }
+    }
+    gpus
+}
+
+#[cfg(not(windows))]
+fn detect_gpus() -> Vec<GpuInfo> {
+    Vec::new()
+}
+
+#[tauri::command]
+fn get_hardware_info() -> Result<HardwareInfo, String> {
+    let mut sys = sysinfo::System::new();
+    sys.refresh_memory();
+    let total_ram = sys.total_memory(); // bytes in sysinfo 0.30
+    Ok(HardwareInfo {
+        total_ram_bytes: if total_ram > 0 { Some(total_ram) } else { None },
+        gpus: detect_gpus(),
+    })
+}
+
+// ============================================================================
+// Extension management (declarative packs — theme / prompt-pack / command-pack)
+// ============================================================================
+
+#[tauri::command]
+fn list_installed_extensions() -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(extensions::ExtensionService::list_installed()))
+}
+
+#[tauri::command]
+fn install_extension_from_manifest(manifest: serde_json::Value) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::install_from_manifest(&manifest)
+}
+
+#[tauri::command]
+fn install_extension_from_folder(path: String) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::install_from_folder(&path)
+}
+
+#[tauri::command]
+fn uninstall_extension(id: String) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::uninstall(&id)
+}
+
+#[tauri::command]
+fn set_extension_enabled(id: String, enabled: bool) -> Result<serde_json::Value, String> {
+    extensions::ExtensionService::set_enabled(&id, enabled)
+}
+
+// ============================================================================
+// Skill management (instruction packs for the agent)
+// ============================================================================
+
+#[tauri::command]
+fn list_skills() -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(skills::SkillService::list()))
+}
+
+#[tauri::command]
+fn read_skill(id: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::read(&id)
+}
+
+#[tauri::command]
+fn install_skill_from_folder(path: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::install_from_folder(&path)
+}
+
+#[tauri::command]
+fn delete_skill(id: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::delete(&id)
+}
+
+#[tauri::command]
+fn set_skill_enabled(id: String, enabled: bool) -> Result<serde_json::Value, String> {
+    skills::SkillService::set_enabled(&id, enabled)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let state = AppState {
         workspace: Mutex::new(WorkspaceService::new()),
         active_mode: Mutex::new(AgentMode::Dev),
         terminal_mgr: InteractiveTerminalManager::new(),
+        active_ops: Mutex::new(HashMap::new()),
     };
 
     tauri::Builder::default()
@@ -920,6 +1476,7 @@ pub fn run() {
             evaluate_tool_policy,
             get_available_tools,
             agent_dispatch_turn,
+            cancel_agent_operation,
             execute_tool,
             save_memory_entry,
             list_memories,
@@ -927,7 +1484,24 @@ pub fn run() {
             get_git_status,
             git_stage_and_commit,
             get_git_diff,
-            get_ollama_models
+            get_ollama_models,
+            load_chat_sessions,
+            save_chat_sessions,
+            ollama_pull_model,
+            ollama_delete_model,
+            ollama_model_info,
+            ollama_running_models,
+            get_hardware_info,
+            list_installed_extensions,
+            install_extension_from_manifest,
+            install_extension_from_folder,
+            uninstall_extension,
+            set_extension_enabled,
+            list_skills,
+            read_skill,
+            install_skill_from_folder,
+            delete_skill,
+            set_skill_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

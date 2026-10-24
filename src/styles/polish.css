@@ -1,0 +1,318 @@
+/* ==========================================================================
+   Orbital X — UI Polish Layer (polish.css)
+   Accessibility, responsiveness, and theme-consistency fixes layered on top
+   of tokens/themes/layout/components. Loaded last so overrides win.
+   ========================================================================== */
+
+/* ---------- Keyboard focus (visible, consistent, theme-aware) ---------- */
+.btn:focus-visible,
+.icon-btn:focus-visible,
+.action-chip:focus-visible,
+.panel-tab:focus-visible,
+.rail-btn:focus-visible,
+.settings-nav-item:focus-visible,
+.tab:focus-visible,
+.chat-history-item:focus-visible,
+.composer-model-pill:focus-visible,
+.mode-pill:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.terminal-session-item:focus-visible {
+  outline: 2px solid var(--border-focus, var(--accent-cyan));
+  outline-offset: 1px;
+  border-radius: var(--radius-xs, 4px);
+}
+
+/* Text inputs get a soft ring instead of a hard outline */
+.input-text:focus-visible,
+.composer-textarea:focus-visible,
+.select-input:focus-visible {
+  outline: none;
+  border-color: var(--border-focus, var(--accent-cyan));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--border-focus, #39c5bb) 25%, transparent);
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: color-mix(in srgb, var(--accent-cyan) 30%, transparent);
+}
+
+/* ---------- Theme-consistency: modal glass values via variables ----------
+   The settings modal hardcoded dark rgba() backgrounds, which rendered a
+   dark box inside the light theme. Override with theme-aware values. */
+.modal-backdrop .settings-modal-container {
+  background: var(--bg-card, #1b1e28);
+  border: 1px solid var(--border-color);
+}
+body.theme-light .settings-modal-container,
+[data-theme="theme-light"] .settings-modal-container,
+[data-theme="nebula-light"] .settings-modal-container {
+  background: #ffffff;
+  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-subtle);
+}
+.modal-backdrop .settings-sidebar {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+}
+body.theme-light .settings-sidebar,
+[data-theme="theme-light"] .settings-sidebar,
+[data-theme="nebula-light"] .settings-sidebar {
+  background: #f6f8fa;
+}
+
+/* Settings content panes scroll independently instead of clipping */
+.settings-content-pane {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ---------- Consistent interactive states ---------- */
+.btn {
+  transition: background-color var(--trans-fast), border-color var(--trans-fast),
+    color var(--trans-fast), transform var(--trans-fast);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+
+/* Disabled buttons read clearly in every theme */
+.btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- Alignment: sidebar views share one header rhythm ---------- */
+.sidebar-subview .sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Search inputs inside sidebar views line up */
+.sidebar-subview .input-text {
+  width: 100%;
+  font-size: var(--text-xs);
+}
+
+/* ---------- Status bar: graceful narrowing ---------- */
+@media (max-width: 1100px) {
+  .statusbar-right .status-item[title]:not(#sb-ctx-meter):not(#status-model-indicator) {
+    display: none;
+  }
+  #status-encoding,
+  .statusbar-left .status-item:nth-child(3),
+  .statusbar-left .status-item:nth-child(4) {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  #sb-ctx-meter,
+  #status-mode {
+    display: none;
+  }
+}
+
+/* ---------- Responsive layout ---------- */
+@media (max-width: 1024px) {
+  .settings-modal-container {
+    width: 98vw;
+    max-width: 98vw;
+    height: 92vh;
+  }
+  .settings-sidebar {
+    width: 168px;
+  }
+}
+
+@media (max-width: 860px) {
+  .settings-modal-container {
+    flex-direction: column;
+    height: 94vh;
+  }
+  .settings-sidebar {
+    width: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 8px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .settings-sidebar .settings-nav-item {
+    white-space: nowrap;
+  }
+  .settings-content-pane {
+    flex: 1;
+  }
+}
+
+/* Composer actions wrap instead of overflowing on narrow agent panels */
+.composer-bottom-bar {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Modal containers never exceed the viewport */
+.modal-container,
+.settings-modal-container {
+  max-height: calc(100vh - 32px);
+}
+
+/* ---------- Extension & skill cards (shared list rhythm) ---------- */
+.pack-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color var(--trans-fast), background-color var(--trans-fast);
+}
+.pack-card:hover {
+  border-color: var(--border-color);
+  background: var(--bg-hover);
+}
+.pack-card .pack-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pack-card .pack-name {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-primary-bright);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pack-card .pack-meta {
+  font-size: var(--text-2xs);
+  color: var(--text-muted);
+}
+.pack-card .pack-desc {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.pack-type-badge {
+  font-size: var(--text-2xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.pack-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.pack-detail {
+  border-top: 1px dashed var(--border-subtle);
+  margin-top: 2px;
+  padding-top: 6px;
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pack-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  padding: 18px 10px;
+  line-height: 1.6;
+}
+
+/* Toggle switch used by extension/skill enable states */
+.pack-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 30px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--bg-active);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color var(--trans-fast);
+  flex-shrink: 0;
+}
+.pack-toggle::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: left var(--trans-fast), background-color var(--trans-fast);
+}
+.pack-toggle.on {
+  background: color-mix(in srgb, var(--accent-cyan) 45%, transparent);
+  border-color: var(--accent-cyan);
+}
+.pack-toggle.on::after {
+  left: 15px;
+  background: #ffffff;
+}
+
+/* ---------- Scrollbar consistency across themes ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ---------- Small-screen touch targets ---------- */
+@media (pointer: coarse) {
+  .icon-btn,
+  .tool-toggle-btn {
+    min-width: 26px;
+    min-height: 26px;
+  }
+}

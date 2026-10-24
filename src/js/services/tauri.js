@@ -4,6 +4,24 @@
 
 let invokeFn = null;
 
+/**
+ * Creates a Tauri event Channel for streaming progress (tokens, pull status)
+ * from backend commands. Returns null in plain-browser preview mode, where
+ * channels don't exist and commands return complete results instead.
+ */
+export async function makeEventChannel() {
+  if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
+    try {
+      const { Channel } = await import('@tauri-apps/api/core');
+      return new Channel();
+    } catch (e) {
+      console.warn('Channel unavailable, falling back to non-streaming:', e);
+      return null;
+    }
+  }
+  return null;
+}
+
 async function getInvoke() {
   if (invokeFn) return invokeFn;
 
@@ -144,6 +162,22 @@ async function getInvoke() {
         return 'D:\\1work\\YT\\Orbital X';
       case 'list_memories':
         return [];
+      case 'cancel_agent_operation':
+        return false;
+      case 'load_chat_sessions':
+        return null;
+      case 'save_chat_sessions':
+        return true;
+      case 'ollama_pull_model':
+        return { success: true, status: 'success' };
+      case 'ollama_delete_model':
+        return { success: true };
+      case 'ollama_model_info':
+        return { name: args.name, context_length: null, parameter_size: null, quantization: null, supports_tools: null };
+      case 'ollama_running_models':
+        return { models: [] };
+      case 'get_hardware_info':
+        return { totalRamBytes: null, gpus: [] };
       default:
         return { success: true };
     }

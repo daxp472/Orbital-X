@@ -1,15 +1,24 @@
 // ==========================================================================
 // Orbital X — Chat Sessions & History Manager (chat-sessions.js)
+// Persistence lives on disk via the Rust backend (~/.orbital/chat_sessions.json)
+// because WebView localStorage is quota-limited and used to silently drop
+// history. localStorage remains as a fallback for browser-preview mode.
 // ==========================================================================
 
 import { state } from '../state/store.js';
+import { invoke } from '../services/tauri.js';
 import { appendTimelineCard, renderFullTimeline } from './agent.js';
 
 const STORAGE_KEY_SESSIONS = 'orbital_chat_sessions';
 const STORAGE_KEY_ACTIVE = 'orbital_active_session_id';
+// Safety valve: even on disk, keep the list bounded so a months-long history
+// of tool-heavy sessions can't grow without limit.
+const MAX_SESSIONS = 60;
+const MAX_MESSAGES_PER_SESSION = 400;
 
 let sessions = [];
 let activeSessionId = null;
+let persistenceMode = 'disk'; // 'disk' | 'local'
 
 export function initChatSessions() {
   loadSessions();
@@ -44,12 +53,22 @@ export function initChatSessions() {
   updateTitleDisplay();
 }
 
-export function loadSessions() {
+export async function loadSessions() {
+  // Prefer disk persistence through the backend
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_SESSIONS);
-    sessions = raw ? JSON.parse(raw) : [];
+    const fromDisk = await invoke('load_chat_sessions');
+    if (Array.isArray(fromDisk)) {
+      sessions = fromDisk;
+      persistenceMode = 'disk';
+    } else {
+      // First run on this machine — seed from localStorage if present
+      sessions = readLocalStorageSessions();
+      persistenceMode = 'disk';
+    }
   } catch (e) {
-    sessions = [];
+    console.warn('Disk chat persistence unavailable, using localStorage:', e);
+    sessions = readLocalStorageSessions();
+    persistenceMode = 'local';
   }
 
   activeSessionId = localStorage.getItem(STORAGE_KEY_ACTIVE);
@@ -78,6 +97,16 @@ export function loadSessions() {
   }
 }
 
+function readLocalStorageSessions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SESSIONS);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export function getActiveSession() {
   return sessions.find(s => s.id === activeSessionId) || sessions[0];
 }
@@ -86,7 +115,8 @@ export function saveActiveSession() {
   const current = getActiveSession();
   if (!current) return;
 
-  current.messages = state.conversation || [];
+  // Ephemeral nudges/retry notices never belong to persisted history
+  current.messages = (state.conversation || []).filter(m => !m._ephemeral);
   current.mode = state.agentMode;
   current.updatedAt = new Date().toISOString();
 
@@ -264,13 +294,57 @@ function formatRelativeTime(date) {
 }
 
 function saveSessionsToStorage() {
+  // Bound growth: oldest sessions beyond the cap are pruned (never the active one)
+  if (sessions.length > MAX_SESSIONS) {
+    const overflow = sessions.length - MAX_SESSIONS;
+    const activeIdx = sessions.findIndex(s => s.id === activeSessionId);
+    const removable = sessions.filter(s => s.id !== activeSessionId).slice(-overflow - 1);
+    const keep = new Set(removable.map(s => s.id));
+    sessions = sessions.filter((s, i) => !keep.has(s.id) || i === activeIdx);
+    sessions = sessions.slice(-MAX_SESSIONS);
+  }
+  // Bound per-session size (tool-heavy sessions can grow very large)
+  for (const s of sessions) {
+    if (Array.isArray(s.messages) && s.messages.length > MAX_MESSAGES_PER_SESSION) {
+      s.messages = s.messages.slice(-MAX_MESSAGES_PER_SESSION);
+    }
+  }
+
+  // Disk persistence (primary) — fire-and-forget with local fallback
+  invoke('save_chat_sessions', { sessions })
+    .catch((e) => {
+      if (persistenceMode !== 'local') {
+        console.warn('Disk chat save failed, falling back to localStorage:', e);
+        persistenceMode = 'local';
+      }
+      writeLocalStorage();
+    });
+
+  // Keep a lightweight local copy for instant boot before disk round-trip
+  if (persistenceMode === 'local') {
+    writeLocalStorage();
+  }
+
+  if (activeSessionId) {
+    localStorage.setItem(STORAGE_KEY_ACTIVE, activeSessionId);
+  }
+}
+
+function writeLocalStorage() {
   try {
     localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
-    if (activeSessionId) {
-      localStorage.setItem(STORAGE_KEY_ACTIVE, activeSessionId);
-    }
   } catch (e) {
-    console.warn("Could not persist sessions to localStorage:", e);
+    // Quota exceeded even after pruning — drop the oldest sessions until it fits
+    while (sessions.length > 1) {
+      const activeIdx = sessions.findIndex(s => s.id === activeSessionId);
+      const dropIdx = activeIdx === 0 ? sessions.length - 1 : 0;
+      sessions.splice(dropIdx, 1);
+      try {
+        localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
+        return;
+      } catch (e2) { /* keep trimming */ }
+    }
+    console.warn('Chat history could not be persisted locally:', e);
   }
 }
 

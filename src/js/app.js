@@ -9,12 +9,45 @@ import { initOnboarding } from './onboarding/wizard.js';
 import { initModelPicker } from './components/model-picker.js';
 import { initSourceControl, refreshGitStatus } from './components/source-control.js';
 import { initExtensions } from './components/extensions.js';
+import { initSkills, renderSkillsPanel } from './components/skills.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 import { showToast } from './services/notifications.js';
+import { restorePlanState } from './services/orchestrator.js';
 
 window.showToast = showToast;
+
+// Re-renders an interrupted plan for the current workspace so progress
+// survives app restarts (plans are persisted per workspace root).
+function tryRestorePlan() {
+  try {
+    const restored = restorePlanState();
+    if (!restored || !restored.tasks || restored.tasks.length === 0) return;
+    if (['completed', 'cancelled'].includes(restored.status)) return;
+    import('./components/agent.js').then((m) => {
+      if (typeof m.renderPlanCard === 'function') {
+        m.renderPlanCard(restored);
+        appendRestoredPlanNotice(restored);
+      }
+    });
+  } catch (e) {
+    console.warn('Plan restore failed:', e);
+  }
+}
+
+function appendRestoredPlanNotice(plan) {
+  const { completedCount, totalCount } = (function calc() {
+    const done = (plan.tasks || []).filter(t => t.status === 'completed' || t.status === 'skipped').length;
+    return { completedCount: done, totalCount: (plan.tasks || []).length };
+  })();
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+  const notice = document.createElement('div');
+  notice.style.cssText = 'font-size: 11px; color: var(--text-muted); padding: 4px 2px; border-left: 2px solid var(--accent-cyan); margin: 6px 0;';
+  notice.textContent = `↩️ Restored in-progress plan "${plan.title}" (${completedCount}/${totalCount} tasks done). Use the plan card above to resume execution.`;
+  timeline.appendChild(notice);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Orbital X Desktop IDE initializing...");
@@ -51,6 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initModelPicker();
   initSourceControl();
   initExtensions();
+  initSkills();
   initFileTreeHeaderActions();
   initActivityRail();
   initResizers();
@@ -99,6 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (meta && meta.root_path) {
       await loadWorkspace(meta.root_path);
       refreshMemories();
+      tryRestorePlan();
     }
   } catch (e) {
     console.log("No initial workspace loaded:", e);
@@ -140,6 +175,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 5. Reload memory and source control
         refreshMemories();
         refreshGitStatus();
+        tryRestorePlan();
       }
     } catch (err) {
       console.error("Workspace transition error:", err);
@@ -183,6 +219,7 @@ function initActivityRail() {
     { id: 'rail-debug', view: 'view-debug' },
     { id: 'rail-extensions', view: 'view-extensions' },
     { id: 'rail-memory', view: 'view-memory' },
+    { id: 'rail-skills', view: 'view-skills' },
   ];
 
   const sidebar = document.getElementById('sidebar');
@@ -204,6 +241,10 @@ function initActivityRail() {
         const viewElem = document.getElementById(item.view);
         if (viewElem) viewElem.style.display = 'flex';
         if (item.id === 'rail-memory') refreshMemories();
+        if (item.id === 'rail-skills') renderSkillsPanel();
+        if (item.id === 'rail-extensions') {
+          import('./components/extensions.js').then(m => m.renderPanel());
+        }
         if (item.id === 'rail-source-control') refreshGitStatus();
       }
     });
@@ -400,9 +441,13 @@ async function performSearch(query) {
     matches.forEach(m => {
       const item = document.createElement('div');
       item.style.cssText = 'padding: 6px; border-radius: 4px; background: var(--bg-surface); margin-bottom: 4px; cursor: pointer; font-size: 11px;';
+      // File snippets are untrusted workspace content — escape before innerHTML
+      const esc = (s) => String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       item.innerHTML = `
-        <div style="font-weight: 600; color: var(--accent-cyan);">${m.file}${m.line ? `:${m.line}` : ''}</div>
-        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); margin-top: 2px;">${m.snippet}</div>
+        <div style="font-weight: 600; color: var(--accent-cyan);">${esc(m.file)}${m.line ? `:${esc(m.line)}` : ''}</div>
+        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); margin-top: 2px;">${esc(m.snippet)}</div>
       `;
 
       item.addEventListener('click', async () => {
@@ -548,7 +593,7 @@ function initAboutModal() {
     setTimeout(() => {
       btnCheckUpdates.textContent = '✓ Up to Date';
       import('./services/notifications.js').then(m => {
-        m.showToast('Orbital X is up to date (v2.2.2 Latest Release)', 'success');
+        m.showToast('Orbital X is up to date (v2.2.3 Latest Release)', 'success');
       });
       setTimeout(() => {
         btnCheckUpdates.textContent = 'Check for Updates';

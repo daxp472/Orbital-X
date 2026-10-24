@@ -28,6 +28,9 @@ export const state = {
     provider: 'ollama', // 'ollama' | 'anthropic' | 'openai' | 'gemini'
     model: 'llama3',
     endpoint: 'http://localhost:11434',
+    // Custom OpenAI-compatible base URL (LM Studio, llama.cpp server, vLLM…).
+    // Empty = official OpenAI API.
+    openaiBaseUrl: '',
     keys: {
       anthropic: '',
       openai: '',
@@ -39,6 +42,16 @@ export const state = {
       openai: 'gpt-4o',
       gemini: 'gemini-2.0-flash',
     },
+    // Inference settings applied to every dispatch (see providers.rs DispatchOptions)
+    settings: {
+      numCtx: 8192,        // local model context window
+      keepAlive: '30m',    // '5m' | '30m' | '2h' | 'forever'
+      temperature: 0.7,
+      numPredict: 2048,    // max generated tokens per turn
+      maxIterations: 30,   // agent loop step cap
+    },
+    // Cache of per-model facts fetched from /api/show — never fabricated.
+    modelInfo: {},
     isGenerating: false,
     activeSubprocess: null,
   },
@@ -114,6 +127,24 @@ export function loadPersistedState() {
     const savedEndpoint = localStorage.getItem('orbital_endpoint');
     if (savedEndpoint) state.ai.endpoint = savedEndpoint;
 
+    const savedOpenaiBaseUrl = localStorage.getItem('orbital_openai_base_url');
+    if (savedOpenaiBaseUrl !== null) state.ai.openaiBaseUrl = savedOpenaiBaseUrl;
+
+    const savedAiSettings = localStorage.getItem('orbital_ai_settings');
+    if (savedAiSettings) {
+      try {
+        const parsed = JSON.parse(savedAiSettings);
+        state.ai.settings = { ...state.ai.settings, ...parsed };
+      } catch (e) { /* keep defaults */ }
+    }
+
+    const savedModelInfo = localStorage.getItem('orbital_model_info');
+    if (savedModelInfo) {
+      try {
+        state.ai.modelInfo = JSON.parse(savedModelInfo) || {};
+      } catch (e) { state.ai.modelInfo = {}; }
+    }
+
     const savedDefaultModels = localStorage.getItem('orbital_default_models');
     if (savedDefaultModels) {
       const parsed = JSON.parse(savedDefaultModels);
@@ -149,6 +180,9 @@ export function persistState() {
     localStorage.setItem('orbital_provider', state.ai.provider);
     localStorage.setItem('orbital_model', state.ai.model);
     localStorage.setItem('orbital_endpoint', state.ai.endpoint);
+    localStorage.setItem('orbital_openai_base_url', state.ai.openaiBaseUrl || '');
+    localStorage.setItem('orbital_ai_settings', JSON.stringify(state.ai.settings));
+    localStorage.setItem('orbital_model_info', JSON.stringify(state.ai.modelInfo || {}));
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');

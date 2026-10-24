@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="./src/styles/themes.css" />
   <link rel="stylesheet" href="./src/styles/layout.css" />
   <link rel="stylesheet" href="./src/styles/components.css" />
+  <link rel="stylesheet" href="./src/styles/polish.css" />
   <!-- Google Fonts: Inter and JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.2 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.3 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -175,6 +176,11 @@
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
               <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
               <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+          </div>
+          <div class="rail-btn" id="rail-skills" data-tooltip="Skills" title="Agent Skills — reusable instruction packs the agent reads on demand">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
             </svg>
           </div>
 
@@ -311,6 +317,23 @@
             <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">
               No durable memories yet.<br>Click '+' to record an architectural rule or setup instruction.
             </div>
+          </div>
+        </div>
+
+        <!-- Skills View -->
+        <div id="view-skills" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
+          <div class="sidebar-header">
+            <span>Agent Skills</span>
+            <div class="sidebar-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-import-skill" style="padding: 1px 8px; font-size: 10px;">📁 Import…</button>
+            </div>
+          </div>
+          <div style="padding: 8px 10px; font-size: 10px; color: var(--text-muted); line-height: 1.5; border-bottom: 1px solid var(--border-subtle);">
+            Skills are reusable instruction packs (a folder with SKILL.md). Enabled skills appear in the
+            agent's context; it reads the full skill when a task matches.
+          </div>
+          <div class="sidebar-content" id="skills-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="pack-empty">Loading skills…</div>
           </div>
         </div>
 
@@ -686,6 +709,7 @@
           <span style="color: var(--accent-cyan); font-weight: bold; font-size: 11px;">⚡</span>
           <span id="status-token-count">0 tok today</span>
         </div>
+        <div class="status-item" id="sb-ctx-meter" title="Context window usage and generation speed">— ctx</div>
         <div class="status-item" id="status-mode">
           <span class="mode-dot" style="background-color: var(--accent-cyan);"></span>
           <span id="sb-mode-text">Dev Mode</span>
@@ -895,9 +919,16 @@
                 <label class="form-label">API Key</label>
                 <input type="password" class="input-text" id="cfg-openai-key" placeholder="sk-..." />
               </div>
-              <div class="form-group">
+              <div class="form-group" style="margin-bottom: 6px;">
                 <label class="form-label">Default Model</label>
                 <input type="text" class="input-text" id="cfg-openai-model" value="gpt-4o" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Custom Base URL (optional — LM Studio, llama.cpp, vLLM…)</label>
+                <input type="text" class="input-text" id="cfg-openai-baseurl" placeholder="http://localhost:1234/v1" />
+                <div style="font-size: 10px; color: var(--text-muted); margin-top: 3px;">
+                  Leave empty for the official OpenAI API. Compatible local servers use their /v1 endpoint.
+                </div>
               </div>
             </div>
 
@@ -930,6 +961,42 @@
               <div class="form-group">
                 <label class="form-label">Default Model</label>
                 <input type="text" class="input-text" id="cfg-ollama-model" value="llama3" />
+              </div>
+              <!-- Ollama model manager is injected here at runtime -->
+              <div id="ollama-manager-container"></div>
+            </div>
+
+            <!-- Local Inference Engine settings -->
+            <div style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <strong>Local Inference Engine</strong>
+                <span style="font-size: 10px; color: var(--text-muted);">applies to Ollama dispatches</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div class="form-group">
+                  <label class="form-label">Context Window (num_ctx)</label>
+                  <input type="number" class="input-text" id="cfg-num-ctx" value="8192" min="1024" max="131072" step="1024" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Keep Model Loaded</label>
+                  <select class="select-input" id="cfg-keep-alive">
+                    <option value="5m">5 minutes</option>
+                    <option value="30m" selected>30 minutes</option>
+                    <option value="2h">2 hours</option>
+                    <option value="forever">Until app closes</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Temperature</label>
+                  <input type="number" class="input-text" id="cfg-temperature" value="0.7" min="0" max="2" step="0.05" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Max Response Tokens</label>
+                  <input type="number" class="input-text" id="cfg-num-predict" value="2048" min="128" max="32768" step="128" />
+                </div>
+              </div>
+              <div id="numctx-hint" style="font-size: 10px; color: var(--text-muted);">
+                The effective context is automatically capped by each model's real limit (read from Ollama) — never above what the model supports.
               </div>
             </div>
           </div>
@@ -1250,7 +1317,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.2.2 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.2.3 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 
