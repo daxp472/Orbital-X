@@ -13,8 +13,40 @@ import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 import { showToast } from './services/notifications.js';
+import { restorePlanState } from './services/orchestrator.js';
 
 window.showToast = showToast;
+
+// Re-renders an interrupted plan for the current workspace so progress
+// survives app restarts (plans are persisted per workspace root).
+function tryRestorePlan() {
+  try {
+    const restored = restorePlanState();
+    if (!restored || !restored.tasks || restored.tasks.length === 0) return;
+    if (['completed', 'cancelled'].includes(restored.status)) return;
+    import('./components/agent.js').then((m) => {
+      if (typeof m.renderPlanCard === 'function') {
+        m.renderPlanCard(restored);
+        appendRestoredPlanNotice(restored);
+      }
+    });
+  } catch (e) {
+    console.warn('Plan restore failed:', e);
+  }
+}
+
+function appendRestoredPlanNotice(plan) {
+  const { completedCount, totalCount } = (function calc() {
+    const done = (plan.tasks || []).filter(t => t.status === 'completed' || t.status === 'skipped').length;
+    return { completedCount: done, totalCount: (plan.tasks || []).length };
+  })();
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+  const notice = document.createElement('div');
+  notice.style.cssText = 'font-size: 11px; color: var(--text-muted); padding: 4px 2px; border-left: 2px solid var(--accent-cyan); margin: 6px 0;';
+  notice.textContent = `↩️ Restored in-progress plan "${plan.title}" (${completedCount}/${totalCount} tasks done). Use the plan card above to resume execution.`;
+  timeline.appendChild(notice);
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Orbital X Desktop IDE initializing...");
@@ -99,6 +131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (meta && meta.root_path) {
       await loadWorkspace(meta.root_path);
       refreshMemories();
+      tryRestorePlan();
     }
   } catch (e) {
     console.log("No initial workspace loaded:", e);
@@ -140,6 +173,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 5. Reload memory and source control
         refreshMemories();
         refreshGitStatus();
+        tryRestorePlan();
       }
     } catch (err) {
       console.error("Workspace transition error:", err);

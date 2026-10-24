@@ -4,6 +4,7 @@ mod providers;
 mod terminal;
 mod tools;
 mod usage;
+mod websearch;
 mod workspace;
 
 use memory::MemoryService;
@@ -818,6 +819,22 @@ async fn execute_tool(
             let root = ws.get_root().ok_or("No workspace open")?;
             let mems = MemoryService::search_memories(&root, query);
             Ok(serde_json::json!(mems))
+        }
+        "web_search" => {
+            let query = arguments
+                .get("query")
+                .and_then(|q| q.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"web_search\",\"message\":\"web_search requires a 'query' string.\"}")?;
+            let max_res = arguments.get("max_results").and_then(|m| m.as_u64()).unwrap_or(5) as usize;
+            websearch::web_search(query, max_res).await
+        }
+        "fetch_page" => {
+            let url = arguments
+                .get("url")
+                .and_then(|u| u.as_str())
+                .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"fetch_page\",\"message\":\"fetch_page requires a 'url' string (public http/https).\"}")?;
+            let max_chars = arguments.get("max_chars").and_then(|m| m.as_u64()).unwrap_or(0) as usize;
+            websearch::fetch_page(url, max_chars).await
         }
         _ => Err(format!("Unrecognized tool: {}", name)),
     }

@@ -591,6 +591,17 @@ export function openSettings() {
   const s = state.ai.settings || {};
   const numCtxInput = document.getElementById('cfg-num-ctx');
   if (numCtxInput) numCtxInput.value = s.numCtx || 8192;
+  // Model-aware hint: show the cached real limit for the default local model
+  const numCtxHint = document.getElementById('numctx-hint');
+  if (numCtxHint) {
+    const defModel = state.ai.defaultModels.ollama;
+    const info = (state.ai.modelInfo || {})[defModel];
+    if (info && Number.isFinite(info.contextLength) && info.contextLength > 0) {
+      numCtxHint.textContent = `Model "${defModel}" reports a real context limit of ${Number(info.contextLength).toLocaleString()} tokens — requests are capped to min(setting, model limit). Larger context uses more memory and can be slower per token; only raise it for tasks that need it.`;
+    } else {
+      numCtxHint.textContent = 'The effective context is automatically capped by each model\'s real limit once known (open a model\'s Info above, or select it in the model picker, to read it from Ollama).';
+    }
+  }
   const keepAliveSel = document.getElementById('cfg-keep-alive');
   if (keepAliveSel) keepAliveSel.value = s.keepAlive || '30m';
   const tempInput = document.getElementById('cfg-temperature');
