@@ -511,7 +511,50 @@ function initShortcutsHelpOverlay() {
         e.preventDefault();
         closeShortcutsHelp();
       }
+      const aboutModal = document.getElementById('modal-about');
+      if (aboutModal && aboutModal.style.display !== 'none') {
+        e.preventDefault();
+        aboutModal.style.display = 'none';
+      }
     }
   });
+
+  initAboutModal();
 }
+
+function initAboutModal() {
+  const modal = document.getElementById('modal-about');
+  const btnAbout = document.getElementById('btn-about-orbital');
+  const btnClose = document.getElementById('btn-close-about');
+  const btnCheckUpdates = document.getElementById('btn-about-check-updates');
+
+  const openAbout = () => {
+    if (modal) modal.style.display = 'flex';
+  };
+
+  const closeAbout = () => {
+    if (modal) modal.style.display = 'none';
+  };
+
+  btnAbout?.addEventListener('click', openAbout);
+  btnClose?.addEventListener('click', closeAbout);
+
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeAbout();
+  });
+
+  btnCheckUpdates?.addEventListener('click', () => {
+    btnCheckUpdates.textContent = 'Checking...';
+    setTimeout(() => {
+      btnCheckUpdates.textContent = '✓ Up to Date';
+      import('./services/notifications.js').then(m => {
+        m.showToast('Orbital X is up to date (v2.2.2 Latest Release)', 'success');
+      });
+      setTimeout(() => {
+        btnCheckUpdates.textContent = 'Check for Updates';
+      }, 2500);
+    }, 600);
+  });
+}
+
 

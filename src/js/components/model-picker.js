@@ -167,8 +167,35 @@ async function loadProviderModels(provider) {
 
   if (provider === 'ollama') {
     container.innerHTML = `
+      <div style="background: rgba(57, 197, 187, 0.1); border: 1px solid rgba(57, 197, 187, 0.25); border-radius: 6px; padding: 6px 8px; margin-bottom: 8px;">
+        <div style="font-size: 10px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 4px;">
+          <span>⚡</span> HARDWARE BASELINE: 16 GB RAM REQUIRED
+        </div>
+        <div style="font-size: 10px; color: var(--text-secondary); margin-top: 2px;">
+          7B models require 6GB VRAM; 14B models require 12GB VRAM. Ensure adequate memory to prevent CPU bottleneck.
+        </div>
+      </div>
+
+      <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
+        <span>Curated Coding Models:</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px;">
+        <div class="curated-model-row" data-model="qwen2.5-coder:7b" style="padding: 5px 8px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div><strong>qwen2.5-coder:7b</strong> <span style="font-size: 9px; color: var(--accent-cyan); margin-left: 4px;">★ Top Pick</span></div>
+          <span style="font-size: 9px; color: var(--text-muted);">6GB VRAM • 16GB RAM</span>
+        </div>
+        <div class="curated-model-row" data-model="qwen2.5-coder:14b" style="padding: 5px 8px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div><strong>qwen2.5-coder:14b</strong></div>
+          <span style="font-size: 9px; color: var(--text-muted);">12GB VRAM • 32GB RAM</span>
+        </div>
+        <div class="curated-model-row" data-model="deepseek-coder:6.7b" style="padding: 5px 8px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+          <div><strong>deepseek-coder:6.7b</strong></div>
+          <span style="font-size: 9px; color: var(--text-muted);">6GB VRAM • 16GB RAM</span>
+        </div>
+      </div>
+
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
-        Local Ollama Models (${state.ai.endpoint})
+        Installed in Local Ollama (${state.ai.endpoint}):
       </div>
       <div id="ollama-detected-models" style="display: flex; flex-direction: column; gap: 4px;">
         <div style="font-size: 11px; color: var(--text-muted); padding: 8px;"><span class="spinner"></span> Detecting installed models...</div>
@@ -176,11 +203,18 @@ async function loadProviderModels(provider) {
       <div style="margin-top: 8px; border-top: 1px solid var(--border-subtle); padding-top: 8px;">
         <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">Custom / Specific Model:</div>
         <div style="display: flex; gap: 4px;">
-          <input type="text" class="input-text" id="custom-ollama-input" placeholder="e.g. llama3:latest" value="${state.ai.model || 'llama3:latest'}" style="flex: 1; font-size: 11px; padding: 4px 8px;" />
+          <input type="text" class="input-text" id="custom-ollama-input" placeholder="e.g. qwen2.5-coder:7b" value="${state.ai.model || 'qwen2.5-coder:7b'}" style="flex: 1; font-size: 11px; padding: 4px 8px;" />
           <button class="btn btn-primary btn-sm" id="btn-apply-custom-ollama">Use</button>
         </div>
       </div>
     `;
+
+    // Wire curated model clicks
+    container.querySelectorAll('.curated-model-row').forEach(row => {
+      row.addEventListener('click', () => {
+        selectModel('ollama', row.dataset.model);
+      });
+    });
 
     const detectedContainer = container.querySelector('#ollama-detected-models');
 
@@ -192,7 +226,7 @@ async function loadProviderModels(provider) {
       if (!models || models.length === 0) {
         detectedContainer.innerHTML = `
           <div style="padding: 6px; font-size: 11px; color: var(--accent-orange); background: var(--bg-surface); border-radius: 4px;">
-            No models detected in Ollama. Ensure Ollama is running or enter model name below.
+            No custom models detected in Ollama. Click any curated model above or enter name below.
           </div>
         `;
       } else {
@@ -223,7 +257,7 @@ async function loadProviderModels(provider) {
     } catch (e) {
       detectedContainer.innerHTML = `
         <div style="padding: 6px; font-size: 11px; color: var(--accent-orange); background: var(--bg-surface); border-radius: 4px;">
-          Ollama not reached at ${state.ai.endpoint}.<br>Enter your local model name below.
+          Ollama not reached at ${state.ai.endpoint}.<br>Select a curated model or enter your model name.
         </div>
       `;
     }
