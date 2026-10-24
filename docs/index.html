@@ -5,11 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Orbital X — High-Performance, Memory-Conscious AI Desktop Coding IDE</title>
   
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+
   <!-- SEO & Social Meta -->
   <meta name="description" content="Orbital X is a native AI desktop coding IDE built with Tauri 2 and Rust. Features 100% offline local model support with Ollama, ~95MB idle memory, and kernel-enforced tri-mode safety policies." />
   <meta name="keywords" content="Orbital X, AI IDE, Tauri 2, Rust, Ollama, Local LLM, Monaco Editor, Cursor alternative, Antigravity IDE, Developer Tools" />
   <meta property="og:title" content="Orbital X — The Open-Source, Memory-Conscious AI Desktop IDE" />
   <meta property="og:description" content="Native speed, zero cloud telemetry, 100% offline Ollama models, and ~95MB idle memory. Built for developers." />
+  <meta property="og:image" content="https://daxp472.github.io/Orbital-X/logo.png" />
   <meta property="og:url" content="https://daxp472.github.io/Orbital-X/" />
   <meta property="og:type" content="website" />
 
@@ -26,18 +31,7 @@
   <nav class="navbar">
     <div class="nav-container">
       <a href="#" class="nav-logo">
-        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="16" cy="16" r="14" stroke="url(#logo_grad)" stroke-width="2.5" stroke-dasharray="70 20" />
-          <ellipse cx="16" cy="16" rx="14" ry="7" transform="rotate(-30 16 16)" stroke="#39c5bb" stroke-width="1.8" opacity="0.85" />
-          <path d="M11 11L21 21M21 11L11 21" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round" />
-          <circle cx="16" cy="16" r="3" fill="#bc8cff" />
-          <defs>
-            <linearGradient id="logo_grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#39c5bb" />
-              <stop offset="1" stop-color="#bc8cff" />
-            </linearGradient>
-          </defs>
-        </svg>
+        <img src="logo.png" alt="Orbital X Logo" class="brand-logo-img" />
         <span>Orbital X</span>
       </a>
 
@@ -45,7 +39,8 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#benchmarks">Benchmarks</a></li>
         <li><a href="#modes">Safety Modes</a></li>
-        <li><a href="#ollama">Local AI</a></li>
+        <li><a href="#models">Local Models &amp; Hardware</a></li>
+        <li><a href="#ollama">Offline Setup</a></li>
         <li><a href="#download">Download</a></li>
       </ul>
 
@@ -64,6 +59,13 @@
   <!-- Hero Section -->
   <header class="hero">
     <div class="container">
+      
+      <!-- New Glowing Brand Emblem -->
+      <div class="hero-logo-emblem">
+        <div class="emblem-glow"></div>
+        <img src="logo.png" alt="Orbital X Logo" class="hero-emblem-img" />
+      </div>
+
       <div class="pill-badge">
         <span class="pill-dot"></span>
         v2.2.2 Latest Release • Multi-Platform Installers for Windows, macOS &amp; Linux
@@ -139,7 +141,7 @@
             <div class="mockup-dot green"></div>
           </div>
           <div class="mockup-title">Orbital X — src/main.rs [Dev Mode]</div>
-          <div style="font-size: 0.75rem; color: #39c5bb; font-family: var(--font-mono);">● Ollama (llama3)</div>
+          <div style="font-size: 0.75rem; color: #39c5bb; font-family: var(--font-mono);">● Ollama (qwen2.5-coder:7b)</div>
         </div>
 
         <div class="mockup-body">
@@ -158,126 +160,113 @@
           <!-- Mockup Center Editor -->
           <div class="mockup-editor">
             <div style="color: #64748b;">// Orbital X — Kernel Policy Engine</div>
-            <div><span style="color: #bc8cff;">pub struct</span> <span style="color: #58a6ff;">PolicyDecision</span> {</div>
-            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> allows: <span style="color: #39c5bb;">bool</span>,</div>
-            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> requires_approval: <span style="color: #39c5bb;">bool</span>,</div>
-            <div style="margin-left: 16px;"><span style="color: #bc8cff;">pub</span> risk: <span style="color: #58a6ff;">RiskLevel</span>,</div>
+            <div><span style="color: #bc8cff;">pub struct</span> <span style="color: #39c5bb;">SecurityPolicy</span> {</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;mode: <span style="color: #2997ff;">OperatingMode</span>,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;workspace_boundary: <span style="color: #2997ff;">PathBuf</span>,</div>
             <div>}</div>
-            <br>
-            <div style="color: #64748b;">// Evaluates tool invocation strictly inside Rust boundary</div>
-            <div><span style="color: #bc8cff;">pub fn</span> <span style="color: #39c5bb;">evaluate_tool_policy</span>(tool: &amp;str, mode: &amp;str) -&gt; <span style="color: #58a6ff;">PolicyDecision</span> {</div>
-            <div style="margin-left: 16px;"><span style="color: #bc8cff;">match</span> (tool, mode) {</div>
-            <div style="margin-left: 32px;">(<span style="color: #39c5bb;">"write_file"</span>, <span style="color: #39c5bb;">"dev"</span>) =&gt; PolicyDecision::require_diff_approval(),</div>
-            <div style="margin-left: 32px;">(<span style="color: #39c5bb;">"write_file"</span>, <span style="color: #39c5bb;">"agent_pro"</span>) =&gt; PolicyDecision::allow(),</div>
-            <div style="margin-left: 32px;">_ =&gt; PolicyDecision::enforce_strict_approval(),</div>
-            <div style="margin-left: 16px;">}</div>
+            <br />
+            <div style="color: #64748b;">// Evaluates per-tool invocation safety</div>
+            <div><span style="color: #bc8cff;">impl</span> <span style="color: #39c5bb;">SecurityPolicy</span> {</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #bc8cff;">pub fn</span> <span style="color: #30d158;">evaluate</span>(&amp;self, action: &amp;Action) -&gt; <span style="color: #2997ff;">Decision</span> {</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color: #ff9f0a;">match</span> self.mode {</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OperatingMode::Dev =&gt; Decision::RequireApprovalWithDiff,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OperatingMode::AgentPro =&gt; Decision::AllowSafeAutonomous,</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;}</div>
             <div>}</div>
           </div>
 
-          <!-- Mockup Right Agent Panel -->
-          <div class="mockup-agent">
-            <div>
-              <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 12px;">
-                <span>ORBITAL AGENT</span>
-                <span style="color: #39c5bb;">DEV MODE</span>
-              </div>
-              <div class="mockup-chat-msg">
-                <strong>You:</strong> Refactor policy engine to add undo journal support.
-              </div>
-              <div class="mockup-chat-msg agent">
-                <span style="color: #bc8cff; font-weight: bold;">Orbital Agent:</span><br>
-                Inspected <code>policy.rs</code> and verified workspace bounds. I have prepared the diff for your review.
-              </div>
+          <!-- Mockup Right AI Assistant -->
+          <div class="mockup-chat">
+            <div style="font-size: 0.8rem; font-weight: 700; color: #ffffff; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+              <span>🤖 Orbital Assistant</span>
+              <span style="font-size: 0.7rem; background: rgba(57, 197, 187, 0.2); color: #39c5bb; padding: 2px 6px; border-radius: 4px;">DEV MODE</span>
             </div>
-            <div style="background: var(--bg-surface); padding: 8px 12px; border-radius: 6px; font-size: 0.75rem; border: 1px solid var(--border-subtle); color: var(--text-muted);">
-              Ask Orbital X to edit, test, or explain...
+
+            <div class="mockup-bubble user">
+              Audit the workspace confinement and add a delete_directory tool.
+            </div>
+
+            <div class="mockup-bubble ai">
+              Examined workspace boundaries. I will implement <code>delete_directory</code> with path canonicalization, previewing 4 files (~12 KB).
+              <div style="margin-top: 8px; padding: 8px; background: rgba(18, 22, 34, 0.9); border: 1px solid rgba(255, 159, 10, 0.4); border-radius: 6px;">
+                <div style="font-size: 0.72rem; color: #ff9f0a; font-weight: 600;">⚠️ APPROVAL REQUIRED</div>
+                <div style="font-size: 0.75rem; color: #ffffff; margin-top: 2px;">Target: <code>src/temp_cache/</code></div>
+                <div style="display: flex; gap: 6px; margin-top: 6px;">
+                  <button style="background: #39c5bb; color: #000; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Approve</button>
+                  <button style="background: #202b3f; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem;">Reject</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+
     </div>
   </header>
 
-  <!-- Technical Highlights -->
+  <!-- Core Features Grid -->
   <section class="section" id="features">
     <div class="container">
       <div class="section-header">
-        <h2>Built from First Principles</h2>
-        <p>No bloated browser wrappers. No cloud middlemen. Pure native speed and complete developer autonomy.</p>
+        <h2>Designed for Real Developers</h2>
+        <p>A native desktop IDE that respects your machine resources and protects your intellectual property.</p>
       </div>
 
-      <div class="feature-grid">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Tauri 2 + Rust Core</h3>
-          <p>
-            Unlike Electron-based editors that bundle duplicate Chromium instances, Orbital X runs on an ultra-lean 
-            Rust backend with native Microsoft Edge WebView2. Idle RAM stays below 100 MB.
-          </p>
-        </div>
-
-        <div class="feature-card">
-          <div class="feature-icon">🦙</div>
-          <h3>100% Local AI with Ollama</h3>
-          <p>
-            Plug directly into your local machine's Ollama instance (<code>http://localhost:11434</code>). 
-            Download and pull models directly inside the IDE with the built-in Ollama manager. Zero API keys, zero cloud costs.
-          </p>
-        </div>
-
+      <div class="features-grid">
         <div class="feature-card">
           <div class="feature-icon">🛡️</div>
-          <h3>Tri-Mode Safety Policy</h3>
-          <p>
-            Switch effortlessly between <strong>Agent Pro</strong> (high autonomy), <strong>Dev Mode</strong> (approval cards with diff previews), 
-            and <strong>User Mode</strong> (strict per-action confirmation). Destructive commands are blocked at the Rust kernel.
-          </p>
+          <h3>100% Offline Ollama Intelligence</h3>
+          <p>Connect directly to your local Ollama port (<code>11434</code>). Run state-of-the-art models like Qwen 2.5 Coder, DeepSeek Coder, and Llama 3 with zero data leaving your machine.</p>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">💾</div>
-          <h3>Durable Project Memory</h3>
-          <p>
-            Architectural decisions, build instructions, and team rules are automatically extracted and stored locally in 
-            <code>.orbital/memory.json</code>. Your AI remembers your project across restarts.
-          </p>
+          <div class="feature-icon">⚡</div>
+          <h3>Tauri 2 + Rust Core Performance</h3>
+          <p>Ditch Chromium and multi-gigabyte Electron bloat. Orbital X runs on an ultra-optimized Rust native backend, launching in under ~280ms and idling at ~95MB RAM.</p>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">📝</div>
-          <h3>Monaco Code Editor Upgraded</h3>
-          <p>
-            Battle-tested Monaco experience with active file path breadcrumbs, Go to Line (<code>Ctrl+G</code>), Go to Definition (<code>F12</code>), 
-            multi-cursor selection (<code>Ctrl+Shift+L</code>), zoom controls (<code>Ctrl+=</code>/<code>-</code>), and side-by-side diff review.
-          </p>
+          <div class="feature-icon">🧠</div>
+          <h3>Durable Project Architecture Memory</h3>
+          <p>Orbital X automatically parses your codebase conventions, design tokens, and recurring libraries into persistent memory (<code>.orbital/memory.json</code>) across sessions.</p>
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>Terminal History &amp; Git Panel</h3>
-          <p>
-            Integrated terminal with 50-command persistent history navigation (<code>↑</code>/<code>↓</code>), built-in shell commands, 
-            and a complete Source Control panel with live diff review, staging, and one-click Git commits.
-          </p>
+          <div class="feature-icon">🎛️</div>
+          <h3>Tri-Mode Security &amp; Confinement</h3>
+          <p>Choose between <strong>Dev Mode</strong> (interactive diff approval), <strong>Agent Pro Mode</strong> (autonomous safe execution), and <strong>User Mode</strong> (strict per-action confirmation).</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💻</div>
+          <h3>Integrated VS Code-Grade Terminal</h3>
+          <p>Multi-tab terminal subsystem with command history navigation (ArrowUp/Down), built-ins, and hotkey toggling (<code>Ctrl+`</code>) directly inside the bottom panel.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⏪</div>
+          <h3>Interactive Rollback &amp; Diff Previews</h3>
+          <p>Inspect every file mutation before it happens via Monaco Side-by-Side Diff, with full single-click rollback for any AI edit.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Real Benchmarks Section -->
+  <!-- Benchmarks Section -->
   <section class="section" id="benchmarks" style="background: rgba(13, 18, 28, 0.4);">
     <div class="container">
       <div class="section-header">
-        <h2>Performance Benchmarks</h2>
-        <p>Real-world measurements taken on a clean Windows 11 system with 1 workspace open.</p>
+        <h2>Benchmarked Against Legacy IDEs</h2>
+        <p>Measurable native performance metrics tested on standard developer hardware.</p>
       </div>
 
-      <div class="table-container">
-        <table class="bench-table">
+      <div class="benchmark-table-wrapper">
+        <table class="benchmark-table">
           <thead>
             <tr>
-              <th>Metric / Resource</th>
-              <th>Orbital X (v2.0.1)</th>
+              <th>Metric</th>
+              <th class="highlight">Orbital X (v2.2.2)</th>
               <th>Cursor (Electron)</th>
               <th>VS Code + Copilot</th>
             </tr>
@@ -286,17 +275,17 @@
             <tr>
               <td><strong>Idle RAM Footprint</strong></td>
               <td class="bench-highlight">~95 MB</td>
-              <td class="bench-bad">1,650 MB</td>
-              <td class="bench-bad">1,250 MB</td>
+              <td class="bench-bad">~1,850 MB</td>
+              <td class="bench-bad">~1,200 MB</td>
             </tr>
             <tr>
               <td><strong>Cold Launch Latency</strong></td>
               <td class="bench-highlight">~280 ms</td>
-              <td class="bench-bad">2,400 ms</td>
-              <td class="bench-bad">1,900 ms</td>
+              <td class="bench-bad">~3,400 ms</td>
+              <td class="bench-bad">~2,900 ms</td>
             </tr>
             <tr>
-              <td><strong>Render Frame Rate</strong></td>
+              <td><strong>Monaco Editor Smoothness</strong></td>
               <td class="bench-highlight">Solid 120+ FPS</td>
               <td class="bench-bad">60 - 90 FPS</td>
               <td class="bench-bad">60 FPS</td>
@@ -315,7 +304,7 @@
             </tr>
             <tr>
               <td><strong>Installer Bundle Size</strong></td>
-              <td class="bench-highlight">~5.3 MB (NSIS)</td>
+              <td class="bench-highlight">~5.8 MB (NSIS)</td>
               <td class="bench-bad">120 MB+</td>
               <td class="bench-bad">95 MB+</td>
             </tr>
@@ -374,35 +363,505 @@
     </div>
   </section>
 
-  <!-- Local AI with Ollama Guide -->
+  <!-- RECOMMENDED LOCAL MODELS & HARDWARE ADVISOR SECTION -->
+  <section class="section models-section" id="models">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">OFFLINE LOCAL LLM ECOSYSTEM</div>
+        <h2>Recommended Models &amp; Hardware Advisor</h2>
+        <p>Pair Orbital X with the right local AI model for your hardware. Zero token bills, zero cloud lock-in, zero latency lag.</p>
+      </div>
+
+      <!-- Crucial Hardware Warning & Best Practice Guide Banner -->
+      <div class="hardware-warning-banner">
+        <div class="hw-banner-icon">⚠️</div>
+        <div class="hw-banner-body">
+          <div class="hw-banner-title">
+            <h4>Critical Hardware Baseline: 16 GB Minimum System RAM Required</h4>
+            <span class="hw-spec-tag">System RAM ≥ 16 GB</span>
+          </div>
+          <p>
+            Local coding models execute directly on your PC hardware. For smooth editor performance, multi-file code indexing, and IDE multitasking, <strong>a minimum of 16 GB of System RAM is required</strong> (32 GB recommended for autonomous Agent Pro).
+          </p>
+          <div class="hw-rules-grid">
+            <div class="hw-rule-item">
+              <div class="hw-rule-header">
+                <span class="hw-badge-dot dot-green"></span>
+                <strong>Full GPU VRAM (Ideal)</strong>
+              </div>
+              <p>When the quantized model weights fit entirely inside your GPU VRAM (e.g. RTX 3060/4070 or Apple Silicon Unified Memory), you get full GPU compute reaching <strong>60 to 120+ tokens/sec</strong> with zero editor stutter.</p>
+            </div>
+
+            <div class="hw-rule-item">
+              <div class="hw-rule-header">
+                <span class="hw-badge-dot dot-yellow"></span>
+                <strong>CPU &amp; RAM Offload (Hybrid)</strong>
+              </div>
+              <p>If a model exceeds GPU VRAM, Ollama offloads leftover layers to System RAM and computes them on the CPU. It remains functional at <strong>15–30 tok/s</strong>, but heavily taxes system memory.</p>
+            </div>
+
+            <div class="hw-rule-item">
+              <div class="hw-rule-header">
+                <span class="hw-badge-dot dot-red"></span>
+                <strong>Out-of-Memory Freeze Guard</strong>
+              </div>
+              <p>Attempting to run a 14B or 32B model on a computer with only 8 GB RAM will cause severe disk paging and OS lockups. <strong>Always match model size to your hardware using the selector below.</strong></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interactive Hardware Fit Checker -->
+      <div class="hw-selector-card">
+        <div class="hw-selector-header">
+          <div>
+            <h3>Interactive Hardware Fit Checker</h3>
+            <p>Select your machine specs to instantly check compatibility and token speed for each recommended model:</p>
+          </div>
+          <div class="hw-status-indicator" id="hw-status-summary">
+            <span class="status-dot"></span>
+            <span id="hw-status-text">Hardware: 8 GB VRAM • 16 GB RAM (Balanced Developer Rig)</span>
+          </div>
+        </div>
+
+        <div class="hw-selectors-row">
+          <div class="selector-col">
+            <span class="selector-label">Your Dedicated GPU VRAM / Apple Unified Memory:</span>
+            <div class="pill-group" id="vram-pills">
+              <button class="pill-choice" data-vram="4">4 GB</button>
+              <button class="pill-choice" data-vram="6">6 GB</button>
+              <button class="pill-choice active" data-vram="8">8 GB (Default)</button>
+              <button class="pill-choice" data-vram="12">12 GB</button>
+              <button class="pill-choice" data-vram="16">16 GB</button>
+              <button class="pill-choice" data-vram="24">24 GB+</button>
+            </div>
+          </div>
+
+          <div class="selector-col">
+            <span class="selector-label">Your Total Installed System RAM:</span>
+            <div class="pill-group" id="ram-pills">
+              <button class="pill-choice" data-ram="8">8 GB (High Risk)</button>
+              <button class="pill-choice active" data-ram="16">16 GB (Recommended Min)</button>
+              <button class="pill-choice" data-ram="32">32 GB (Optimal)</button>
+              <button class="pill-choice" data-ram="64">64 GB+ (Frontier)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Category Tabs -->
+      <div class="model-tier-tabs">
+        <button class="tier-tab-btn active" data-tier="all">All Recommended Models</button>
+        <button class="tier-tab-btn" data-tier="everyday">⚡ Tier 1: Fast Everyday Coding (7B)</button>
+        <button class="tier-tab-btn" data-tier="agent">🤖 Tier 2: Autonomous Agent Pro (14B–22B)</button>
+        <button class="tier-tab-btn" data-tier="frontier">🧠 Tier 3: Enterprise &amp; Deep Reasoning (32B+)</button>
+      </div>
+
+      <!-- Curated Model Cards Grid -->
+      <div class="model-cards-grid" id="model-grid">
+
+        <!-- Model 1: Qwen 2.5 Coder 7B -->
+        <div class="model-card" data-tier="everyday" data-vram-req="4.7" data-ram-req="16">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge everyday">TIER 1 • EVERYDAY SPEED</span>
+              <h4 class="model-name">qwen2.5-coder:7b</h4>
+            </div>
+            <span class="fit-badge fit-optimal" data-model="qwen-7b">Optimal</span>
+          </div>
+          <p class="model-desc">
+            The reigning benchmark champion for 7B coding models. Ultra-responsive inline code completions, bug triage, and rapid single-file feature generation.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">7.6B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~4.7 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">85–110 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">TypeScript</span>
+            <span class="tag">Python</span>
+            <span class="tag">Rust</span>
+            <span class="tag">Fast Inline</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run qwen2.5-coder:7b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run qwen2.5-coder:7b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 2: DeepSeek Coder 6.7B -->
+        <div class="model-card" data-tier="everyday" data-vram-req="4.2" data-ram-req="16">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge everyday">TIER 1 • EVERYDAY SPEED</span>
+              <h4 class="model-name">deepseek-coder:6.7b</h4>
+            </div>
+            <span class="fit-badge fit-optimal" data-model="ds-6.7b">Optimal</span>
+          </div>
+          <p class="model-desc">
+            Exceptional accuracy on complex algorithms, unit test generation, and strict language syntax. Highly reliable for C++, Go, and backend scripting.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">6.7B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~4.2 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">95–125 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Algorithms</span>
+            <span class="tag">Go / C++</span>
+            <span class="tag">Unit Tests</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run deepseek-coder:6.7b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run deepseek-coder:6.7b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 3: Llama 3.2 3B -->
+        <div class="model-card" data-tier="everyday" data-vram-req="2.2" data-ram-req="16">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge everyday">TIER 1 • LIGHTWEIGHT</span>
+              <h4 class="model-name">llama3.2:3b</h4>
+            </div>
+            <span class="fit-badge fit-optimal" data-model="llama-3b">Optimal</span>
+          </div>
+          <p class="model-desc">
+            Ultra-lightweight edge model designed for low-power developer laptops or operating on battery. Instant zero-latency responses for quick functions.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">3.2B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~2.2 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">130+ t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Battery Friendly</span>
+            <span class="tag">Ultra-Fast</span>
+            <span class="tag">Quick Q&amp;A</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run llama3.2:3b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run llama3.2:3b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 4: Qwen 2.5 Coder 14B (Top Pick) -->
+        <div class="model-card featured" data-tier="agent" data-vram-req="9.0" data-ram-req="16">
+          <div class="featured-ribbon">⭐ BEST FOR AGENT PRO</div>
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge agent">TIER 2 • AUTONOMOUS AGENT</span>
+              <h4 class="model-name">qwen2.5-coder:14b</h4>
+            </div>
+            <span class="fit-badge fit-optimal" data-model="qwen-14b">Optimal</span>
+          </div>
+          <p class="model-desc">
+            <strong>The sweet spot for Orbital X Agent Pro.</strong> Exceptional multi-file task decomposition, self-correcting refactoring, and AST understanding without burning excessive VRAM.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">14.7B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~9.0 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">45–65 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Multi-File</span>
+            <span class="tag">Agent Pro</span>
+            <span class="tag">Tool Calling</span>
+            <span class="tag">Refactoring</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run qwen2.5-coder:14b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run qwen2.5-coder:14b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 5: Codestral 22B -->
+        <div class="model-card" data-tier="agent" data-vram-req="13.5" data-ram-req="32">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge agent">TIER 2 • LARGE CONTEXT</span>
+              <h4 class="model-name">codestral:22b</h4>
+            </div>
+            <span class="fit-badge fit-hybrid" data-model="codestral">Hybrid</span>
+          </div>
+          <p class="model-desc">
+            Mistral AI's flagship open-weights coding model. Features an expansive 32k context window, fluent in 80+ programming languages with deep repository tracing.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">22.2B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~13.5 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">30–45 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">32k Context</span>
+            <span class="tag">80+ Languages</span>
+            <span class="tag">Fill-in-Middle</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run codestral:22b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run codestral:22b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 6: DeepSeek R1 14B (Reasoning) -->
+        <div class="model-card" data-tier="agent" data-vram-req="9.2" data-ram-req="16">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge agent">TIER 2 • REASONING</span>
+              <h4 class="model-name">deepseek-r1:14b</h4>
+            </div>
+            <span class="fit-badge fit-optimal" data-model="ds-r1-14b">Optimal</span>
+          </div>
+          <p class="model-desc">
+            Distilled from DeepSeek-R1. Employs internal chain-of-thought verification before authoring code, making it phenomenal for debugging tricky edge cases.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">14.7B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~9.2 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">38–55 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Chain-of-Thought</span>
+            <span class="tag">Deep Debugging</span>
+            <span class="tag">Logic Puzzles</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run deepseek-r1:14b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run deepseek-r1:14b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 7: Qwen 2.5 Coder 32B -->
+        <div class="model-card" data-tier="frontier" data-vram-req="20.0" data-ram-req="32">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge frontier">TIER 3 • FRONTIER CODER</span>
+              <h4 class="model-name">qwen2.5-coder:32b</h4>
+            </div>
+            <span class="fit-badge fit-heavy" data-model="qwen-32b">Heavy</span>
+          </div>
+          <p class="model-desc">
+            Frontier-class coding capabilities completely offline. Rivals proprietary GPT-4o benchmarks on HumanEval and SWE-bench. Perfect for full project scaffolding.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">32.5B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~20.0 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">22–35 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Near GPT-4o</span>
+            <span class="tag">Full Scaffolding</span>
+            <span class="tag">Architecture</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run qwen2.5-coder:32b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run qwen2.5-coder:32b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 8: DeepSeek R1 32B -->
+        <div class="model-card" data-tier="frontier" data-vram-req="21.5" data-ram-req="32">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge frontier">TIER 3 • FRONTIER REASONING</span>
+              <h4 class="model-name">deepseek-r1:32b</h4>
+            </div>
+            <span class="fit-badge fit-heavy" data-model="ds-r1-32b">Heavy</span>
+          </div>
+          <p class="model-desc">
+            Heavyweight reasoning engine for complex mathematical modeling, concurrency race condition analysis, and compiler-level bug resolution.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">32.8B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~21.5 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">18–28 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Deep Logic</span>
+            <span class="tag">Concurrency</span>
+            <span class="tag">Hard Algorithms</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run deepseek-r1:32b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run deepseek-r1:32b">Copy</button>
+          </div>
+        </div>
+
+        <!-- Model 9: Llama 3.3 70B -->
+        <div class="model-card" data-tier="frontier" data-vram-req="42.0" data-ram-req="64">
+          <div class="model-card-header">
+            <div>
+              <span class="tier-badge frontier">TIER 3 • ENTERPRISE GIANT</span>
+              <h4 class="model-name">llama3.3:70b</h4>
+            </div>
+            <span class="fit-badge fit-heavy" data-model="llama-70b">Heavy</span>
+          </div>
+          <p class="model-desc">
+            Meta's premier 70B open model. Unmatched general reasoning and multi-turn pair programming for Mac Studio (64GB+) or dual-GPU workstation setups.
+          </p>
+          <div class="model-specs-grid">
+            <div class="spec-cell">
+              <span class="spec-label">Params</span>
+              <span class="spec-value">70.6B</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Quant</span>
+              <span class="spec-value">Q4_K_M</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">VRAM Req</span>
+              <span class="spec-value">~42.0 GB</span>
+            </div>
+            <div class="spec-cell">
+              <span class="spec-label">Speed</span>
+              <span class="spec-value speed">12–20 t/s</span>
+            </div>
+          </div>
+          <div class="model-tags">
+            <span class="tag">Enterprise</span>
+            <span class="tag">Dual GPU / Mac 64GB</span>
+            <span class="tag">Elite Reasoning</span>
+          </div>
+          <div class="model-install-box">
+            <code>ollama run llama3.3:70b</code>
+            <button class="terminal-copy-btn" data-copy="ollama run llama3.3:70b">Copy</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Local AI with Ollama Setup Guide -->
   <section class="section" id="ollama" style="background: rgba(13, 18, 28, 0.4);">
     <div class="container">
       <div class="section-header">
-        <h2>Run Any Local Model Offline</h2>
+        <div class="section-tag">QUICK INSTALLATION</div>
+        <h2>Start Coding Offline in 3 Easy Steps</h2>
         <p>No credit cards. No cloud queues. No corporate compliance leaks.</p>
       </div>
 
-      <div style="max-width: 800px; margin: 0 auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 36px;">
-        <ol style="margin-left: 20px; display: flex; flex-direction: column; gap: 20px; color: var(--text-secondary); font-size: 0.95rem;">
+      <div style="max-width: 840px; margin: 0 auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: 36px; box-shadow: 0 16px 40px rgba(0,0,0,0.4);">
+        <ol style="margin-left: 20px; display: flex; flex-direction: column; gap: 24px; color: var(--text-secondary); font-size: 0.95rem;">
           <li>
-            <strong style="color: #ffffff;">Launch Ollama on your PC:</strong>
-            <p style="margin-top: 6px;">Pull your favorite coding model via terminal:</p>
+            <strong style="color: #ffffff; font-size: 1.05rem;">1. Pull Your Desired Model via Ollama:</strong>
+            <p style="margin-top: 6px;">Open your system terminal and execute your chosen model command:</p>
             <div class="terminal-install-box" style="margin-top: 8px;">
               <span>ollama run qwen2.5-coder:7b</span>
               <button class="terminal-copy-btn" data-copy="ollama run qwen2.5-coder:7b">Copy</button>
             </div>
           </li>
           <li>
-            <strong style="color: #ffffff;">Open Orbital X Settings:</strong>
-            <p style="margin-top: 4px;">Press <code>Ctrl + ,</code> or click the gear icon in the left activity rail.</p>
+            <strong style="color: #ffffff; font-size: 1.05rem;">2. Launch Orbital X &amp; Open Settings:</strong>
+            <p style="margin-top: 4px;">Launch Orbital X and press <kbd style="background: #1c2438; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-subtle); color: #fff;">Ctrl + ,</kbd> or click the gear icon on the left sidebar.</p>
           </li>
           <li>
-            <strong style="color: #ffffff;">Select Ollama:</strong>
-            <p style="margin-top: 4px;">Orbital X automatically queries your local Ollama port (<code>11434</code>) and populates all installed models in the dropdown selector!</p>
-          </li>
-          <li>
-            <strong style="color: #ffffff;">Code with Total Privacy:</strong>
-            <p style="margin-top: 4px;">Your code never leaves your local hardware. Everything is computed right on your GPU/NPU.</p>
+            <strong style="color: #ffffff; font-size: 1.05rem;">3. Auto-Detect &amp; Connect:</strong>
+            <p style="margin-top: 4px;">Orbital X connects to your local Ollama port (<code>11434</code>) automatically. Select your pulled model from the dropdown, choose your safety mode (Dev or Agent Pro), and start coding with 100% data privacy!</p>
           </li>
         </ol>
       </div>
@@ -413,8 +872,9 @@
   <section class="section download-section" id="download">
     <div class="container">
       <div class="section-header">
+        <div class="section-tag">OFFICIAL RELEASE</div>
         <h2>Get Orbital X v2.2.2</h2>
-        <p>Available as native desktop packages and installers for Windows, macOS, and Linux.</p>
+        <p>Native multi-platform desktop installers and packages compiled for Windows, macOS, and Linux.</p>
       </div>
 
       <div class="download-cards">
@@ -427,10 +887,10 @@
           </div>
           <div>
             <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_x64-setup.exe" class="btn btn-primary" style="width: 100%;">
-              Download .exe Setup (5.4 MB)
+              Download .exe Setup (6.1 MB)
             </a>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
-              Direct NSIS Installer • SHA256: <code>314FB30...</code>
+              Direct NSIS Installer • Verified Release v2.2.2
             </div>
           </div>
         </div>
@@ -443,8 +903,8 @@
             <p>Apple Silicon (M1–M4) &amp; Intel<br>Native Disk Image Bundle</p>
           </div>
           <div>
-            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_x64.dmg" class="btn btn-secondary" style="width: 100%;">
-              Download .dmg
+            <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_aarch64.dmg" class="btn btn-secondary" style="width: 100%;">
+              Download .dmg (8.2 MB)
             </a>
             <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 10px;">
               Universal DMG • Drag &amp; Drop Install
@@ -461,10 +921,10 @@
           </div>
           <div>
             <div style="display: flex; gap: 8px;">
-              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/orbital-x_2.2.2_amd64.AppImage" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
+              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_amd64.AppImage" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
                 .AppImage
               </a>
-              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/orbital-x_2.2.2_amd64.deb" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
+              <a href="https://github.com/daxp472/Orbital-X/releases/download/v2.2.2/Orbital.X_2.2.2_amd64.deb" class="btn btn-secondary" style="flex: 1; font-size: 0.8rem; padding: 10px 8px; text-align: center;">
                 .deb Package
               </a>
             </div>
@@ -496,17 +956,24 @@
   <footer class="footer">
     <div class="container">
       <div class="footer-content">
-        <div class="footer-copy">
-          <strong>Orbital X</strong> — An Open-Source Community Project.<br>
-          Licensed under the <a href="https://github.com/daxp472/Orbital-X/blob/main/LICENSE" target="_blank" rel="noopener" style="color: var(--accent-cyan);">MIT License</a>.
+        <div class="footer-brand">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <img src="logo.png" alt="Orbital X Logo" class="brand-logo-img" style="width: 24px; height: 24px;" />
+            <span style="font-weight: 700; color: #fff;">Orbital X</span>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;">v2.2.2</span>
+          </div>
+          <div class="footer-copy">
+            An Open-Source Community Desktop IDE Project.<br>
+            Licensed under the <a href="https://github.com/daxp472/Orbital-X/blob/main/LICENSE" target="_blank" rel="noopener" style="color: var(--accent-cyan);">MIT License</a>.
+          </div>
         </div>
 
         <div class="footer-links">
           <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://github.com/daxp472/Orbital-X/releases" target="_blank" rel="noopener">Releases</a>
-          <a href="https://github.com/daxp472/Orbital-X/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+          <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.2.2" target="_blank" rel="noopener">Releases</a>
+          <a href="#models">Hardware Guide</a>
           <a href="https://github.com/daxp472/Orbital-X/blob/main/ARCHITECTURE.md" target="_blank" rel="noopener">Architecture</a>
-          <a href="https://github.com/daxp472/Orbital-X/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+          <a href="https://github.com/daxp472/Orbital-X/blob/main/SECURITY.md" target="_blank" rel="noopener">Security Policy</a>
         </div>
       </div>
     </div>
