@@ -392,7 +392,16 @@ export function openFileInTab(fileData) {
 
   if (editorInstance) {
     editorInstance.setModel(model);
+    editorInstance.layout();
     editorInstance.focus();
+  } else {
+    const container = document.getElementById('monaco-container');
+    if (container) {
+      editorInstance = initMonaco(container);
+      editorInstance.setModel(model);
+      editorInstance.layout();
+      editorInstance.focus();
+    }
   }
 
   // Hide empty state screen
@@ -466,8 +475,12 @@ export function switchToTab(tabId) {
   const model = editorModels.get(tab.path);
   if (model && editorInstance) {
     editorInstance.setModel(model);
+    editorInstance.layout();
     editorInstance.focus();
   }
+
+  const emptyState = document.getElementById('editor-empty-state');
+  if (emptyState) emptyState.style.display = 'none';
 
   const langElem = document.getElementById('status-language');
   if (langElem) langElem.textContent = tab.language.toUpperCase();
