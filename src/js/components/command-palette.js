@@ -79,6 +79,7 @@ function buildCommandRegistry() {
     // ----- Git -----
     { id: 'git.status', group: 'Git', icon: '⑂', title: 'Show Git Status', run: () => clickById('rail-source-control') },
     { id: 'git.commit', group: 'Git', icon: '✔', title: 'Stage All & Commit…', run: gitCommitFlow },
+    { id: 'git.blame', group: 'Git', icon: '👁', title: 'Toggle Git Blame in Editor', run: () => import('../components/source-control.js').then(m => m.toggleGitBlame()) },
 
     // ----- File -----
     { id: 'file.openFolder', group: 'File', icon: '📂', title: 'Open Workspace Folder…', keybinding: 'Ctrl+O', run: () => clickById('btn-open-workspace') },

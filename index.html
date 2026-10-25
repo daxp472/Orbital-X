@@ -350,19 +350,8 @@
               </button>
             </div>
           </div>
-
-          <!-- Commit Area -->
-          <div style="padding: 10px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--border-subtle);">
-            <div style="font-size: 11px; color: var(--accent-cyan); font-weight: 600;" id="git-branch-display">Branch: main</div>
-            <textarea class="input-text" id="git-commit-message" placeholder="Message (Ctrl+Enter to commit)..." rows="2" style="resize: none; font-size: 11px; line-height: 1.4;"></textarea>
-            <button class="btn btn-primary btn-sm" id="btn-git-commit" style="width: 100%;">Commit Changes</button>
-          </div>
-
-          <!-- Changes List -->
-          <div class="sidebar-content" id="git-changes-list" style="padding: 8px;">
-            <div style="padding: 12px; text-align: center; color: var(--text-muted); font-size: 11px;">
-              Loading Git status...
-            </div>
+          <div class="sidebar-content" id="source-control-content" style="padding: 0; display: flex; flex-direction: column; overflow-y: auto; flex: 1;">
+            <!-- Rendered by source-control.js -->
           </div>
         </div>
 

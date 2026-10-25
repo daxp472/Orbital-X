@@ -926,6 +926,8 @@ function showTabContextMenu(x, y, panel, tab) {
       });
     } },
     { label: 'Move to ' + (panel === 'left' ? 'Right' : 'Left') + ' Pane', icon: '⫲', enabled: state.editor.splitMode, action: () => moveTabToPanel(tab, panel, panel === 'left' ? 'right' : 'left') },
+    { type: 'separator' },
+    { label: 'Toggle Git Blame', icon: '👁', action: () => import('../components/source-control.js').then(m => m.toggleGitBlame()) },
   ];
 
   for (const item of items) {
