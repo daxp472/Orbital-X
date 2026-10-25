@@ -86,6 +86,9 @@ export function initSettings() {
   // Settings overhaul: search, JSON editor, import/export/reset, editable keybindings
   setupSettingsOverhaul();
 
+  // I5 smart routing + I9 debug mode
+  setupAgentEngineSettings();
+
   // Terminal appearance settings (Part E4)
   setupTerminalSettingsUI();
 
@@ -1693,4 +1696,98 @@ function setupSettingsOverhaul() {
   refreshWorkspaceSettings();
   // The shortcuts pane becomes an editable keybinding table (G4)
   buildEditableShortcutsTable();
+}
+
+// ==========================================================================
+// I5 — Smart Routing settings  |  I9 — Debug mode toggle
+// ==========================================================================
+
+function setupAgentEngineSettings() {
+  // Models pane: smart routing block
+  const modelsPane = document.getElementById('spane-models');
+  if (modelsPane && !document.getElementById('cfg-routing-enabled')) {
+    const block = document.createElement('div');
+    block.style.cssText = 'background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 12px;';
+    block.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong>Smart Routing (multi-model)</strong>
+      </div>
+      <div class="settings-section-desc" style="margin-bottom: 8px;">
+        Route tasks to specialist local models: code writing, explanation/reasoning, and quick lookups each use their own model (Ollama only). Classification is keyword-based on your message.
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Enable Smart Routing</span>
+          <span class="settings-setting-caption">Off = every task uses the active model.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-routing-enabled"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Code-writing model</label>
+          <select class="select-input" id="cfg-routing-code"></select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Explanation / reasoning model</label>
+          <select class="select-input" id="cfg-routing-explain"></select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Quick-lookup model (smallest)</label>
+          <select class="select-input" id="cfg-routing-fast"></select>
+        </div>
+      </div>
+    `;
+    modelsPane.appendChild(block);
+
+    const selEn = block.querySelector('#cfg-routing-enabled');
+    const selCode = block.querySelector('#cfg-routing-code');
+    const selExplain = block.querySelector('#cfg-routing-explain');
+    const selFast = block.querySelector('#cfg-routing-fast');
+
+    invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(models => {
+      const opts = (models || []).map(m => `<option value="${m}">${m}</option>`).join('');
+      selCode.innerHTML = opts; selExplain.innerHTML = opts; selFast.innerHTML = opts;
+      const r = state.ai.smartRouting || {};
+      if (r.codeModel) selCode.value = r.codeModel;
+      if (r.explainModel) selExplain.value = r.explainModel;
+      if (r.fastModel) selFast.value = r.fastModel;
+    }).catch(() => {
+      selCode.innerHTML = selExplain.innerHTML = selFast.innerHTML =
+        '<option value="">(Ollama not reachable — start it to configure routing)</option>';
+    });
+
+    selEn.checked = !!(state.ai.smartRouting?.enabled);
+    const save = () => {
+      state.ai.smartRouting = {
+        enabled: selEn.checked,
+        codeModel: selCode.value,
+        explainModel: selExplain.value,
+        fastModel: selFast.value,
+      };
+      persistState();
+    };
+    [selEn, selCode, selExplain, selFast].forEach(el => el.addEventListener('change', save));
+  }
+
+  // Agent pane: debug mode toggle
+  const agentPane = document.getElementById('spane-agent');
+  if (agentPane && !document.getElementById('cfg-agent-debug')) {
+    const row = document.createElement('div');
+    row.className = 'settings-setting-row';
+    row.style.marginTop = '14px;';
+    row.innerHTML = `
+      <div class="settings-setting-info">
+        <span class="settings-setting-label">Agent Debug Mode</span>
+        <span class="settings-setting-caption">Show verbose per-turn output: messages sent, raw responses, parsed tool calls, and context sizes.</span>
+      </div>
+      <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-agent-debug"><span class="settings-toggle-slider"></span></label></div>
+    `;
+    agentPane.appendChild(row);
+    const dbg = row.querySelector('#cfg-agent-debug');
+    dbg.checked = !!state.ai.debugMode;
+    dbg.addEventListener('change', () => {
+      state.ai.debugMode = dbg.checked;
+      persistState();
+    });
+  }
 }
