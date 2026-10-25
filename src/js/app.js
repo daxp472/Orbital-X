@@ -9,6 +9,8 @@ import { initOnboarding } from './onboarding/wizard.js';
 import { initModelPicker } from './components/model-picker.js';
 import { initSourceControl, refreshGitStatus } from './components/source-control.js';
 import { initExtensions } from './components/extensions.js';
+import { initSearchPanel } from './components/search.js';
+import { initCommandPalette } from './components/command-palette.js';
 import { initSkills, renderSkillsPanel } from './components/skills.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
@@ -85,8 +87,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   initSourceControl();
   initExtensions();
   initSkills();
+  initSearchPanel();
+  initCommandPalette();
   initFileTreeHeaderActions();
   initActivityRail();
+  initStatusBarExtras();
   initResizers();
   initGlobalShortcuts();
   initWindowControls();
@@ -134,6 +139,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadWorkspace(meta.root_path);
       refreshMemories();
       tryRestorePlan();
+      tryRestoreEditorSession();
     }
   } catch (e) {
     console.log("No initial workspace loaded:", e);
@@ -176,6 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         refreshMemories();
         refreshGitStatus();
         tryRestorePlan();
+        tryRestoreEditorSession();
       }
     } catch (err) {
       console.error("Workspace transition error:", err);
@@ -198,18 +205,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     switchMode(next);
   });
 
-  // Search input handler
-  const searchInput = document.getElementById('search-input');
-  if (searchInput) {
-    let debounceTimer;
-    searchInput.addEventListener('input', (e) => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => performSearch(e.target.value), 300);
-    });
-  }
-
   console.log("Orbital X initialization complete.");
 });
+
+// Rich status bar interactions (Part C): language picker, indent settings,
+// format button — plus editor session restore after workspace load.
+function initStatusBarExtras() {
+  document.getElementById('status-language')?.addEventListener('click', () => {
+    import('./editor/monaco.js').then(m => m.openLanguagePicker());
+  });
+  document.getElementById('sb-format-btn')?.addEventListener('click', () => {
+    import('./editor/monaco.js').then(m => m.formatActiveDocument());
+  });
+  document.getElementById('sb-indent')?.addEventListener('click', () => {
+    import('./components/settings.js').then(m => m.openSettings());
+  });
+}
+
+async function tryRestoreEditorSession() {
+  try {
+    const m = await import('./editor/monaco.js');
+    if (typeof m.restoreEditorSession === 'function') await m.restoreEditorSession();
+  } catch (e) {
+    console.warn('Editor session restore failed:', e);
+  }
+}
 
 function initActivityRail() {
   const rails = [
@@ -399,6 +419,16 @@ function initGlobalShortcuts() {
         bottom?.classList.add('collapsed');
       }
     }
+    // Ctrl + W: Close editor tab
+    else if (e.ctrlKey && e.key.toLowerCase() === 'w') {
+      e.preventDefault();
+      import('./editor/monaco.js').then(m => m.closeActiveTab());
+    }
+    // Ctrl + \: Toggle split editor
+    else if (e.ctrlKey && e.key === '\\') {
+      e.preventDefault();
+      import('./editor/monaco.js').then(m => m.toggleSplitEditor());
+    }
     // Ctrl + B: Toggle Sidebar
     else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
       e.preventDefault();
@@ -418,53 +448,6 @@ function initGlobalShortcuts() {
   });
 }
 
-async function performSearch(query) {
-  const container = document.getElementById('search-results-container');
-  if (!container) return;
-
-  if (!query || query.trim().length === 0) {
-    container.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">Type a term to search across all files.</div>';
-    return;
-  }
-
-  container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted);"><span class="spinner"></span> Searching files...</div>';
-
-  try {
-    const matches = await invoke('search_workspace', { query, max_results: 30 });
-    if (!matches || matches.length === 0) {
-      container.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">No matches found.</div>';
-      return;
-    }
-
-    container.innerHTML = `<div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">Found ${matches.length} matches</div>`;
-
-    matches.forEach(m => {
-      const item = document.createElement('div');
-      item.style.cssText = 'padding: 6px; border-radius: 4px; background: var(--bg-surface); margin-bottom: 4px; cursor: pointer; font-size: 11px;';
-      // File snippets are untrusted workspace content — escape before innerHTML
-      const esc = (s) => String(s ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-      item.innerHTML = `
-        <div style="font-weight: 600; color: var(--accent-cyan);">${esc(m.file)}${m.line ? `:${esc(m.line)}` : ''}</div>
-        <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); margin-top: 2px;">${esc(m.snippet)}</div>
-      `;
-
-      item.addEventListener('click', async () => {
-        try {
-          const fileData = await invoke('read_file', { path: m.file });
-          openFileInTab(fileData);
-        } catch (err) {
-          alert("Error opening match: " + err);
-        }
-      });
-
-      container.appendChild(item);
-    });
-  } catch (e) {
-    container.innerHTML = `<div style="color: var(--accent-red); font-size: 12px;">Search error: ${e}</div>`;
-  }
-}
 
 function initWindowControls() {
   const getWin = async () => {
@@ -539,18 +522,7 @@ function initShortcutsHelpOverlay() {
 
   // Global keydown: F1 or Ctrl+Shift+P to open/toggle, Escape to close
   window.addEventListener('keydown', (e) => {
-    const isF1 = e.key === 'F1';
-    const isCmdPalette = e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p';
-
-    if (isF1 || isCmdPalette) {
-      e.preventDefault();
-      const isVisible = modal && modal.style.display !== 'none';
-      if (isVisible) {
-        closeShortcutsHelp();
-      } else {
-        openShortcutsHelp();
-      }
-    } else if (e.key === 'Escape') {
+    if (e.key === 'Escape') {
       const isVisible = modal && modal.style.display !== 'none';
       if (isVisible) {
         e.preventDefault();
