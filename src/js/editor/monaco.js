@@ -430,7 +430,7 @@ function bindEditorBase(ed, panel) {
 // Part B2/B4/B10 — folding, multi-cursor, and symbol command bindings
 // ---------------------------------------------------------------------------
 
-function chord(k1, k2) { return monaco.KeyMod.Chord(k1, k2); }
+function chord(k1, k2) { return monaco.KeyMod.chord(k1, k2); }
 
 const editorCommandDisposables = new WeakMap();
 
@@ -469,7 +469,7 @@ function bindEditorCommands(ed) {
 
   // Folding chords (Ctrl+K prefixes — kept as fixed chord bindings)
   const C = monaco.KeyMod.CtrlCmd, K = monaco.KeyCode;
-  const chord = (k1, k2) => monaco.KeyMod.Chord(k1, k2);
+  const chord = (k1, k2) => monaco.KeyMod.chord(k1, k2);
   const addChord = (c1, c2, actionId) => {
     const d = ed.addCommand(chord(C | c1, C | c2), run(actionId));
     if (d) disposables.push(d);

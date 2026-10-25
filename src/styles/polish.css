@@ -969,3 +969,108 @@ body.theme-light .settings-sidebar,
 
 .think-section { order: -1; }
 .debug-card summary { user-select: none; }
+
+/* ==========================================================================
+   Smooth motion pass — splash exit, panels, cards, modals, tabs
+   ========================================================================== */
+
+/* Splash: fade + scale-out instead of a bare opacity swap */
+.splash-screen {
+  transition: opacity 0.55s var(--ease-apple), visibility 0.55s;
+}
+.splash-screen .splash-content {
+  transition: transform 0.55s var(--ease-apple), opacity 0.55s var(--ease-apple);
+}
+.splash-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.splash-screen.hidden .splash-content {
+  transform: scale(1.06) translateY(-8px);
+  opacity: 0;
+}
+
+/* Timeline cards & tool boxes: gentle rise-in as the agent works */
+@keyframes cardRiseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.timeline-card,
+.tool-box,
+.plan-card,
+.session-summary-card {
+  animation: cardRiseIn 0.28s var(--ease-apple);
+}
+
+/* Sidebar subviews crossfade instead of hard swap */
+.sidebar-subview {
+  animation: viewFadeIn 0.22s var(--ease-apple);
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Modals: soft scale-up with backdrop fade */
+.modal-backdrop {
+  animation: backdropFade 0.22s var(--ease-apple);
+}
+@keyframes backdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Editor tabs slide in when opened */
+.tab {
+  animation: tabSlideIn 0.2s var(--ease-apple);
+}
+@keyframes tabSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Composer chips pop */
+.attachment-chip {
+  animation: chipPop 0.18s var(--ease-spring);
+}
+@keyframes chipPop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Bottom panel + agent panel resize transitions (subtle, on class toggles) */
+#bottom-panel {
+  transition: height 0.16s var(--ease-apple);
+}
+#agent-panel {
+  transition: width 0.16s var(--ease-apple);
+}
+#sidebar {
+  transition: width 0.16s var(--ease-apple);
+}
+
+/* Git file rows and history rows fade in */
+.git-file-row,
+.git-commit-row {
+  animation: cardRiseIn 0.2s var(--ease-apple);
+}
+
+/* Activity Center slide-in */
+#activity-center {
+  transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
+  transform: translateX(16px);
+  opacity: 0;
+}
+#activity-center[style*="flex"] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* Respect reduced motion for the whole pass */
+@media (prefers-reduced-motion: reduce) {
+  .timeline-card, .tool-box, .plan-card, .session-summary-card,
+  .sidebar-subview, .modal-backdrop, .tab, .attachment-chip,
+  .git-file-row, .git-commit-row {
+    animation: none !important;
+  }
+}
