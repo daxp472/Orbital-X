@@ -140,6 +140,8 @@ const DEFAULT_EDITOR_SETTINGS = {
   fontLigatures: true,
   lineHeight: 22,
   letterSpacing: 0,
+  formatOnSave: false,
+  largeFileBannerShown: false,
 };
 
 function editorSettings() {
@@ -825,6 +827,18 @@ export function openFileInTab(fileData, opts = {}) {
   const ed = editorFor(panel);
   if (ed) {
     ed.setModel(model);
+    // N1: large file handling — degrade heavy features, show a banner
+    const sizeBytes = new Blob([content]).size;
+    const isLarge = sizeBytes > 500 * 1024;
+    const isHuge = sizeBytes > 1024 * 1024;
+    ed.updateOptions({
+      minimap: { enabled: !isHuge && !!editorSettings().minimap },
+      quickSuggestions: !isLarge,
+      suggestOnTriggerCharacters: !isLarge,
+      occurrencesHighlight: isLarge ? 'off' : 'singleFile',
+      renderLineHighlight: isLarge ? 'none' : 'all',
+    });
+    showLargeFileBanner(panel, isLarge, isHuge, sizeBytes);
     ed.layout();
     if (!opts.silent) ed.focus();
   }
@@ -853,15 +867,65 @@ function scheduleAutoSave(panel, tab) {
   }, delay));
 }
 
+// ---------------------------------------------------------------------------
+// N1: large file banner  |  N6: clickable breadcrumbs
+// ---------------------------------------------------------------------------
+
+function showLargeFileBanner(panel, isLarge, isHuge, sizeBytes) {
+  const dom = panelDom(panel);
+  const existing = document.getElementById('large-file-banner');
+  if (!isLarge) { existing?.remove(); return; }
+  if (existing) { updateBannerText(existing, isHuge, sizeBytes); return; }
+  const banner = document.createElement('div');
+  banner.id = 'large-file-banner';
+  banner.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 4px 12px; font-size: 11px; color: var(--accent-orange); background: color-mix(in srgb, var(--accent-orange) 12%, transparent); border-bottom: 1px solid var(--border-subtle); flex-shrink: 0;';
+  updateBannerText(banner, isHuge, sizeBytes);
+  const bc = dom.breadcrumb;
+  if (bc && bc.parentElement) bc.parentElement.insertBefore(banner, bc.nextSibling);
+}
+
+function updateBannerText(banner, isHuge, sizeBytes) {
+  const kb = Math.round(sizeBytes / 1024);
+  banner.textContent = isHuge
+    ? `⚠ Large file (${kb} KB): IntelliSense, minimap, and some highlighting disabled for performance`
+    : `⚠ Large file (${kb} KB): IntelliSense disabled for performance`;
+}
+
 function updateBreadcrumbFor(panel) {
   const dom = panelDom(panel);
   const p = panelState(panel);
   const tab = p.tabs.find(t => t.id === p.activeTabId);
   if (!dom.breadcrumb) return;
   if (!tab) { dom.breadcrumb.textContent = ''; return; }
-  const relativePath = tab.relativePath || tab.name || tab.path || '';
-  dom.breadcrumb.textContent = relativePath.replace(/[\\/]/g, ' › ');
+  const relativePath = (tab.relativePath || tab.name || tab.path || '').replace(/\\/g, '/');
+  const segments = relativePath.split('/').filter(Boolean);
+  dom.breadcrumb.innerHTML = '';
+  segments.forEach((seg, i) => {
+    const isLast = i === segments.length - 1;
+    const el = document.createElement(isLast ? 'strong' : 'span');
+    el.textContent = seg;
+    if (!isLast) {
+      el.className = 'breadcrumb-seg';
+      el.title = `Open this folder in the explorer`;
+      // Clicking a segment focuses the explorer and reveals that directory
+      el.addEventListener('click', async () => {
+        const dirPath = segments.slice(0, i + 1).join('/');
+        document.getElementById('rail-explorer')?.click();
+        import('../components/file-tree.js').then(m => {
+          if (typeof m.revealPathInTree === 'function') m.revealPathInTree(dirPath);
+        });
+      });
+    }
+    dom.breadcrumb.appendChild(el);
+    if (!isLast) {
+      const sep = document.createElement('span');
+      sep.textContent = ' › ';
+      sep.style.color = 'var(--text-muted)';
+      dom.breadcrumb.appendChild(sep);
+    }
+  });
 }
+
 
 export function updateBreadcrumb(tab) {
   updateBreadcrumbFor(getActivePanel());
@@ -1359,6 +1423,14 @@ export async function saveActiveFile() {
 export async function saveTab(tab, panel = 'left') {
   const ed = editorFor(panel);
   if (!ed || !tab) return;
+
+  // N7: format on save
+  if (editorSettings().formatOnSave) {
+    try {
+      const action = ed.getAction('editor.action.formatDocument');
+      if (action) await action.run();
+    } catch (e) { /* no formatter — save anyway */ }
+  }
   const currentContent = ed.getValue();
 
   try {

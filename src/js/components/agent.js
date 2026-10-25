@@ -1331,6 +1331,8 @@ STRATEGY:
   if (sessionStats.turns > 0) {
     appendSessionSummaryCard(sessionStats, iteration);
   }
+  // K3: native notification when the window is hidden during a run
+  window.dispatchEvent(new CustomEvent('orbital:agent-run-finished', { detail: { steps: iteration } }));
 
   // I6: silent background memory extraction — never interrupts the user
   autoExtractProjectFacts();

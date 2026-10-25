@@ -421,6 +421,9 @@ export function initTerminal() {
     bottomPanel?.classList.toggle('collapsed');
   });
 
+  // N3: terminal log semantics
+  const outA = document.getElementById('terminal-stdout-A');
+  if (outA) outA.setAttribute('role', 'log');
   const stdoutHost = document.getElementById('terminal-stdout-host') || document.getElementById('terminal-stdout');
   stdoutHost?.addEventListener('click', (e) => {
     const link = e.target.closest('.term-link');

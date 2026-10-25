@@ -1466,6 +1466,50 @@ fn detect_gpus() -> Vec<GpuInfo> {
     Vec::new()
 }
 
+/// K3: native OS notification through the Tauri notification plugin.
+#[tauri::command]
+fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| format!("Native notification failed: {}", e))
+}
+
+/// P3: latest release tag from the GitHub API (server-side fetch keeps the
+/// CSP tight — the webview never talks to api.github.com directly).
+#[tauri::command]
+async fn check_latest_release() -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("OrbitalX-IDE/2.2.3")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get("https://api.github.com/repos/daxp472/Orbital-X/releases/latest")
+        .send()
+        .await
+        .map_err(|e| format!("Release check failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "tag": json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default(),
+        "url": json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default(),
+        "name": json.get("name").and_then(|t| t.as_str()).unwrap_or_default(),
+    }))
+}
+
+/// M4: workspace statistics for the Overview panel.
+#[tauri::command]
+fn get_workspace_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.get_workspace_stats()
+}
+
 #[tauri::command]
 fn get_hardware_info() -> Result<HardwareInfo, String> {
     let mut sys = sysinfo::System::new();
@@ -1544,9 +1588,25 @@ pub fn run() {
         active_ops: Mutex::new(HashMap::new()),
     };
 
+    // P1: catch Rust panics into ~/.orbital/orbital.log so a crash leaves a trace
+    let log_dir = dirs::home_dir()
+        .map(|h| h.join(".orbital"))
+        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let _ = std::fs::create_dir_all(&log_dir);
+    let panic_log = log_dir.join("orbital.log");
+    std::panic::set_hook(Box::new(move |info| {
+        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&panic_log)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{ts}] PANIC: {info}\n").as_bytes()));
+    }));
+
     tauri::Builder::default()
         .manage(state)
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
@@ -1586,6 +1646,9 @@ pub fn run() {
             delete_memory,
             set_memory_importance,
             list_checkpoints,
+            notify_native,
+            check_latest_release,
+            get_workspace_stats,
             restore_checkpoint,
             get_git_status,
             git_stage_and_commit,

@@ -1230,6 +1230,70 @@ impl WorkspaceService {
         }))
     }
 
+    /// Workspace statistics for the Overview panel: language breakdown,
+    /// file counts by type, total size, and the largest files.
+    pub fn get_workspace_stats(&self) -> Result<serde_json::Value, String> {
+        let root = self.root.as_ref().ok_or("No workspace open")?;
+        let mut by_ext: std::collections::HashMap<String, (u64, u64)> = std::collections::HashMap::new(); // ext -> (count, bytes)
+        let mut total_files = 0u64;
+        let mut total_bytes = 0u64;
+        let mut largest: Vec<(String, u64)> = Vec::new();
+        let mut git_remote = String::new();
+
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
+            let path = entry.path();
+            if !path.is_file() {
+                let dname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                if dname == ".git" || dname == "node_modules" || dname == "target" || dname == "dist" {
+                    it.skip_current_dir();
+                }
+                continue;
+            }
+            if entry.file_type().is_symlink() { continue; }
+            total_files += 1;
+            let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+            total_bytes += size;
+
+            let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_else(|| "(none)".into());
+            let slot = by_ext.entry(ext.clone()).or_insert((0, 0));
+            slot.0 += 1;
+            slot.1 += size;
+            if size > 200 * 1024 {
+                largest.push((path.to_string_lossy().replace('\\', "/"), size));
+            }
+        }
+
+        largest.sort_by_key(|(_, b)| std::cmp::Reverse(*b));
+        let largest_top: Vec<serde_json::Value> = largest.into_iter().take(5)
+            .map(|(p, b)| serde_json::json!({ "path": p, "bytes": b })).collect();
+
+        let mut by_language: Vec<serde_json::Value> = by_ext.iter()
+            .map(|(ext, (count, bytes))| serde_json::json!({ "ext": ext, "files": count, "bytes": bytes }))
+            .collect();
+        by_language.sort_by_key(|v| std::cmp::Reverse(v.get("bytes").and_then(|b| b.as_u64()).unwrap_or(0)));
+
+        // Git remote URL (best effort)
+        if let Ok(cfg) = std::fs::read_to_string(root.join(".git").join("config")) {
+            for line in cfg.lines() {
+                let t = line.trim();
+                if t.starts_with("url = ") {
+                    git_remote = t.trim_start_matches("url = ").to_string();
+                    break;
+                }
+            }
+        }
+
+        Ok(serde_json::json!({
+            "root": root.to_string_lossy().replace('\\', "/"),
+            "total_files": total_files,
+            "total_bytes": total_bytes,
+            "by_extension": by_language.into_iter().take(12).collect::<Vec<_>>(),
+            "largest_files": largest_top,
+            "git_remote": git_remote,
+        }))
+    }
+
     pub fn get_project_structure(&self, max_depth: usize, include_files: bool) -> Result<serde_json::Value, String> {
         let root = self.root.as_ref().ok_or("No workspace open")?;
         let depth = max_depth.clamp(1, 5);

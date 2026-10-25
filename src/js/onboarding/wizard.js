@@ -74,6 +74,13 @@ function renderStep() {
   prevBtn.style.display = currentStep > 1 ? 'inline-flex' : 'none';
   nextBtn.textContent = currentStep === totalSteps ? 'Get Started' : 'Next';
 
+  // O2: clickable progress dots + per-step skip
+  renderProgressDots();
+  const skipBtn = document.getElementById('btn-onboarding-skip-step');
+  if (skipBtn) {
+    skipBtn.style.display = currentStep < totalSteps ? 'inline-flex' : 'none';
+  }
+
   if (currentStep === 1) {
     body.innerHTML = `
       <div style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
@@ -248,5 +255,86 @@ function renderStep() {
         renderStep();
       });
     });
+
+    // O2: 3-things quick tutorial alongside the theme picker
+    body.insertAdjacentHTML('beforeend', `
+      <div style="margin-top: 16px; border-top: 1px solid var(--border-subtle); padding-top: 12px; font-size: 11.5px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px;">
+        <div><strong style="color: var(--text-primary);">1. Chat with the agent</strong> — Ctrl+L focuses the chat; try <code>/explain</code> or <code>/fix</code>.</div>
+        <div><strong style="color: var(--text-primary);">2. Open files fast</strong> — Ctrl+P fuzzy-opens any file; click tree items to preview.</div>
+        <div><strong style="color: var(--text-primary);">3. Use the terminal</strong> — Ctrl+\` toggles it; Ctrl+R searches command history.</div>
+      </div>
+    `);
+  }
+}
+
+// O2: clickable progress dots + per-step skip + VS Code settings import
+function renderProgressDots() {
+  const modal = document.getElementById('modal-onboarding');
+  if (!modal) return;
+  let dots = modal.querySelector('.onboarding-dots');
+  const footer = modal.querySelector('.onboarding-footer') || modal.querySelector('#btn-onboarding-next')?.parentElement;
+  if (!footer) return;
+  if (!dots) {
+    dots = document.createElement('div');
+    dots.className = 'onboarding-dots';
+    dots.style.cssText = 'display: flex; gap: 6px; margin-right: auto;';
+    footer.insertBefore(dots, footer.firstChild);
+
+    // per-step skip link
+    const skipStep = document.createElement('button');
+    skipStep.className = 'btn btn-secondary btn-sm';
+    skipStep.id = 'btn-onboarding-skip-step';
+    skipStep.textContent = 'Skip this step';
+    skipStep.addEventListener('click', () => {
+      currentStep = Math.min(currentStep + 1, totalSteps);
+      renderStep();
+    });
+    footer.insertBefore(skipStep, dots.nextSibling);
+
+    // VS Code settings import
+    const vsBtn = document.createElement('button');
+    vsBtn.className = 'btn btn-secondary btn-sm';
+    vsBtn.textContent = 'Import from VS Code';
+    vsBtn.title = 'Map common settings from your VS Code user settings.json';
+    vsBtn.addEventListener('click', importFromVSCode);
+    footer.insertBefore(vsBtn, footer.firstChild.nextSibling);
+  }
+  dots.innerHTML = '';
+  for (let i = 1; i <= totalSteps; i++) {
+    const dot = document.createElement('span');
+    dot.style.cssText = `width: 8px; height: 8px; border-radius: 50%; cursor: pointer; background: ${i === currentStep ? 'var(--accent-cyan)' : (i < currentStep ? 'var(--accent-green)' : 'var(--border-color)')};`;
+    dot.title = `Step ${i}`;
+    dot.addEventListener('click', () => { currentStep = i; renderStep(); });
+    dots.appendChild(dot);
+  }
+}
+
+async function importFromVSCode() {
+  // Read the VS Code user settings via the backend (frontend cannot touch
+  // arbitrary files). Mapped: font settings, word wrap, tab size, minimap.
+  try {
+    const res = await invoke('run_command', {
+      command: 'Get-Content "$env:APPDATA\Code\User\settings.json" -Raw',
+      timeout_seconds: 10,
+    });
+    const raw = (res.stdout || '').trim();
+    if (!raw) throw new Error('settings.json not found');
+    // VS Code allows JSONC — strip // comments crudely
+    const cleaned = raw.replace(/^\s*\/\/.*$/gm, '');
+    const parsed = JSON.parse(cleaned);
+    const { state } = await import('../state/store.js');
+    const mon = await import('../editor/monaco.js');
+    const ed = state.settings.editor || (state.settings.editor = {});
+    if (parsed['editor.fontSize']) ed.fontSize = Number(parsed['editor.fontSize']);
+    if (parsed['editor.fontFamily']) ed.fontFamily = parsed['editor.fontFamily'];
+    if (parsed['editor.fontLigatures'] !== undefined) ed.fontLigatures = !!parsed['editor.fontLigatures'];
+    if (parsed['editor.wordWrap']) ed.wordWrap = parsed['editor.wordWrap'];
+    if (parsed['editor.tabSize']) ed.tabSize = Number(parsed['editor.tabSize']);
+    if (parsed['editor.minimap.enabled'] !== undefined) ed.minimap = !!parsed['editor.minimap.enabled'];
+    mon.applyEditorSettings();
+    showToast('Imported common editor settings from VS Code', 'success', 2800);
+    renderStep();
+  } catch (e) {
+    showToast(`VS Code import: ${e.message || e}`, 'warning', 3600);
   }
 }
