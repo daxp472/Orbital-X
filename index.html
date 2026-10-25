@@ -533,6 +533,20 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
+            <button class="icon-btn" id="btn-export-chat" title="Export chat as Markdown">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+            <button class="icon-btn" id="btn-import-chat" title="Import chat from Markdown">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </button>
               <!-- More actions / Chat History -->
               <button class="icon-btn" id="btn-chat-history" title="Recent Chats & History">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -584,7 +598,12 @@
         </div>
 
         <!-- Agent Timeline / Chat Area -->
-        <div class="agent-timeline" id="agent-timeline">
+        <div id="agent-panel-tabs" style="display: flex; gap: 2px; padding: 0 10px 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 6px;">
+              <button class="btn btn-sm btn-secondary" data-atab="chat" style="font-size: 10px; padding: 2px 10px;">💬 Chat</button>
+              <button class="btn btn-sm btn-secondary" data-atab="checkpoints" style="font-size: 10px; padding: 2px 10px;">🕘 Checkpoints</button>
+            </div>
+            <div id="agent-checkpoints-view" style="display: none; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; padding: 0 10px;"></div>
+            <div class="agent-timeline" id="agent-timeline">
           <div class="timeline-card assistant-msg">
             <div class="timeline-card-header">
               <span>Orbital Agent</span>
@@ -630,7 +649,12 @@
 
               <!-- Context @ and Send button on bottom right -->
               <div class="composer-actions">
-                <button class="icon-btn" id="btn-composer-context" title="Attach Context File (@)">
+                <button class="icon-btn" id="btn-composer-attach" title="Attach context (file, selection, terminal, diff…)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                </svg>
+              </button>
+              <button class="icon-btn" id="btn-composer-context" title="Attach Context File (@)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="12" cy="12" r="4"></circle>
                     <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"></path>

@@ -9,6 +9,13 @@ pub struct ProjectMemory {
     pub category: String, // "architecture", "convention", "rule", "instruction"
     pub title: String,
     pub content: String,
+    /// Importance 1-5 (5 = always inject first). Older entries default to 3.
+    #[serde(default = "default_importance")]
+    pub importance: u32,
+}
+
+fn default_importance() -> u32 {
+    3
 }
 
 pub struct MemoryService;
@@ -85,6 +92,7 @@ impl MemoryService {
             category: category.to_string(),
             title: title.to_string(),
             content: content.to_string(),
+            importance: 3,
         };
 
         memories.push(memory.clone());

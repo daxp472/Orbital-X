@@ -1156,6 +1156,20 @@ pub async fn stream_ollama_turn(
 }
 
 fn extract_json_tool_calls(content: &str) -> Option<Vec<ToolCall>> {
+    // Reasoning models (qwen3-thinking, deepseek-r1, …) wrap chain-of-thought
+    // in <think>…</think>. Never mine tool calls out of the reasoning — only
+    // from the actual response body.
+    let stripped = if content.contains("<think>") {
+        let re = regex::Regex::new(r"(?s)<think>.*?</think>").ok();
+        match re {
+            Some(re) => re.replace_all(content, "").to_string(),
+            None => content.to_string(),
+        }
+    } else {
+        content.to_string()
+    };
+    let content = stripped.as_str();
+
     let mut calls = Vec::new();
     let mut search_str = content;
 

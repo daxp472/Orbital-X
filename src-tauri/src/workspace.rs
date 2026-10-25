@@ -706,6 +706,68 @@ impl WorkspaceService {
         }
     }
 
+    /// Checkpoint support (agent UI): the recent change journal, newest last.
+    /// Entries include only metadata (path, description, timestamp) — full
+    /// before/after content stays in memory for restore operations.
+    pub fn list_journal_summary(&self) -> Vec<serde_json::Value> {
+        let start = self.change_journal.len().saturating_sub(20);
+        self.change_journal[start..]
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "index": self.change_journal.iter().position(|x| x.id == e.id).unwrap_or(0),
+                    "id": e.id,
+                    "timestamp": e.timestamp,
+                    "path": e.path,
+                    "description": e.description,
+                    "kind": if e.before_content.is_some() { "edit" } else { "create" },
+                })
+            })
+            .collect()
+    }
+
+    /// Restores the workspace to the state just AFTER checkpoint `index`
+    /// by reverting every journal entry newer than it (newest first).
+    pub fn restore_to_checkpoint(&mut self, index: usize) -> Result<serde_json::Value, String> {
+        if index >= self.change_journal.len() {
+            return Err(format!("Checkpoint {} not found (journal has {} entries)", index, self.change_journal.len()));
+        }
+        let mut reverted = 0usize;
+        let mut failed: Vec<String> = Vec::new();
+        // Iterate newest → index+1, undoing each in place
+        let mut i = self.change_journal.len();
+        while i > index + 1 {
+            i -= 1;
+            let entry = &self.change_journal[i];
+            match &entry.before_content {
+                Some(prev) => {
+                    if let Err(e) = fs::write(&entry.path, prev) {
+                        failed.push(format!("{}: {}", entry.path, e));
+                        continue;
+                    }
+                }
+                None => {
+                    let p = PathBuf::from(&entry.path);
+                    if p.exists() {
+                        if let Err(e) = fs::remove_file(&p) {
+                            failed.push(format!("{}: {}", entry.path, e));
+                            continue;
+                        }
+                    }
+                }
+            }
+            reverted += 1;
+        }
+        // Truncate the journal to the checkpoint (it is restored state now)
+        self.change_journal.truncate(index + 1);
+
+        Ok(serde_json::json!({
+            "success": failed.is_empty(),
+            "reverted": reverted,
+            "failed": failed,
+        }))
+    }
+
     pub fn undo_last_change(&mut self) -> Result<String, String> {
         let entry = self.change_journal.pop().ok_or("No agent changes to undo")?;
         let full_path = PathBuf::from(&entry.path);

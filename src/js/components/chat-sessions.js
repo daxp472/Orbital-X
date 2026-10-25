@@ -49,8 +49,117 @@ export function initChatSessions() {
     }
   });
 
+  // H4: export / import buttons
+  document.getElementById('btn-export-chat')?.addEventListener('click', exportActiveSessionMarkdown);
+  document.getElementById('btn-import-chat')?.addEventListener('click', importSessionFromMarkdown);
+
+  // H4: inline rename on double-click of the title
+  titleElem?.addEventListener('dblclick', () => {
+    if (titleElem.querySelector('input')) return;
+    const current = getActiveSession();
+    if (!current) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = current.title || '';
+    input.style.cssText = 'width: 160px; font-size: 12px; padding: 1px 6px; border: 1px solid var(--border-focus); border-radius: 4px; background: var(--bg-input); color: var(--text-primary);';
+    titleElem.textContent = '';
+    titleElem.appendChild(input);
+    input.focus();
+    input.select();
+    const commit = () => {
+      const v = input.value.trim();
+      if (v && v !== current.title) {
+        current.title = v;
+        saveSessionsToStorage();
+      }
+      updateTitleDisplay();
+    };
+    input.addEventListener('keydown', (ev) => {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+      if (ev.key === 'Escape') { ev.preventDefault(); updateTitleDisplay(); }
+    });
+    input.addEventListener('blur', commit);
+  });
+
   // Render initial title
   updateTitleDisplay();
+}
+
+// H4 helpers ---------------------------------------------------------------
+
+function normalizeFlags(sess) {
+  if (typeof sess.pinned !== 'boolean') sess.pinned = false;
+  if (typeof sess.archived !== 'boolean') sess.archived = false;
+  return sess;
+}
+
+function sortSessions() {
+  sessions.sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0);
+  });
+}
+
+function exportActiveSessionMarkdown() {
+  const current = getActiveSession();
+  if (!current) return;
+  const lines = [
+    `# ${current.title || 'Orbital X Chat'}`,
+    '',
+    `> Exported from Orbital X on ${new Date().toLocaleString()}`,
+    `> Mode: ${current.mode || 'dev'}`,
+    '',
+  ];
+  for (const m of (current.messages || [])) {
+    if (m._ephemeral) continue;
+    if (m.role === 'user') {
+      lines.push('## User', '', String(m.content || ''), '');
+    } else if (m.role === 'assistant') {
+      lines.push('## Assistant', '', String(m.content || ''), '');
+      if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+        lines.push(`_Tools: ${m.tool_calls.map(t => t.name).join(', ')}_`, '');
+      }
+    }
+  }
+  lines.push('---', `_Session id: ${current.id}_`);
+  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `orbital-chat-${(current.title || 'session').replace(/[^a-z0-9]+/gi, '-').slice(0, 40).toLowerCase()}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importSessionFromMarkdown() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.md,.markdown,.txt';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const messages = [];
+      const title = ((text.match(/^# (.+)$/m) || [])[1] || file.name.replace(/\.(md|markdown|txt)$/i, '')).trim();
+      const parts = text.split(/^## (User|Assistant)\s*$/m);
+      for (let i = 1; i < parts.length; i += 2) {
+        const role = parts[i].trim() === 'User' ? 'user' : 'assistant';
+        const content = (parts[i + 1] || '').trim();
+        if (content) messages.push({ role, content, timestamp: Date.now() });
+      }
+      if (messages.length === 0) throw new Error('no recognizable messages (expected "## User" / "## Assistant" sections)');
+      createNewSession(title.slice(0, 60));
+      state.conversation = messages;
+      saveActiveSession();
+      import('./agent.js').then(m => m.renderFullTimeline(messages));
+      showToast(`Imported "${title}" (${messages.length} messages)`, 'success', 3200);
+    } catch (err) {
+      alert(`Import failed: ${err.message}`);
+    }
+  };
+  input.click();
 }
 
 export async function loadSessions() {
@@ -90,6 +199,9 @@ export async function loadSessions() {
     saveSessionsToStorage();
   }
 
+  sessions.forEach(normalizeFlags);
+  sortSessions();
+
   // Restore active session into state.conversation
   const current = sessions.find(s => s.id === activeSessionId);
   if (current) {
@@ -119,6 +231,7 @@ export function saveActiveSession() {
   current.messages = (state.conversation || []).filter(m => !m._ephemeral);
   current.mode = state.agentMode;
   current.updatedAt = new Date().toISOString();
+  normalizeFlags(current);
 
   // Auto-generate title from the first 7 words of initial user message if still default
   const isDefaultTitle = !current.title ||
@@ -243,18 +356,62 @@ function closeHistoryDropdown() {
   dropdown?.classList.remove('active');
 }
 
+let historySearch = '';
+let showArchived = false;
+
 function renderHistoryList() {
   const listElem = document.getElementById('chat-history-list');
   if (!listElem) return;
-
   listElem.innerHTML = '';
 
-  if (sessions.length === 0) {
-    listElem.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 11px; text-align: center;">No chat history yet.</div>`;
+  // H4: session search across titles + message contents
+  const search = document.createElement('input');
+  search.type = 'text';
+  search.className = 'input-text';
+  search.placeholder = 'Search sessions…';
+  search.value = historySearch;
+  search.style.cssText = 'width: 100%; font-size: 11px; margin-bottom: 6px;';
+  search.addEventListener('input', () => {
+    historySearch = search.value;
+    renderHistoryRows(listElem);
+  });
+  search.addEventListener('keydown', (e) => e.stopPropagation());
+  listElem.appendChild(search);
+
+  const archivedToggle = document.createElement('label');
+  archivedToggle.style.cssText = 'display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); cursor: pointer; margin-bottom: 6px;';
+  archivedToggle.innerHTML = `<input type="checkbox" ${showArchived ? 'checked' : ''}> Show archived (${sessions.filter(x => x.archived).length})`;
+  archivedToggle.querySelector('input').addEventListener('change', (e) => {
+    showArchived = e.target.checked;
+    renderHistoryList();
+  });
+  listElem.appendChild(archivedToggle);
+
+  renderHistoryRows(listElem);
+}
+
+function renderHistoryRows(listElem) {
+  listElem.querySelectorAll('.chat-history-row').forEach(el => el.remove());
+  const q = historySearch.trim().toLowerCase();
+
+  const rowsHost = document.createElement('div');
+  rowsHost.className = 'chat-history-row';
+  rowsHost.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
+  listElem.appendChild(rowsHost);
+
+  const visible = sessions.filter(sess => {
+    if (!showArchived && sess.archived) return false;
+    if (!q) return true;
+    if ((sess.title || '').toLowerCase().includes(q)) return true;
+    return (sess.messages || []).some(m => (m.content || '').toLowerCase().includes(q));
+  });
+
+  if (visible.length === 0) {
+    rowsHost.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 11px; text-align: center;">${q ? 'No sessions match.' : 'No chat history yet.'}</div>`;
     return;
   }
 
-  sessions.forEach(sess => {
+  for (const sess of visible) {
     const isActive = sess.id === activeSessionId;
     const item = document.createElement('div');
     item.className = `chat-history-item ${isActive ? 'active' : ''}`;
@@ -264,22 +421,43 @@ function renderHistoryList() {
 
     item.innerHTML = `
       <div style="flex: 1; min-width: 0;">
-        <div class="chat-history-title">${escapeHtml(sess.title)}</div>
+        <div class="chat-history-title">${escapeHtml(sess.pinned ? '📌 ' : '')}${escapeHtml(sess.archived ? '📦 ' : '')}${escapeHtml(sess.title)}</div>
         <div class="chat-history-meta">${msgCount} messages · ${dateStr}</div>
       </div>
-      <button class="chat-history-del" title="Delete Chat" data-del-id="${sess.id}">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      </button>
+      <span style="display: flex; gap: 2px; flex-shrink: 0;">
+        <button class="git-icon-btn hist-pin" title="${sess.pinned ? 'Unpin' : 'Pin to top'}" style="color:${sess.pinned ? 'var(--accent-cyan)' : 'var(--text-muted)'};">📌</button>
+        <button class="git-icon-btn hist-archive" title="${sess.archived ? 'Unarchive' : 'Archive'}">📦</button>
+        <button class="chat-history-del" title="Delete Chat" data-del-id="${sess.id}">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </span>
     `;
 
     item.addEventListener('click', () => switchSession(sess.id));
+    item.querySelector('.hist-pin')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sess.pinned = !sess.pinned;
+      sortSessions();
+      saveSessionsToStorage();
+      renderHistoryList();
+    });
+    item.querySelector('.hist-archive')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      sess.archived = !sess.archived;
+      if (sess.archived && sess.id === activeSessionId && !showArchived) {
+        const next = sessions.find(x => !x.archived);
+        if (next) switchSession(next.id);
+      }
+      saveSessionsToStorage();
+      renderHistoryList();
+    });
     item.querySelector('.chat-history-del')?.addEventListener('click', (e) => deleteSession(sess.id, e));
 
-    listElem.appendChild(item);
-  });
+    rowsHost.appendChild(item);
+  }
 }
 
 function formatRelativeTime(date) {
@@ -294,6 +472,7 @@ function formatRelativeTime(date) {
 }
 
 function saveSessionsToStorage() {
+  sortSessions();
   // Bound growth: oldest sessions beyond the cap are pruned (never the active one)
   if (sessions.length > MAX_SESSIONS) {
     const overflow = sessions.length - MAX_SESSIONS;

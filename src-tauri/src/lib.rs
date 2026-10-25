@@ -915,6 +915,44 @@ fn list_memories(state: State<'_, AppState>) -> Result<serde_json::Value, String
     }
 }
 
+/// Sets the importance (1-5) of a memory entry — agent prompt injection
+/// orders by importance.
+#[tauri::command]
+fn set_memory_importance(id: String, importance: u32, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = ws.get_root().ok_or("No workspace open")?;
+    let clamped = importance.clamp(1, 5);
+    let mut memories = MemoryService::load_memories(&root);
+    let mut updated = false;
+    for m in memories.iter_mut() {
+        if m.id == id {
+            m.importance = clamped;
+            updated = true;
+        }
+    }
+    if !updated {
+        return Ok(serde_json::json!({ "success": false, "error": "Memory entry not found" }));
+    }
+    let file = root.join(".orbital").join("memory.json");
+    let serialized = serde_json::to_string_pretty(&memories).map_err(|e| e.to_string())?;
+    std::fs::write(file, serialized).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "success": true, "id": id, "importance": clamped }))
+}
+
+/// Checkpoint list (last 20 change-journal entries) for the agent panel.
+#[tauri::command]
+fn list_checkpoints(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    Ok(ws.list_journal_summary())
+}
+
+/// Reverts every agent change newer than the given checkpoint index.
+#[tauri::command]
+fn restore_checkpoint(index: usize, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.restore_to_checkpoint(index)
+}
+
 #[tauri::command]
 fn delete_memory(id: String, state: State<'_, AppState>) -> Result<bool, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -1546,6 +1584,9 @@ pub fn run() {
             save_memory_entry,
             list_memories,
             delete_memory,
+            set_memory_importance,
+            list_checkpoints,
+            restore_checkpoint,
             get_git_status,
             git_stage_and_commit,
             get_git_diff,
