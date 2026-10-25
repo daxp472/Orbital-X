@@ -375,7 +375,7 @@ export function initTerminal() {
   });
 
   if (inputElem) {
-    inputElem.addEventListener('keydown', (e) => {
+    inputElem.addEventListener('keydown', async (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         executeTerminalCommand();
@@ -400,6 +400,9 @@ export function initTerminal() {
       } else if (e.key === 'f' && e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         openTerminalSearch();
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        await handleTabCompletion(inputElem);
       } else if (e.key === 'c' && e.ctrlKey && !e.shiftKey) {
         sendInterruptSignal();
         inputElem.value = '';
@@ -731,6 +734,32 @@ function renderPaneTabs(pane) {
   plus.textContent = '+';
   plus.addEventListener('click', (e) => openProfileMenu(e, pane));
   bar.appendChild(plus);
+
+  // E: Share terminal output with the AI chat
+  const shareBtn = document.createElement('button');
+  shareBtn.className = 'terminal-share-btn terminal-tab';
+  shareBtn.title = 'Share terminal output with AI';
+  shareBtn.textContent = '';  // CSS ::before renders the icon
+  shareBtn.style.marginLeft = 'auto'; shareBtn.style.width = '28px'; shareBtn.style.height = '24px';
+  shareBtn.addEventListener('click', async () => {
+    const sess = activeInPane(pane);
+    if (!sess || !sess.buffer?.trim()) {
+      showToast('Terminal buffer is empty', 'info', 2000);
+      return;
+    }
+    const lastLines = sess.buffer.trimEnd().split('\n').slice(-40).join('\n');
+    try {
+      const agentMod = await import('./agent.js');
+      agentMod.addAttachment('terminal');
+      showToast('Terminal output attached to chat — send your message', 'success', 2800);
+      // Also open the agent panel
+      const agentPanel = document.getElementById('agent-panel');
+      agentPanel?.classList.remove('hidden');
+    } catch (e) {
+      showToast(`Share failed: ${e}`, 'error', 2800);
+    }
+  });
+  bar.appendChild(shareBtn);
 
   const closeBtn = document.createElement('div');
   closeBtn.className = 'terminal-tab terminal-close-btn';
@@ -1269,5 +1298,82 @@ async function runValidationTests() {
     logAudit(`Validation tests completed: ${isSuccess ? 'PASSED' : 'FAILED'}`);
   } catch (e) {
     card.innerHTML = `<div style="color: var(--accent-red);">Validation check error: ${e}</div>`;
+  }
+}
+
+// ==========================================================================
+// Tab completion — completes file/folder paths like a real terminal
+// ==========================================================================
+
+async function handleTabCompletion(inputElem) {
+  const value = inputElem.value;
+  const caret = inputElem.selectionStart ?? value.length;
+
+  // Get the current token (last word before cursor)
+  const before = value.slice(0, caret);
+  const tokenMatch = before.match(/([^\s]*)$/);
+  const token = tokenMatch ? tokenMatch[1] : '';
+  if (!token) return;
+
+  // Split into directory part and filename prefix
+  const lastSlash = Math.max(token.lastIndexOf('/'), token.lastIndexOf('\\'));
+  const dirPart = lastSlash >= 0 ? token.slice(0, lastSlash + 1) : '';
+  const filePrefix = lastSlash >= 0 ? token.slice(lastSlash + 1) : token;
+
+  // Determine the search directory
+  const session = getActiveSession();
+  const baseCwd = session?.cwd || state.workspace.rootPath || '.';
+
+  // Ask the backend for matching files
+  try {
+    const searchDir = dirPart ? `${baseCwd}/${dirPart}`.replace(/\/+/g, '/').replace(/\\\\/g, '/') : baseCwd;
+    const results = await invoke('search_workspace', {
+      query: filePrefix,
+      maxResults: 20,
+    });
+
+    // Filter results that are in the current directory level (not nested)
+    const matches = (results || []).filter(r => {
+      const rel = r.file || '';
+      // Must be in the same directory (no additional slashes after the dir part)
+      const afterDir = dirPart ? rel.slice(rel.indexOf(dirPart) + dirPart.length) : rel;
+      return rel.includes(dirPart) && !afterDir.includes('/');
+    });
+
+    if (matches.length === 0) return;
+
+    if (matches.length === 1) {
+      // Single match — complete it
+      const match = matches[0];
+      const fileName = (match.file || '').split('/').pop().split('\\').pop();
+      const completed = before.slice(0, before.length - token.length) + dirPart + fileName;
+      inputElem.value = completed + value.slice(caret);
+      inputElem.setSelectionRange(completed.length, completed.length);
+    } else {
+      // Multiple matches — show a brief list in the terminal buffer
+      const session2 = getActiveSession();
+      if (session2) {
+        const names = matches.slice(0, 10).map(m => (m.file || '').split('/').pop()).join('  ');
+        session2.buffer += `\n${names}\n`;
+        if (matches.length > 10) session2.buffer += `  …and ${matches.length - 10} more\n`;
+        renderPanes();
+      }
+
+      // Complete to common prefix
+      const names = matches.map(m => (m.file || '').split('/').pop().split('\\').pop()).sort();
+      let common = names[0] || '';
+      for (const name of names) {
+        while (!name.startsWith(common)) {
+          common = common.slice(0, -1);
+        }
+      }
+      if (common.length > filePrefix.length) {
+        const completed = before.slice(0, before.length - token.length) + dirPart + common;
+        inputElem.value = completed + value.slice(caret);
+        inputElem.setSelectionRange(completed.length, completed.length);
+      }
+    }
+  } catch (e) {
+    // Silent — Tab completion is best-effort
   }
 }

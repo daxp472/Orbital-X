@@ -559,6 +559,17 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "list_memories",
+                "description": "List ALL saved project memories (persistent knowledge: architecture, conventions, progress, rules). Each entry has category, title, content, and importance. Use this to recall project state after a context reset or to see everything the project knows.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "list_skills",
                 "description": "List installed skill packs (reusable instruction sets for specific technologies or workflows). Each entry has a name, description, and whenToUse hint. If a task matches a skill, read it before proceeding.",
                 "parameters": {

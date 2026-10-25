@@ -8,6 +8,7 @@
 
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
+import { showConfirmDialog } from '../services/dialogs.js';
 import { showToast } from '../services/notifications.js';
 
 const CATEGORY_META = {
@@ -196,7 +197,7 @@ function memoryCard(m) {
   });
 
   card.querySelector('.mem-del')?.addEventListener('click', async () => {
-    if (!confirm(`Delete memory "${m.title}"?`)) return;
+    if (!(await showConfirmDialog('Delete Memory', `Delete memory "${m.title}"?`, 'Delete', true))) return;
     try {
       await invoke('delete_memory', { id: m.id });
       selectedMemoryIds.delete(m.id);

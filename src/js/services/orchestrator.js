@@ -132,7 +132,7 @@ Rules:
   }
 
   // Normalize and hard-validate every task before it reaches the executor
-  const tasks = parsed.tasks.slice(0, 8).map((t, i) => {
+  const tasks = parsed.tasks.slice(0, 12).map((t, i) => {
     const id = `task-${i + 1}`;
     const deps = Array.isArray(t.depends_on)
       ? t.depends_on.map(d => {

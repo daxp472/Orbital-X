@@ -969,3 +969,478 @@ body.theme-light .settings-sidebar,
 
 .think-section { order: -1; }
 .debug-card summary { user-select: none; }
+
+/* ==========================================================================
+   Smooth motion pass — splash exit, panels, cards, modals, tabs
+   ========================================================================== */
+
+/* Splash: fade + scale-out instead of a bare opacity swap */
+.splash-screen {
+  transition: opacity 0.55s var(--ease-apple), visibility 0.55s;
+}
+.splash-screen .splash-content {
+  transition: transform 0.55s var(--ease-apple), opacity 0.55s var(--ease-apple);
+}
+.splash-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.splash-screen.hidden .splash-content {
+  transform: scale(1.06) translateY(-8px);
+  opacity: 0;
+}
+
+/* Timeline cards & tool boxes: gentle rise-in as the agent works */
+@keyframes cardRiseIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.timeline-card,
+.tool-box,
+.plan-card,
+.session-summary-card {
+  animation: cardRiseIn 0.28s var(--ease-apple);
+}
+
+/* Sidebar subviews crossfade instead of hard swap */
+.sidebar-subview {
+  animation: viewFadeIn 0.22s var(--ease-apple);
+}
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Modals: soft scale-up with backdrop fade */
+.modal-backdrop {
+  animation: backdropFade 0.22s var(--ease-apple);
+}
+@keyframes backdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Editor tabs slide in when opened */
+.tab {
+  animation: tabSlideIn 0.2s var(--ease-apple);
+}
+@keyframes tabSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Composer chips pop */
+.attachment-chip {
+  animation: chipPop 0.18s var(--ease-spring);
+}
+@keyframes chipPop {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* Bottom panel + agent panel resize transitions (subtle, on class toggles) */
+#bottom-panel {
+  transition: height 0.16s var(--ease-apple);
+}
+#agent-panel {
+  transition: width 0.16s var(--ease-apple);
+}
+#sidebar {
+  transition: width 0.16s var(--ease-apple);
+}
+
+/* Git file rows and history rows fade in */
+.git-file-row,
+.git-commit-row {
+  animation: cardRiseIn 0.2s var(--ease-apple);
+}
+
+/* Activity Center slide-in */
+#activity-center {
+  transition: transform 0.26s var(--ease-apple), opacity 0.26s var(--ease-apple);
+  transform: translateX(16px);
+  opacity: 0;
+}
+#activity-center[style*="flex"] {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+/* Respect reduced motion for the whole pass */
+@media (prefers-reduced-motion: reduce) {
+  .timeline-card, .tool-box, .plan-card, .session-summary-card,
+  .sidebar-subview, .modal-backdrop, .tab, .attachment-chip,
+  .git-file-row, .git-commit-row {
+    animation: none !important;
+  }
+}
+
+/* ==========================================================================
+   Chat drop zone (FIX 5)
+   ========================================================================== */
+#agent-panel.chat-drop-zone {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -6px;
+  background: color-mix(in srgb, var(--accent-cyan) 4%, transparent);
+}
+#agent-panel.chat-drop-zone::after {
+  content: 'Drop files to attach';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: var(--bg-card);
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-cyan);
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Inline diff decorations in the editor (FIX 10b)
+   ========================================================================== */
+.inline-diff-add {
+  background: color-mix(in srgb, #30d158 15%, transparent);
+  border-left: 3px solid #30d158;
+}
+.inline-diff-del {
+  background: color-mix(in srgb, #ff453a 15%, transparent);
+  border-left: 3px solid #ff453a;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* ==========================================================================
+   Outline & Timeline sections (FIX 9)
+   ========================================================================== */
+.sidebar-outline-section summary,
+.sidebar-timeline-section summary {
+  list-style: none;
+  transition: color 0.15s;
+}
+.sidebar-outline-section summary:hover,
+.sidebar-timeline-section summary:hover {
+  color: var(--text-primary-bright);
+}
+.sidebar-outline-section summary::-webkit-details-marker,
+.sidebar-timeline-section summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-outline-section summary::before,
+.sidebar-timeline-section summary::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.15s;
+}
+.sidebar-outline-section[open] summary::before,
+.sidebar-timeline-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Resizer handle improvement (FIX 8) */
+#resizer-agent {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+}
+#resizer-agent:hover,
+#resizer-agent.resizing {
+  background: var(--accent-cyan);
+}
+#resizer-agent::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--border-color);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#resizer-agent:hover::after {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   Toast notification polish — glass effect, better sizing, animations
+   ========================================================================== */
+.toast-item {
+  min-width: 280px;
+  max-width: 400px;
+  padding: 0;
+  border-radius: var(--radius-md, 12px);
+  background: rgba(22, 25, 33, 0.95);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  transform: translateX(120%) scale(0.95);
+  opacity: 0;
+  transition: transform 0.35s var(--ease-spring), opacity 0.25s var(--ease-apple);
+}
+.toast-item.toast-show {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+}
+.toast-item.toast-hide {
+  transform: translateX(120%) scale(0.9);
+  opacity: 0;
+}
+.toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 12px 14px;
+  flex-shrink: 0;
+}
+.toast-content {
+  flex: 1;
+  padding: 10px 4px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.toast-message {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary-bright, #fff);
+  line-height: 1.4;
+}
+.toast-close-btn {
+  align-self: flex-start;
+  margin: 6px 6px 0 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.toast-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-cyan);
+  opacity: 0.5;
+  animation: toastShrink linear forwards;
+  transform-origin: left;
+}
+.toast-action-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toast-action-btn.primary {
+  background: var(--accent-cyan);
+  color: #04211f;
+  border: none;
+}
+.toast-action-btn.primary:hover {
+  filter: brightness(1.15);
+}
+
+/* Type-specific icon backgrounds */
+.toast-info .toast-icon { color: var(--accent-cyan); }
+.toast-success .toast-icon { color: #30d158; }
+.toast-warning .toast-icon { color: var(--accent-orange); }
+.toast-error .toast-icon { color: var(--accent-red); }
+.toast-info { border-left: 3px solid var(--accent-cyan); }
+.toast-success { border-left: 3px solid #30d158; }
+.toast-warning { border-left: 3px solid var(--accent-orange); }
+.toast-error { border-left: 3px solid var(--accent-red); }
+
+/* ==========================================================================
+   Terminal share button
+   ========================================================================== */
+.terminal-share-btn {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.terminal-share-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+/* ==========================================================================
+   UI Polish: Outline/Timeline styling, empty states, terminal share button
+   ========================================================================== */
+
+/* Outline & Timeline — better collapsed styling with visible indicators */
+.sidebar-outline-section,
+.sidebar-timeline-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  margin: 3px 8px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-surface);
+  transition: border-color 0.15s;
+}
+.sidebar-outline-section:hover,
+.sidebar-timeline-section:hover {
+  border-color: var(--border-color);
+}
+.sidebar-outline-section summary,
+.sidebar-timeline-section summary {
+  list-style: none;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  transition: background-color 0.12s, color 0.12s;
+  position: relative;
+}
+.sidebar-outline-section summary:hover,
+.sidebar-timeline-section summary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary-bright);
+}
+.sidebar-outline-section summary::-webkit-details-marker,
+.sidebar-timeline-section summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-outline-section summary::after,
+.sidebar-timeline-section summary::after {
+  content: '';
+  width: 0; height: 0;
+  border-left: 4px solid var(--text-muted);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  margin-left: auto;
+  transition: transform 0.18s var(--ease-apple);
+}
+.sidebar-outline-section[open] summary::after,
+.sidebar-timeline-section[open] summary::after {
+  transform: rotate(90deg);
+  border-left-color: var(--accent-cyan);
+}
+.sidebar-outline-section summary svg,
+.sidebar-timeline-section summary svg {
+  opacity: 0.6;
+}
+.sidebar-outline-section[open] summary svg,
+.sidebar-timeline-section[open] summary svg {
+  opacity: 1;
+  color: var(--accent-cyan);
+}
+.sidebar-outline-section > div,
+.sidebar-timeline-section > div {
+  padding: 4px 8px 6px 12px;
+  font-size: 10.5px;
+  border-top: 1px solid var(--border-subtle);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Empty file tree state — more welcoming */
+#file-tree-container .empty-state,
+.view-explorer .empty-state {
+  text-align: center;
+  padding: 24px 16px;
+}
+.view-explorer .empty-state svg {
+  opacity: 0.3;
+  margin-bottom: 8px;
+}
+
+/* Terminal share button — compact, icon-only with tooltip */
+.terminal-share-btn {
+  font-size: 0;
+  width: 28px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: all 0.15s;
+}
+.terminal-share-btn::before {
+  content: '🤖';
+  font-size: 13px;
+}
+.terminal-share-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 8%, transparent);
+}
+
+/* Explorer top sections — compact filter + favorites/recents */
+#explorer-top-sections {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+#explorer-top-sections details {
+  margin: 2px 8px;
+}
+#explorer-top-sections summary {
+  font-size: 10px !important;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+#explorer-top-sections summary:hover {
+  color: var(--text-secondary);
+}
+
+/* Sidebar header — cleaner look */
+.sidebar-header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  background: var(--bg-surface);
+}

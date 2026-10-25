@@ -5,6 +5,7 @@
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openFileInTab } from '../editor/monaco.js';
+import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
 
 // L2/L3: recents + favorites state
 let recentFiles = [];
@@ -269,7 +270,7 @@ export function initFileTreeHeaderActions() {
       alert("Please open a workspace folder first to create files.");
       return;
     }
-    const relPath = prompt("Enter file name or relative path (e.g. script.js or src/module.py):");
+    const relPath = await showInputDialog("New File", "e.g. script.js or src/module.py");
     if (!relPath || !relPath.trim()) return;
 
     try {
@@ -292,7 +293,7 @@ export function initFileTreeHeaderActions() {
       alert("Please open a workspace folder first to create folders.");
       return;
     }
-    const folderPath = prompt("Enter new folder path (e.g. assets or components/ui):");
+    const folderPath = await showInputDialog("New Folder", "e.g. assets or components/ui");
     if (!folderPath || !folderPath.trim()) return;
 
     try {
@@ -382,7 +383,7 @@ let showFileTreeContextMenu = function (x, y, node) {
       label: 'Rename...',
       icon: '✏️',
       action: async () => {
-        const newName = prompt(`Rename "${node.name}" to:`, node.name);
+        const newName = await showInputDialog("Rename File", `New name for ${node.name}`, node.name);
         if (!newName || !newName.trim() || newName.trim() === node.name) return;
         const trimmed = newName.trim();
         const lastSlash = Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'));
@@ -412,7 +413,7 @@ let showFileTreeContextMenu = function (x, y, node) {
       icon: '🗑️',
       danger: true,
       action: async () => {
-        const confirmed = confirm(`Are you sure you want to delete "${node.name}"?`);
+        const confirmed = await showConfirmDialog(`Delete File`, `Are you sure you want to delete "${node.name}"?`, 'Delete', true);
         if (!confirmed) return;
         try {
           await invoke('execute_tool', {
@@ -900,7 +901,7 @@ function syncMultiSelectUI() {
 // ---------------------------------------------------------------
 
 export async function promptNewFile(dirPath) {
-  const name = prompt(dirPath ? `New file in ${dirPath}/ — filename:` : 'New file name (relative to workspace root):');
+  const name = await showInputDialog('New File', dirPath ? `filename (in ${dirPath}/)` : 'filename (workspace-relative)');
   if (!name || !name.trim()) return;
   const path = dirPath ? `${dirPath}/${name.trim()}` : name.trim();
   try {
@@ -913,7 +914,7 @@ export async function promptNewFile(dirPath) {
 }
 
 export async function promptNewFolder(dirPath) {
-  const name = prompt(dirPath ? `New folder in ${dirPath}/ — name:` : 'New folder name (relative to workspace root):');
+  const name = await showInputDialog('New Folder', dirPath ? `name (in ${dirPath}/)` : 'name (workspace-relative)');
   if (!name || !name.trim()) return;
   const path = dirPath ? `${dirPath}/${name.trim()}` : name.trim();
   try {
@@ -1051,14 +1052,14 @@ export async function showFileProperties(path) {
 export async function bulkDeleteSelected() {
   const paths = [...multiSelectedPaths];
   if (paths.length === 0) { showToast('Nothing selected', 'info', 1600); return; }
-  if (!confirm(`Delete ${paths.length} file(s)?\n\n${paths.slice(0, 8).join('\n')}${paths.length > 8 ? '\n…' : ''}`)) return;
+  if (!(await showConfirmDialog('Delete Files', `Delete ${paths.length} file(s)?`, 'Delete All', true))) return;
   try {
     const manifest = await invoke('execute_tool', {
       name: 'batch_delete_files',
       arguments: { paths },
       mode: 'dev',
     });
-    const approved = confirm(`Deletion manifest verified: ${manifest.total_files} files (${Math.round(manifest.total_bytes / 1024)} KB).\n\nConfirm irreversible deletion?`);
+    const approved = await showConfirmDialog("Confirm Deletion", `Deletion manifest verified: ${manifest.total_files} files (${Math.round(manifest.total_bytes / 1024)} KB).\n\nConfirm irreversible deletion?`, "Delete Permanently", true);
     if (!approved) { showToast('Deletion cancelled', 'info', 1800); return; }
     const res = await invoke('execute_tool', {
       name: 'batch_delete_files',
@@ -1137,3 +1138,193 @@ export function initExplorerA11y() {
   }
 }
 setTimeout(initExplorerA11y, 500);
+
+// ==========================================================================
+// FIX 3: auto-refresh the explorer whenever the agent (or the user) mutates
+// the filesystem. The agent already dispatches orbital:file-written on every
+// write; we also listen for a broader mutation event and refresh debounced.
+// ==========================================================================
+
+let treeRefreshTimer = null;
+
+function scheduleTreeRefresh() {
+  clearTimeout(treeRefreshTimer);
+  treeRefreshTimer = setTimeout(async () => {
+    try {
+      await refreshFileTree();
+      // Re-apply any active filter after the tree re-renders
+      if (treeFilter) applyTreeFilter();
+    } catch (e) {
+      console.warn('Explorer auto-refresh failed:', e);
+    }
+  }, 350); // debounce: batch rapid mutations (multi-file writes) into one refresh
+}
+
+// Agent writes via the write/patch tools
+window.addEventListener('orbital:file-written', scheduleTreeRefresh);
+
+// Broader mutations: deletes, renames, directory creates, batch deletes,
+// git operations that change the tree, checkpoint restores
+window.addEventListener('orbital:files-changed', scheduleTreeRefresh);
+
+// Hook into the agent's tool execution: after any filesystem-mutating tool
+// completes, fire the refresh event
+(function hookAgentToolRefresh() {
+  const origDispatch = window.dispatchEvent.bind(window);
+  // The agent already dispatches orbital:file-written for write_file/patch_file.
+  // We piggyback on tool completion by watching for tool-box status changes:
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType === 1 && node.classList?.contains('tool-box')) {
+          // A new tool box was added — watch its status for completion
+          const statusEl = node.querySelector('.tool-status-badge');
+          if (statusEl) {
+            const watch = new MutationObserver(() => {
+              const txt = statusEl.textContent || '';
+              if (txt.includes('✓') || txt.includes('✗') || txt.includes('Deleted') || txt.includes('Renamed')) {
+                // Check which tool it was by looking at the header
+                const toolName = node.querySelector('.tool-name-badge')?.textContent || '';
+                if (/write|patch|delete|rename|create_dir|batch|mkdir/i.test(toolName)) {
+                  scheduleTreeRefresh();
+                }
+                watch.disconnect();
+              }
+            });
+            watch.observe(statusEl, { childList: true, characterData: true, subtree: true });
+          }
+        }
+      }
+    }
+  });
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    observer.observe(timeline, { childList: true, subtree: true });
+  }
+})();
+
+// ==========================================================================
+// FIX 9: Functional Outline & Timeline sections in the explorer
+// ==========================================================================
+
+const SYMBOL_RE = /(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|struct|enum|trait|interface|const|let|var|def|fn|pub\s+fn|impl|type)\s+([A-Za-z_$][\w$]*)/g;
+
+export function refreshOutline() {
+  const host = document.getElementById('outline-symbols');
+  if (!host) return;
+
+  const m = null;
+  import('../editor/monaco.js').then((mon) => {
+    const ed = mon.getActiveEditor?.();
+    const model = ed?.getModel();
+    if (!model) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Open a file to see its symbols</span>';
+      return;
+    }
+
+    const content = model.getValue();
+    const lang = model.getLanguageId();
+    const symbols = [];
+    let match;
+    const re = new RegExp(SYMBOL_RE.source, 'g');
+    while ((match = re.exec(content)) !== null) {
+      const line = content.substring(0, match.index).split('\n').length;
+      const kind = /class|struct|interface|impl/.test(match[0]) ? 'class' :
+                   /const|let|var/.test(match[0]) ? 'var' : 'fn';
+      symbols.push({ name: match[1], line, kind });
+    }
+
+    if (symbols.length === 0) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">No symbols found</span>';
+      return;
+    }
+
+    const ICONS = { fn: 'ƒ', class: '◇', var: '▪' };
+    const COLORS = { fn: 'var(--accent-cyan)', class: 'var(--accent-purple)', var: 'var(--accent-orange)' };
+    host.innerHTML = '';
+    for (const sym of symbols.slice(0, 50)) {
+      const row = document.createElement('div');
+      row.style.cssText = `display: flex; align-items: center; gap: 6px; padding: 1px 4px; cursor: pointer; border-radius: 3px; font-family: var(--font-mono);`;
+      row.innerHTML = `<span style="color: ${COLORS[sym.kind]}; font-weight: 700; width: 14px; text-align: center; flex-shrink: 0;">${ICONS[sym.kind]}</span>
+        <span style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${sym.name}</span>
+        <span style="color: var(--text-muted); font-size: 9px;">:${sym.line}</span>`;
+      row.addEventListener('click', () => {
+        ed.revealLineInCenter(sym.line);
+        ed.setPosition({ lineNumber: sym.line, column: 1 });
+        ed.focus();
+      });
+      host.appendChild(row);
+    }
+  }).catch(() => {});
+}
+
+export async function refreshTimeline() {
+  const host = document.getElementById('timeline-commits');
+  if (!host) return;
+
+  const mon = await import('../editor/monaco.js');
+  const ed = mon.getActiveEditor?.();
+  const model = ed?.getModel();
+  if (!model) {
+    host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Open a file to see its git history</span>';
+    return;
+  }
+  const panel = mon.getActivePanel();
+  const tabs = mon.getPanelTabs(panel);
+  const activeId = panel === 'left' ? state.editor.activeTabId : state.editor.rightActiveTabId;
+  const tab = tabs.find(t => t.id === activeId);
+  if (!tab) return;
+  const relPath = tab.relativePath || tab.name;
+
+  try {
+    const res = await invoke('run_git_command', {
+      args: ['log', '--no-color', '--pretty=format:%h|%ar|%s', '-10', '--', relPath],
+    });
+    const commits = (res.stdout || '').split('\n').filter(Boolean);
+    if (commits.length === 0) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">No commits for this file</span>';
+      return;
+    }
+    host.innerHTML = '';
+    for (const line of commits) {
+      const [hash, when, ...msgParts] = line.split('|');
+      const msg = msgParts.join('|');
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer; border-radius: 3px; font-size: 10px;';
+      row.innerHTML = `<span style="font-family: var(--font-mono); color: var(--accent-orange); flex-shrink: 0;">${hash}</span>
+        <span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${msg}</span>
+        <span style="color: var(--text-muted); font-size: 9px; flex-shrink: 0;">${when}</span>`;
+      row.addEventListener('click', () => {
+        import('./source-control.js').then(sc => {
+          // Show the commit diff for this file
+          invoke('run_git_command', { args: ['show', '--no-color', '--stat', '-p', hash, '--', relPath] }).then(res => {
+            if (res.stdout) {
+              showToast(`Commit ${hash} — see terminal for full diff`, 'info', 3000);
+              // Write to terminal for inspection
+              import('./terminal.js').then(t => {
+                t.executeTerminalCommand(`git show ${hash} -- ${relPath}`);
+              });
+            }
+          });
+        });
+      });
+      host.appendChild(row);
+    }
+  } catch (e) {
+    host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Not a git repository</span>';
+  }
+}
+
+// Refresh outline + timeline whenever the active tab changes
+window.addEventListener('orbital:tab-changed', () => {
+  refreshOutline();
+  refreshTimeline();
+});
+
+// Also refresh when the outline/timeline sections are opened
+document.getElementById('outline-section')?.addEventListener('toggle', (e) => {
+  if (e.target.open) refreshOutline();
+});
+document.getElementById('timeline-section')?.addEventListener('toggle', (e) => {
+  if (e.target.open) refreshTimeline();
+});

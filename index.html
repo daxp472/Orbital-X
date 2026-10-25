@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.3 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.4 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -287,15 +287,25 @@
             </div>
           </div>
 
-          <!-- Bottom Explorer Sections: Outline & Timeline -->
-          <div class="sidebar-section-header">
-            <span style="font-size: 10px;">></span>
-            <span>Outline</span>
-          </div>
-          <div class="sidebar-section-header">
-            <span style="font-size: 10px;">></span>
-            <span>Timeline</span>
-          </div>
+          <!-- FIX 9: Functional Outline & Timeline sections -->
+          <details class="sidebar-outline-section" id="outline-section" style="margin-top: 4px;">
+            <summary style="font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; padding: 4px 0; display: flex; align-items: center; gap: 6px; user-select: none;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              Outline
+            </summary>
+            <div id="outline-symbols" style="padding: 2px 0 6px 18px; font-size: 10.5px; display: flex; flex-direction: column; gap: 1px; max-height: 200px; overflow-y: auto;">
+              <span style="color: var(--text-muted); font-size: 10px;">Open a file to see its symbols</span>
+            </div>
+          </details>
+          <details class="sidebar-timeline-section" id="timeline-section" style="margin-top: 2px;">
+            <summary style="font-size: 11px; font-weight: 600; color: var(--text-secondary); cursor: pointer; padding: 4px 0; display: flex; align-items: center; gap: 6px; user-select: none;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              Timeline
+            </summary>
+            <div id="timeline-commits" style="padding: 2px 0 6px 18px; font-size: 10.5px; display: flex; flex-direction: column; gap: 3px; max-height: 200px; overflow-y: auto;">
+              <span style="color: var(--text-muted); font-size: 10px;">Open a file to see its git history</span>
+            </div>
+          </details>
         </div>
 
         <!-- Search View -->
@@ -1407,7 +1417,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.2.3 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.2.4 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

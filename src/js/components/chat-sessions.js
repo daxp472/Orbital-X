@@ -101,7 +101,7 @@ function sortSessions() {
   });
 }
 
-function exportActiveSessionMarkdown() {
+async function exportActiveSessionMarkdown() {
   const current = getActiveSession();
   if (!current) return;
   const lines = [
@@ -123,13 +123,33 @@ function exportActiveSessionMarkdown() {
     }
   }
   lines.push('---', `_Session id: ${current.id}_`);
-  const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `orbital-chat-${(current.title || 'session').replace(/[^a-z0-9]+/gi, '-').slice(0, 40).toLowerCase()}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const markdown = lines.join('\n');
+
+  // FIX: browser blob downloads don't work in the Tauri WebView —
+  // write to disk through the backend instead
+  const safeName = (current.title || 'session').replace(/[^a-z0-9]+/gi, '-').slice(0, 40).toLowerCase();
+  const now = new Date().toISOString().slice(0, 10);
+  try {
+    const home = await invoke('run_command', { command: 'echo $env:USERPROFILE', timeout_seconds: 5 });
+    const homeDir = (home.stdout || '.').trim();
+    const path = `${homeDir}/Downloads/orbital-chat-${safeName}-${now}.md`;
+    await invoke('save_file', { path, content: markdown, description: 'Chat export' });
+    showToast(`Exported to ${path}`, 'success', 3500);
+  } catch (e) {
+    // Fallback: try browser download (works in dev mode)
+    try {
+      const blob = new Blob([markdown], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orbital-chat-${safeName}-${now}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Chat exported', 'success', 2500);
+    } catch (e2) {
+      showToast(`Export failed: ${e}`, 'error', 4000);
+    }
+  }
 }
 
 function importSessionFromMarkdown() {
