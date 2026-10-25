@@ -1201,3 +1201,129 @@ window.addEventListener('orbital:files-changed', scheduleTreeRefresh);
     observer.observe(timeline, { childList: true, subtree: true });
   }
 })();
+
+// ==========================================================================
+// FIX 9: Functional Outline & Timeline sections in the explorer
+// ==========================================================================
+
+const SYMBOL_RE = /(?:^|\n)\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function|class|struct|enum|trait|interface|const|let|var|def|fn|pub\s+fn|impl|type)\s+([A-Za-z_$][\w$]*)/g;
+
+export function refreshOutline() {
+  const host = document.getElementById('outline-symbols');
+  if (!host) return;
+
+  const m = null;
+  import('../editor/monaco.js').then((mon) => {
+    const ed = mon.getActiveEditor?.();
+    const model = ed?.getModel();
+    if (!model) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Open a file to see its symbols</span>';
+      return;
+    }
+
+    const content = model.getValue();
+    const lang = model.getLanguageId();
+    const symbols = [];
+    let match;
+    const re = new RegExp(SYMBOL_RE.source, 'g');
+    while ((match = re.exec(content)) !== null) {
+      const line = content.substring(0, match.index).split('\n').length;
+      const kind = /class|struct|interface|impl/.test(match[0]) ? 'class' :
+                   /const|let|var/.test(match[0]) ? 'var' : 'fn';
+      symbols.push({ name: match[1], line, kind });
+    }
+
+    if (symbols.length === 0) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">No symbols found</span>';
+      return;
+    }
+
+    const ICONS = { fn: 'ƒ', class: '◇', var: '▪' };
+    const COLORS = { fn: 'var(--accent-cyan)', class: 'var(--accent-purple)', var: 'var(--accent-orange)' };
+    host.innerHTML = '';
+    for (const sym of symbols.slice(0, 50)) {
+      const row = document.createElement('div');
+      row.style.cssText = `display: flex; align-items: center; gap: 6px; padding: 1px 4px; cursor: pointer; border-radius: 3px; font-family: var(--font-mono);`;
+      row.innerHTML = `<span style="color: ${COLORS[sym.kind]}; font-weight: 700; width: 14px; text-align: center; flex-shrink: 0;">${ICONS[sym.kind]}</span>
+        <span style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${sym.name}</span>
+        <span style="color: var(--text-muted); font-size: 9px;">:${sym.line}</span>`;
+      row.addEventListener('click', () => {
+        ed.revealLineInCenter(sym.line);
+        ed.setPosition({ lineNumber: sym.line, column: 1 });
+        ed.focus();
+      });
+      host.appendChild(row);
+    }
+  }).catch(() => {});
+}
+
+export async function refreshTimeline() {
+  const host = document.getElementById('timeline-commits');
+  if (!host) return;
+
+  const mon = await import('../editor/monaco.js');
+  const ed = mon.getActiveEditor?.();
+  const model = ed?.getModel();
+  if (!model) {
+    host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Open a file to see its git history</span>';
+    return;
+  }
+  const panel = mon.getActivePanel();
+  const tabs = mon.getPanelTabs(panel);
+  const activeId = panel === 'left' ? state.editor.activeTabId : state.editor.rightActiveTabId;
+  const tab = tabs.find(t => t.id === activeId);
+  if (!tab) return;
+  const relPath = tab.relativePath || tab.name;
+
+  try {
+    const res = await invoke('run_git_command', {
+      args: ['log', '--no-color', '--pretty=format:%h|%ar|%s', '-10', '--', relPath],
+    });
+    const commits = (res.stdout || '').split('\n').filter(Boolean);
+    if (commits.length === 0) {
+      host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">No commits for this file</span>';
+      return;
+    }
+    host.innerHTML = '';
+    for (const line of commits) {
+      const [hash, when, ...msgParts] = line.split('|');
+      const msg = msgParts.join('|');
+      const row = document.createElement('div');
+      row.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 2px 4px; cursor: pointer; border-radius: 3px; font-size: 10px;';
+      row.innerHTML = `<span style="font-family: var(--font-mono); color: var(--accent-orange); flex-shrink: 0;">${hash}</span>
+        <span style="color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">${msg}</span>
+        <span style="color: var(--text-muted); font-size: 9px; flex-shrink: 0;">${when}</span>`;
+      row.addEventListener('click', () => {
+        import('./source-control.js').then(sc => {
+          // Show the commit diff for this file
+          invoke('run_git_command', { args: ['show', '--no-color', '--stat', '-p', hash, '--', relPath] }).then(res => {
+            if (res.stdout) {
+              showToast(`Commit ${hash} — see terminal for full diff`, 'info', 3000);
+              // Write to terminal for inspection
+              import('./terminal.js').then(t => {
+                t.executeTerminalCommand(`git show ${hash} -- ${relPath}`);
+              });
+            }
+          });
+        });
+      });
+      host.appendChild(row);
+    }
+  } catch (e) {
+    host.innerHTML = '<span style="color: var(--text-muted); font-size: 10px;">Not a git repository</span>';
+  }
+}
+
+// Refresh outline + timeline whenever the active tab changes
+window.addEventListener('orbital:tab-changed', () => {
+  refreshOutline();
+  refreshTimeline();
+});
+
+// Also refresh when the outline/timeline sections are opened
+document.getElementById('outline-section')?.addEventListener('toggle', (e) => {
+  if (e.target.open) refreshOutline();
+});
+document.getElementById('timeline-section')?.addEventListener('toggle', (e) => {
+  if (e.target.open) refreshTimeline();
+});

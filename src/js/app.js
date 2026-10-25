@@ -355,14 +355,34 @@ function initResizers() {
     }
   });
 
-  // Agent panel col-resizer
+  // Agent panel col-resizer — FIX 8: allow up to 50% of window width
+  const agentPanel = document.getElementById('agent-panel');
   setupResizer('resizer-agent', (e) => {
     const panel = document.getElementById('agent-panel');
     if (panel) {
-      const newWidth = Math.max(260, Math.min(600, window.innerWidth - e.clientX));
+      const maxW = Math.max(600, Math.floor(window.innerWidth * 0.5));
+      const newWidth = Math.max(260, Math.min(maxW, window.innerWidth - e.clientX));
       panel.style.width = `${newWidth}px`;
+      // Live width tooltip on the resizer
+      const handle = document.getElementById('resizer-agent');
+      if (handle) handle.title = `${Math.round(newWidth)}px — double-click to reset`;
     }
   });
+
+  // FIX 8: double-click on the agent resizer resets to default width
+  const agentHandle = document.getElementById('resizer-agent');
+  if (agentHandle && !agentHandle.dataset.dblWired) {
+    agentHandle.dataset.dblWired = '1';
+    agentHandle.title = 'Drag to resize — double-click to reset';
+    agentHandle.addEventListener('dblclick', () => {
+      const panel = document.getElementById('agent-panel');
+      if (panel) {
+        panel.style.width = '380px';
+        try { localStorage.setItem('orbital_panel_agent_w', '380'); } catch (e) { /* quota */ }
+        import('./editor/monaco.js').then(m => m.getActiveEditor()?.layout());
+      }
+    });
+  }
 
   // Bottom panel row-resizer
   setupResizer('resizer-bottom', (e) => {

@@ -365,6 +365,9 @@ export function initMonaco(containerElement) {
   // Live file reload / Watch: agent writes to a file open in the active tab
   window.addEventListener('orbital:file-written', async (e) => {
     const writtenPath = e.detail?.path;
+    if (writtenPath && e.detail?.oldContent !== undefined && e.detail?.newContent !== undefined) {
+      showInlineDiff(e.detail.oldContent, e.detail.newContent);
+    }
     if (!writtenPath) return;
     const normalize = (p) => (p ? p.replace(/\\/g, '/').toLowerCase() : '');
     for (const panel of ['left', 'right']) {
@@ -854,6 +857,7 @@ export function openFileInTab(fileData, opts = {}) {
   renderTabs(panel);
   if (!opts.silent) scheduleTabPersist();
   notify('activeTab', tab);
+  window.dispatchEvent(new CustomEvent('orbital:tab-changed', { detail: { path: tab.path, panel } }));
   return tab;
 }
 
@@ -889,6 +893,82 @@ function updateBannerText(banner, isHuge, sizeBytes) {
   banner.textContent = isHuge
     ? `⚠ Large file (${kb} KB): IntelliSense, minimap, and some highlighting disabled for performance`
     : `⚠ Large file (${kb} KB): IntelliSense disabled for performance`;
+}
+
+// ---------------------------------------------------------------------------
+// FIX 10b: inline diff decorations — green/red line highlights in the editor
+// after the agent patches a file (fades after 12 seconds)
+// ---------------------------------------------------------------------------
+
+let diffDecorations = [];
+let diffFadeTimer = null;
+
+export function showInlineDiff(oldContent, newContent) {
+  const ed = editors[getActivePanel()];
+  const model = ed?.getModel();
+  if (!ed || !model) return;
+
+  // Compute line-level diff using simple LCS approximation
+  const oldLines = oldContent.split('\n');
+  const newLines = newContent.split('\n');
+  const decorations = [];
+
+  // Find changed ranges: walk both arrays, mark lines that differ
+  const maxLen = Math.max(oldLines.length, newLines.length);
+  let currentRange = null;
+
+  const pushRange = () => {
+    if (currentRange) {
+      decorations.push({
+        range: new monaco.Range(currentRange.start, 1, currentRange.end, 1),
+        options: {
+          isWholeLine: true,
+          className: currentRange.type === 'add' ? 'inline-diff-add' : 'inline-diff-del',
+          overviewRuler: {
+            color: currentRange.type === 'add' ? '#30d158' : '#ff453a',
+            position: monaco.editor.OverviewRulerPosition.Right,
+          },
+        },
+      });
+      currentRange = null;
+    }
+  };
+
+  // Simple approach: mark all lines that differ between old and new
+  const oldSet = new Set(oldLines);
+  const newSet = new Set(newLines);
+
+  for (let i = 0; i < newLines.length; i++) {
+    const line = newLines[i];
+    if (!oldSet.has(line)) {
+      // This line is new or changed
+      if (!currentRange || currentRange.type !== 'add' || currentRange.end !== i) {
+        pushRange();
+        currentRange = { start: i + 1, end: i + 1, type: 'add' };
+      } else {
+        currentRange.end = i + 1;
+      }
+    } else {
+      pushRange();
+    }
+  }
+  pushRange();
+
+  // Apply with a fade-out timer
+  diffDecorations = ed.deltaDecorations(diffDecorations, decorations);
+  clearTimeout(diffFadeTimer);
+  diffFadeTimer = setTimeout(() => {
+    const activeEd = editors[getActivePanel()];
+    if (activeEd) {
+      diffDecorations = activeEd.deltaDecorations(diffDecorations, []);
+    }
+  }, 12000);
+
+  // Scroll to the first change
+  if (decorations.length > 0) {
+    const first = decorations[0].range.startLineNumber;
+    ed.revealLineInCenter(first);
+  }
 }
 
 function updateBreadcrumbFor(panel) {

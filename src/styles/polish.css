@@ -1074,3 +1074,99 @@ body.theme-light .settings-sidebar,
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Chat drop zone (FIX 5)
+   ========================================================================== */
+#agent-panel.chat-drop-zone {
+  outline: 2px dashed var(--accent-cyan);
+  outline-offset: -6px;
+  background: color-mix(in srgb, var(--accent-cyan) 4%, transparent);
+}
+#agent-panel.chat-drop-zone::after {
+  content: 'Drop files to attach';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: var(--bg-card);
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--accent-cyan);
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ==========================================================================
+   Inline diff decorations in the editor (FIX 10b)
+   ========================================================================== */
+.inline-diff-add {
+  background: color-mix(in srgb, #30d158 15%, transparent);
+  border-left: 3px solid #30d158;
+}
+.inline-diff-del {
+  background: color-mix(in srgb, #ff453a 15%, transparent);
+  border-left: 3px solid #ff453a;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* ==========================================================================
+   Outline & Timeline sections (FIX 9)
+   ========================================================================== */
+.sidebar-outline-section summary,
+.sidebar-timeline-section summary {
+  list-style: none;
+  transition: color 0.15s;
+}
+.sidebar-outline-section summary:hover,
+.sidebar-timeline-section summary:hover {
+  color: var(--text-primary-bright);
+}
+.sidebar-outline-section summary::-webkit-details-marker,
+.sidebar-timeline-section summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-outline-section summary::before,
+.sidebar-timeline-section summary::before {
+  content: '▶';
+  font-size: 8px;
+  transition: transform 0.15s;
+}
+.sidebar-outline-section[open] summary::before,
+.sidebar-timeline-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* Resizer handle improvement (FIX 8) */
+#resizer-agent {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+}
+#resizer-agent:hover,
+#resizer-agent.resizing {
+  background: var(--accent-cyan);
+}
+#resizer-agent::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--border-color);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+#resizer-agent:hover::after {
+  opacity: 1;
+}
