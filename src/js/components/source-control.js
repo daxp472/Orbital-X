@@ -24,6 +24,7 @@ import * as monaco from 'monaco-editor';
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { showConfirmDialog, showInputDialog } from '../services/dialogs.js';
 
 let panelState = {
   tab: 'changes', // 'changes' | 'history' | 'graph'
@@ -386,10 +387,10 @@ async function unstageFile(path) {
 async function discardFile(entry) {
   const name = fileName(entry.path);
   if (entry.x === '?') {
-    if (!confirm(`Delete untracked file "${name}" permanently?`)) return;
+    if (!(await showConfirmDialog('Delete File', `Delete untracked file "${name}" permanently?`, 'Delete', true))) return;
     await gitAction(['clean', '-f', '--', entry.path], `Removed ${name}`);
   } else {
-    if (!confirm(`Discard all changes in "${name}"? This cannot be undone.`)) return;
+    if (!(await showConfirmDialog('Discard Changes', `Discard all changes in "${name}"? This cannot be undone.`, 'Discard', true))) return;
     await gitAction(['restore', '--', entry.path], `Discarded changes in ${name}`);
   }
 }
@@ -878,7 +879,7 @@ async function openStashMenu(anchorOrEvent) {
           if (op === 'pop') await gitAction(['stash', 'pop', idx], `Popped ${idx}`);
           else if (op === 'apply') await gitAction(['stash', 'apply', idx], `Applied ${idx}`);
           else if (op === 'drop') {
-            if (!confirm(`Drop stash ${idx}? This cannot be undone.`)) return;
+            if (!(await showConfirmDialog('Drop Stash', `Drop stash ${idx}? This cannot be undone.`, 'Drop', true))) return;
             await gitAction(['stash', 'drop', idx], `Dropped ${idx}`);
           }
           pop.remove();

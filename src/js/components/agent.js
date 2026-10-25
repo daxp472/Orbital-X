@@ -6,6 +6,7 @@ import { state, notify } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
+import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
 import {
   isComplexRequest,
   createPlan,
@@ -89,14 +90,14 @@ export function initAgent() {
   });
 
   // Context button (@)
-  document.getElementById('btn-composer-context')?.addEventListener('click', () => {
+  document.getElementById('btn-composer-context')?.addEventListener('click', async () => {
     const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
     if (activeTab) {
       inputElem.value = `@${activeTab.name} ` + inputElem.value;
       updateTokenEstimate(inputElem.value);
       inputElem.focus();
     } else {
-      const filename = prompt("Enter file name or symbol to attach to prompt (e.g. src/main.rs):");
+      const filename = await showInputDialog("Attach File", "e.g. src/main.rs");
       if (filename) {
         inputElem.value = `@${filename} ` + inputElem.value;
         updateTokenEstimate(inputElem.value);
@@ -550,10 +551,10 @@ function openAttachmentMenu(e) {
   }, 0);
 }
 
-export function switchMode(newMode) {
+export async function switchMode(newMode) {
   // H6: leaving Agent Pro mid-task stops the agent — confirm first
   if (state.agentMode === 'agent_pro' && newMode !== 'agent_pro' && isLoopRunning) {
-    if (!confirm(`Are you sure? The agent will stop when switching from Agent Pro to ${newMode === 'dev' ? 'Dev' : 'User'} mode.`)) {
+    if (!(await showConfirmDialog('Mode Change', `Are you sure? The agent will stop when switching from Agent Pro to ${newMode === 'dev' ? 'Dev' : 'User'} mode.`, 'Switch Mode'))) {
       return;
     }
   }
@@ -880,7 +881,7 @@ export async function addAttachment(kind) {
       item.content = sel;
     } else if (kind === 'file') {
       const files = await getWorkspaceFileList();
-      const path = prompt('File path to attach (relative to workspace root):', files[0] || '');
+      const path = await showInputDialog('Attach File', 'path relative to workspace root', files[0] || '');
       if (!path || !path.trim()) return;
       const fileData = await invoke('read_file', { path: path.trim() });
       if (fileData.is_binary) { showToast('Binary files cannot be attached', 'info', 2200); return; }
@@ -3195,8 +3196,8 @@ async function executePlanPhases(plan, card) {
   }
 }
 
-function revisePlan(plan, card) {
-  const feedback = prompt('What adjustments, modifications, or scope additions would you like in this plan?');
+async function revisePlan(plan, card) {
+  const feedback = await showInputDialog('Revise Plan', 'What adjustments would you like?');
   if (!feedback) return;
 
   card.remove();
@@ -3275,7 +3276,7 @@ export async function refreshCheckpointsView() {
         </div>
       `;
       row.querySelector('.cp-restore')?.addEventListener('click', async () => {
-        if (!confirm(`Restore the workspace to just after this change?\n\nEvery agent change made AFTER it will be reverted (${cp.index !== undefined ? 'checkpoint #' + cp.index : ''}).`)) return;
+        if (!(await showConfirmDialog('Restore Checkpoint', `Restore the workspace to just after this change? Every agent change made AFTER it will be reverted.`, 'Restore', true))) return;
         try {
           const res = await invoke('restore_checkpoint', { index: cp.index });
           if (res && res.success) {

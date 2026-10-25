@@ -15,6 +15,7 @@ import { initSkills, renderSkillsPanel } from './components/skills.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
+import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
 import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
@@ -175,7 +176,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 1. Check for unsaved changes in open tabs
     const unsavedTabs = state.editor.tabs.filter(t => t.isDirty);
     if (unsavedTabs.length > 0) {
-      const confirmOpen = confirm(`You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`);
+      const confirmOpen = await showConfirmDialog('Unsaved Files', `You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`, 'Open Workspace');
       if (!confirmOpen) return;
     }
 
@@ -738,9 +739,9 @@ function openWelcomeScreen() {
     import('./components/file-tree.js').then(m => { if (m.promptNewFile) m.promptNewFile(null); });
   });
   document.getElementById('welcome-clone-btn')?.addEventListener('click', async () => {
-    const url = prompt('Repository URL to clone:');
+    const url = await showInputDialog('Clone Repository', 'https://github.com/user/repo.git');
     if (!url || !url.trim()) return;
-    const dest = prompt('Destination folder name (created in your home directory):', 'cloned-repo');
+    const dest = await showInputDialog('Destination', 'folder name (created in home dir)', 'cloned-repo');
     if (!dest || !dest.trim()) return;
     modal.style.display = 'none';
     showToast('Cloning repository…', 'info', 2500);

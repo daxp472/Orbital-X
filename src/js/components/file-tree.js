@@ -5,6 +5,7 @@
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openFileInTab } from '../editor/monaco.js';
+import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
 
 // L2/L3: recents + favorites state
 let recentFiles = [];
@@ -269,7 +270,7 @@ export function initFileTreeHeaderActions() {
       alert("Please open a workspace folder first to create files.");
       return;
     }
-    const relPath = prompt("Enter file name or relative path (e.g. script.js or src/module.py):");
+    const relPath = await showInputDialog("New File", "e.g. script.js or src/module.py");
     if (!relPath || !relPath.trim()) return;
 
     try {
@@ -292,7 +293,7 @@ export function initFileTreeHeaderActions() {
       alert("Please open a workspace folder first to create folders.");
       return;
     }
-    const folderPath = prompt("Enter new folder path (e.g. assets or components/ui):");
+    const folderPath = await showInputDialog("New Folder", "e.g. assets or components/ui");
     if (!folderPath || !folderPath.trim()) return;
 
     try {
@@ -382,7 +383,7 @@ let showFileTreeContextMenu = function (x, y, node) {
       label: 'Rename...',
       icon: '✏️',
       action: async () => {
-        const newName = prompt(`Rename "${node.name}" to:`, node.name);
+        const newName = await showInputDialog("Rename File", `New name for ${node.name}`, node.name);
         if (!newName || !newName.trim() || newName.trim() === node.name) return;
         const trimmed = newName.trim();
         const lastSlash = Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'));
@@ -412,7 +413,7 @@ let showFileTreeContextMenu = function (x, y, node) {
       icon: '🗑️',
       danger: true,
       action: async () => {
-        const confirmed = confirm(`Are you sure you want to delete "${node.name}"?`);
+        const confirmed = await showConfirmDialog(`Delete File`, `Are you sure you want to delete "${node.name}"?`, 'Delete', true);
         if (!confirmed) return;
         try {
           await invoke('execute_tool', {
@@ -900,7 +901,7 @@ function syncMultiSelectUI() {
 // ---------------------------------------------------------------
 
 export async function promptNewFile(dirPath) {
-  const name = prompt(dirPath ? `New file in ${dirPath}/ — filename:` : 'New file name (relative to workspace root):');
+  const name = await showInputDialog('New File', dirPath ? `filename (in ${dirPath}/)` : 'filename (workspace-relative)');
   if (!name || !name.trim()) return;
   const path = dirPath ? `${dirPath}/${name.trim()}` : name.trim();
   try {
@@ -913,7 +914,7 @@ export async function promptNewFile(dirPath) {
 }
 
 export async function promptNewFolder(dirPath) {
-  const name = prompt(dirPath ? `New folder in ${dirPath}/ — name:` : 'New folder name (relative to workspace root):');
+  const name = await showInputDialog('New Folder', dirPath ? `name (in ${dirPath}/)` : 'name (workspace-relative)');
   if (!name || !name.trim()) return;
   const path = dirPath ? `${dirPath}/${name.trim()}` : name.trim();
   try {
@@ -1051,14 +1052,14 @@ export async function showFileProperties(path) {
 export async function bulkDeleteSelected() {
   const paths = [...multiSelectedPaths];
   if (paths.length === 0) { showToast('Nothing selected', 'info', 1600); return; }
-  if (!confirm(`Delete ${paths.length} file(s)?\n\n${paths.slice(0, 8).join('\n')}${paths.length > 8 ? '\n…' : ''}`)) return;
+  if (!(await showConfirmDialog('Delete Files', `Delete ${paths.length} file(s)?`, 'Delete All', true))) return;
   try {
     const manifest = await invoke('execute_tool', {
       name: 'batch_delete_files',
       arguments: { paths },
       mode: 'dev',
     });
-    const approved = confirm(`Deletion manifest verified: ${manifest.total_files} files (${Math.round(manifest.total_bytes / 1024)} KB).\n\nConfirm irreversible deletion?`);
+    const approved = await showConfirmDialog("Confirm Deletion", `Deletion manifest verified: ${manifest.total_files} files (${Math.round(manifest.total_bytes / 1024)} KB).\n\nConfirm irreversible deletion?`, "Delete Permanently", true);
     if (!approved) { showToast('Deletion cancelled', 'info', 1800); return; }
     const res = await invoke('execute_tool', {
       name: 'batch_delete_files',

@@ -1170,3 +1170,124 @@ body.theme-light .settings-sidebar,
 #resizer-agent:hover::after {
   opacity: 1;
 }
+
+/* ==========================================================================
+   Toast notification polish — glass effect, better sizing, animations
+   ========================================================================== */
+.toast-item {
+  min-width: 280px;
+  max-width: 400px;
+  padding: 0;
+  border-radius: var(--radius-md, 12px);
+  background: rgba(22, 25, 33, 0.95);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  transform: translateX(120%) scale(0.95);
+  opacity: 0;
+  transition: transform 0.35s var(--ease-spring), opacity 0.25s var(--ease-apple);
+}
+.toast-item.toast-show {
+  transform: translateX(0) scale(1);
+  opacity: 1;
+}
+.toast-item.toast-hide {
+  transform: translateX(120%) scale(0.9);
+  opacity: 0;
+}
+.toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0 12px 14px;
+  flex-shrink: 0;
+}
+.toast-content {
+  flex: 1;
+  padding: 10px 4px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.toast-message {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary-bright, #fff);
+  line-height: 1.4;
+}
+.toast-close-btn {
+  align-self: flex-start;
+  margin: 6px 6px 0 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.toast-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+.toast-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-cyan);
+  opacity: 0.5;
+  animation: toastShrink linear forwards;
+  transform-origin: left;
+}
+.toast-action-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.toast-action-btn.primary {
+  background: var(--accent-cyan);
+  color: #04211f;
+  border: none;
+}
+.toast-action-btn.primary:hover {
+  filter: brightness(1.15);
+}
+
+/* Type-specific icon backgrounds */
+.toast-info .toast-icon { color: var(--accent-cyan); }
+.toast-success .toast-icon { color: #30d158; }
+.toast-warning .toast-icon { color: var(--accent-orange); }
+.toast-error .toast-icon { color: var(--accent-red); }
+.toast-info { border-left: 3px solid var(--accent-cyan); }
+.toast-success { border-left: 3px solid #30d158; }
+.toast-warning { border-left: 3px solid var(--accent-orange); }
+.toast-error { border-left: 3px solid var(--accent-red); }
+
+/* ==========================================================================
+   Terminal share button
+   ========================================================================== */
+.terminal-share-btn {
+  font-size: 10px;
+  padding: 1px 8px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.terminal-share-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}

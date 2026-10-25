@@ -1327,8 +1327,8 @@ async function openSettingsJsonEditor() {
   });
 }
 
-function resetAllSettingsToDefaults() {
-  if (!confirm('Reset ALL settings to defaults?\n\nThis clears themes, models, editor/terminal preferences, custom keybindings, and toggles (API keys are kept). The app reloads afterwards.')) return;
+async function resetAllSettingsToDefaults() {
+  if (!(await showConfirmDialog('Reset to Defaults', 'This clears themes, models, editor/terminal preferences, custom keybindings, and toggles. API keys are kept. The app reloads afterwards.', 'Reset Everything', true))) return;
   const keysToClear = [
     'orbital_theme', 'orbital_mode', 'orbital_provider', 'orbital_model', 'orbital_endpoint',
     'orbital_openai_base_url', 'orbital_default_models', 'orbital_ai_settings', 'orbital_autosave',
