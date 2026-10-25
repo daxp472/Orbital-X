@@ -17,6 +17,7 @@ import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 import { showToast } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
+import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 
 window.showToast = showToast;
 
@@ -140,6 +141,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       refreshMemories();
       tryRestorePlan();
       tryRestoreEditorSession();
+      import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); });
     }
   } catch (e) {
     console.log("No initial workspace loaded:", e);
@@ -183,6 +185,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         refreshGitStatus();
         tryRestorePlan();
         tryRestoreEditorSession();
+        import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); });
       }
     } catch (err) {
       console.error("Workspace transition error:", err);
@@ -360,60 +363,13 @@ function setupResizer(handleId, onDrag) {
 }
 
 function initGlobalShortcuts() {
-  window.addEventListener('keydown', (e) => {
-    // Ctrl + O: Open Folder
-    if (e.ctrlKey && e.key.toLowerCase() === 'o') {
-      e.preventDefault();
-      document.getElementById('btn-open-workspace')?.click();
-    }
-    // Ctrl + S: Save File
-    else if (e.ctrlKey && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      saveActiveFile();
-    }
-    // Alt + M: Cycle Mode
-    else if (e.altKey && e.key.toLowerCase() === 'm') {
-      e.preventDefault();
-      document.getElementById('header-mode-pill')?.click();
-    }
-    // Ctrl + Shift + A: Toggle Agent
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-      e.preventDefault();
-      document.getElementById('rail-agent')?.click();
-    }
-    // Ctrl + Shift + G: Source Control (Git)
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'g') {
-      e.preventDefault();
-      document.getElementById('rail-source-control')?.click();
-    }
-    // Ctrl + Shift + X: Extensions
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'x') {
-      e.preventDefault();
-      document.getElementById('rail-extensions')?.click();
-    }
-    // Ctrl + Shift + D: Run & Debug
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
-      e.preventDefault();
-      document.getElementById('rail-debug')?.click();
-    }
-    // Ctrl + Shift + E: Explorer
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') {
-      e.preventDefault();
-      document.getElementById('rail-explorer')?.click();
-    }
-    // Ctrl + Shift + F: Search in Workspace
-    else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'f') {
-      e.preventDefault();
-      document.getElementById('rail-search')?.click();
-    }
-    // Ctrl + Shift + ` (backtick): create a new terminal
-    else if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
-      e.preventDefault();
-      import('./components/terminal.js').then(m => m.createTerminalInstance());
-    }
-    // Ctrl + ` (backtick) or Ctrl + J: Toggle Terminal Panel & Focus Terminal Input
-    else if (e.ctrlKey && !e.shiftKey && (e.key === '`' || e.key.toLowerCase() === 'j')) {
-      e.preventDefault();
+  const actions = {
+    'app.save': () => saveActiveFile(),
+    'app.openFolder': () => document.getElementById('btn-open-workspace')?.click(),
+    'app.closeTab': () => import('./editor/monaco.js').then(m => m.closeActiveTab()),
+    'app.splitEditor': () => import('./editor/monaco.js').then(m => m.toggleSplitEditor()),
+    'app.commandPalette': () => import('./components/command-palette.js').then(m => m.openPalette()),
+    'app.toggleTerminal': () => {
       const bottom = document.getElementById('bottom-panel');
       const isCollapsed = bottom?.classList.contains('collapsed');
       if (isCollapsed) {
@@ -423,25 +379,11 @@ function initGlobalShortcuts() {
       } else {
         bottom?.classList.add('collapsed');
       }
-    }
-    // Ctrl + W: Close editor tab
-    else if (e.ctrlKey && e.key.toLowerCase() === 'w') {
-      e.preventDefault();
-      import('./editor/monaco.js').then(m => m.closeActiveTab());
-    }
-    // Ctrl + \: Toggle split editor
-    else if (e.ctrlKey && e.key === '\\') {
-      e.preventDefault();
-      import('./editor/monaco.js').then(m => m.toggleSplitEditor());
-    }
-    // Ctrl + B: Toggle Sidebar
-    else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
-      e.preventDefault();
-      document.getElementById('btn-toggle-sidebar')?.click();
-    }
-    // Ctrl + L: Focus Agent Chat Input (VS Code / Cursor / Antigravity standard)
-    else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === 'l') {
-      e.preventDefault();
+    },
+    'app.newTerminal': () => import('./components/terminal.js').then(m => m.createTerminalInstance()),
+    'app.toggleSidebar': () => document.getElementById('btn-toggle-sidebar')?.click(),
+    'app.toggleAgent': () => document.getElementById('rail-agent')?.click(),
+    'app.focusChat': () => {
       const agentPanel = document.getElementById('agent-panel');
       const btnToggleAgent = document.getElementById('btn-toggle-agent');
       if (agentPanel?.classList.contains('hidden')) {
@@ -449,6 +391,27 @@ function initGlobalShortcuts() {
         btnToggleAgent?.classList.add('active');
       }
       document.getElementById('agent-input')?.focus();
+    },
+    'app.explorer': () => document.getElementById('rail-explorer')?.click(),
+    'app.search': () => document.getElementById('rail-search')?.click(),
+    'app.sourceControl': () => document.getElementById('rail-source-control')?.click(),
+    'app.extensions': () => document.getElementById('rail-extensions')?.click(),
+    'app.cycleMode': () => document.getElementById('header-mode-pill')?.click(),
+    'app.settings': () => document.getElementById('btn-open-settings')?.click(),
+    'app.shortcuts': () => document.getElementById('menu-help')?.click(),
+  };
+
+  const appBindings = getAllBindings().filter(b => b.scope === 'app');
+
+  window.addEventListener('keydown', (e) => {
+    const combo = comboFromEvent(e);
+    if (!combo) return;
+    const hit = appBindings.find(b => b.combo === combo);
+    if (!hit) return;
+    const fn = actions[hit.id];
+    if (fn) {
+      e.preventDefault();
+      fn();
     }
   });
 }

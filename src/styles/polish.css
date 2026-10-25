@@ -851,3 +851,28 @@ body.theme-light .settings-sidebar,
   font-family: var(--font-mono);
   pointer-events: auto;
 }
+
+/* ==========================================================================
+   Part G — settings overhaul
+   ========================================================================== */
+.kb-combo {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  background: var(--bg-activity);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--text-primary);
+}
+.kb-recording {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  animation: kbPulse 1.1s ease infinite;
+}
+@keyframes kbPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+#settings-search-input {
+  border-radius: var(--radius-sm);
+}

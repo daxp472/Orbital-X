@@ -83,6 +83,12 @@ export function initSettings() {
   // Editor settings UI (appearance + formatting + inline autocomplete)
   setupEditorSettingsUI();
 
+  // Settings overhaul: search, JSON editor, import/export/reset, editable keybindings
+  setupSettingsOverhaul();
+
+  // Terminal appearance settings (Part E4)
+  setupTerminalSettingsUI();
+
   // Theme Select inside settings
   populateThemeDropdown();
   document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
@@ -1105,4 +1111,586 @@ function importSettings() {
   };
 
   input.click();
+}
+
+
+// ==========================================================================
+// Settings overhaul (Part G)
+// ==========================================================================
+
+import { getAllBindings, setBinding, resetBinding, findConflict, comboFromEvent } from '../services/keybindings.js';
+
+function markSettingsModified() {
+  try {
+    localStorage.setItem('orbital_settings_modified_at', new Date().toISOString());
+  } catch (e) { /* quota */ }
+  const statusEl = document.getElementById('settings-save-status');
+  if (statusEl) statusEl.textContent = `Last modified: ${new Date().toLocaleString()}`;
+}
+
+// ---------------------------------------------------------------------------
+// G2 — settings search across every pane
+// ---------------------------------------------------------------------------
+
+function setupSettingsSearch() {
+  const content = document.querySelector('.settings-content-pane');
+  if (!content || document.getElementById('settings-search-input')) return;
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'padding: 0 0 10px 0; position: sticky; top: 0; background: inherit; z-index: 5;';
+  wrap.innerHTML = `
+    <input type="text" id="settings-search-input" class="input-text" placeholder="Search settings… (labels, descriptions)" style="width: 100%; font-size: 12px;" />
+    <div id="settings-search-count" style="font-size: 10px; color: var(--text-muted); margin-top: 3px; display: none;"></div>
+  `;
+  content.insertBefore(wrap, content.firstChild);
+
+  const input = wrap.querySelector('#settings-search-input');
+  input.addEventListener('input', () => filterSettings(input.value.trim()));
+}
+
+function highlightText(el, term) {
+  // Wraps case-insensitive matches of term inside el's direct text with <mark>
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const nodes = [];
+  while (walk.nextNode()) nodes.push(walk.currentNode);
+  const lower = term.toLowerCase();
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    const idx = text.toLowerCase().indexOf(lower);
+    if (idx === -1) continue;
+    const frag = document.createDocumentFragment();
+    frag.appendChild(document.createTextNode(text.slice(0, idx)));
+    const mark = document.createElement('mark');
+    mark.style.cssText = 'background: color-mix(in srgb, var(--accent-cyan) 35%, transparent); color: inherit; border-radius: 2px;';
+    mark.textContent = text.slice(idx, idx + term.length);
+    frag.appendChild(mark);
+    frag.appendChild(document.createTextNode(text.slice(idx + term.length)));
+    node.replaceWith(frag);
+  }
+}
+
+function clearHighlights(root) {
+  root.querySelectorAll('mark').forEach(m => {
+    m.replaceWith(document.createTextNode(m.textContent));
+  });
+  root.normalize();
+}
+
+function filterSettings(term) {
+  const panes = [...document.querySelectorAll('.settings-pane')];
+  const countEl = document.getElementById('settings-search-count');
+  clearHighlights(document.querySelector('.settings-content-pane') || document.body);
+
+  if (!term) {
+    countEl.style.display = 'none';
+    // Restore normal single-tab view: show only the active tab's pane
+    const activeBtn = document.querySelector('.settings-nav-item.active');
+    const activePane = activeBtn ? document.getElementById(activeBtn.dataset.pane || activeBtn.getAttribute('data-pane')) : null;
+    panes.forEach(p => { p.style.display = (p === activePane) ? 'flex' : 'none'; });
+    return;
+  }
+
+  const lower = term.toLowerCase();
+  let matches = 0;
+  panes.forEach(pane => {
+    let paneHasMatch = false;
+    const rows = pane.querySelectorAll('.settings-setting-row, .form-group, .settings-section-title, .settings-section-desc');
+    rows.forEach(row => {
+      const label = row.querySelector('.settings-setting-label, .form-label, .settings-section-title');
+      const desc = row.querySelector('.settings-setting-caption, .settings-section-desc');
+      const labelTxt = (label?.textContent || (row.classList.contains('settings-section-title') ? row.textContent : '')).toLowerCase();
+      const descTxt = (desc?.textContent || '').toLowerCase();
+      const hit = labelTxt.includes(lower) || descTxt.includes(lower);
+      if (row.classList.contains('settings-section-title') || row.classList.contains('settings-section-desc')) {
+        row.style.display = ''; // keep headers visible in matched panes
+        return;
+      }
+      if (hit) {
+        paneHasMatch = true;
+        matches++;
+        row.style.display = '';
+        highlightText(row, term);
+      } else {
+        row.style.display = 'none';
+      }
+    });
+    pane.style.display = paneHasMatch ? 'flex' : 'none';
+  });
+
+  countEl.style.display = '';
+  countEl.textContent = `${matches} setting${matches === 1 ? '' : 's'} match “${term}”`;
+}
+
+// ---------------------------------------------------------------------------
+// G1 — settings.json editor + G3 — export/import/reset
+// ---------------------------------------------------------------------------
+
+function collectAllSettings() {
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    theme: state.theme,
+    agentMode: state.agentMode,
+    autoSave: state.settings.autoSave,
+    autoSaveDelay: state.settings.autoSaveDelay,
+    editor: state.settings.editor || {},
+    terminal: state.settings.terminal || {},
+    inlineComplete: state.settings.inlineComplete || { enabled: false, provider: 'ollama' },
+    defaultModels: state.ai.defaultModels,
+    endpoint: state.ai.endpoint,
+    openaiBaseUrl: state.ai.openaiBaseUrl || '',
+    // API keys are intentionally EXCLUDED from exports (security)
+  };
+}
+
+async function applyImportedSettings(obj) {
+  if (typeof obj.theme === 'string') applyTheme(obj.theme);
+  if (typeof obj.agentMode === 'string' && ['agent_pro', 'dev', 'user'].includes(obj.agentMode)) {
+    import('./agent.js').then(m => m.switchMode(obj.agentMode));
+  }
+  if (typeof obj.autoSave === 'boolean') state.settings.autoSave = obj.autoSave;
+  if (Number.isFinite(obj.autoSaveDelay)) state.settings.autoSaveDelay = obj.autoSaveDelay;
+  if (obj.editor && typeof obj.editor === 'object') state.settings.editor = { ...(state.settings.editor || {}), ...obj.editor };
+  if (obj.terminal && typeof obj.terminal === 'object') state.settings.terminal = { ...(state.settings.terminal || {}), ...obj.terminal };
+  if (obj.inlineComplete && typeof obj.inlineComplete === 'object') state.settings.inlineComplete = { ...(state.settings.inlineComplete || {}), ...obj.inlineComplete };
+  if (obj.defaultModels && typeof obj.defaultModels === 'object') state.ai.defaultModels = { ...state.ai.defaultModels, ...obj.defaultModels };
+  if (typeof obj.endpoint === 'string') state.ai.endpoint = obj.endpoint;
+  if (typeof obj.openaiBaseUrl === 'string') state.ai.openaiBaseUrl = obj.openaiBaseUrl;
+
+  persistState();
+  markSettingsModified();
+  const mon = await import('../editor/monaco.js');
+  mon.applyEditorSettings();
+  const term = await import('./terminal.js');
+  if (typeof term.applyTerminalAppearance === 'function') term.applyTerminalAppearance();
+}
+
+async function openSettingsJsonEditor() {
+  document.getElementById('modal-settings-json')?.remove();
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.id = 'modal-settings-json';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal-container" style="width: 760px; max-width: 94vw; height: 78vh; display: flex; flex-direction: column; padding: 12px; gap: 8px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <strong style="font-size: 13px;">settings.json</strong>
+        <span style="font-size: 11px; color: var(--text-muted);">Direct JSON editing — every setting, validated on save. API keys are never included.</span>
+        <span id="settings-json-error" style="font-size: 11px; color: var(--accent-red); margin-left: auto;"></span>
+      </div>
+      <div id="settings-json-editor-host" style="flex: 1; min-height: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm);"></div>
+      <div style="display:flex; gap:8px; justify-content: flex-end;">
+        <button class="btn btn-secondary btn-sm" id="settings-json-cancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="settings-json-save">Save & Apply</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const monacoMod = await import('monaco-editor');
+  const current = collectAllSettings();
+  delete current.exportedAt;
+  const ed = monacoMod.editor.create(document.getElementById('settings-json-editor-host'), {
+    value: JSON.stringify(current, null, 2),
+    language: 'json',
+    theme: 'orbital-dark-theme',
+    automaticLayout: true,
+    fontSize: 12,
+    fontFamily: "'JetBrains Mono', monospace",
+    minimap: { enabled: false },
+    tabSize: 2,
+  });
+
+  modal.querySelector('#settings-json-cancel').addEventListener('click', () => {
+    ed.dispose();
+    modal.remove();
+  });
+  modal.querySelector('#settings-json-save').addEventListener('click', async () => {
+    const errEl = modal.querySelector('#settings-json-error');
+    errEl.textContent = '';
+    try {
+      const parsed = JSON.parse(ed.getValue());
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Root must be a JSON object');
+      }
+      await applyImportedSettings(parsed);
+      ed.dispose();
+      modal.remove();
+      showToast('settings.json applied', 'success', 2500);
+      openSettings(); // refresh form fields
+    } catch (e) {
+      errEl.textContent = `Invalid: ${e.message}`;
+    }
+  });
+}
+
+function resetAllSettingsToDefaults() {
+  if (!confirm('Reset ALL settings to defaults?\n\nThis clears themes, models, editor/terminal preferences, custom keybindings, and toggles (API keys are kept). The app reloads afterwards.')) return;
+  const keysToClear = [
+    'orbital_theme', 'orbital_mode', 'orbital_provider', 'orbital_model', 'orbital_endpoint',
+    'orbital_openai_base_url', 'orbital_default_models', 'orbital_ai_settings', 'orbital_autosave',
+    'orbital_autosave_delay', 'orbital_editor_settings', 'orbital_terminal_settings',
+    'orbital_terminal_meta', 'orbital_terminal_custom_shells', 'orbital_inline_complete',
+    'orbital_custom_keybindings', 'orbital_palette_mru',
+  ];
+  for (const k of keysToClear) localStorage.removeItem(k);
+  location.reload();
+}
+
+function enhanceImportExport() {
+  const exportBtn = document.getElementById('btn-export-settings');
+  const importBtn = document.getElementById('btn-import-settings');
+
+  if (exportBtn && !exportBtn.dataset.overhauled) {
+    // Clone-replace to drop the legacy export listener (avoid double downloads)
+    exportBtn.replaceWith(exportBtn.cloneNode(true));
+    const exportBtnFresh = document.getElementById('btn-export-settings');
+    exportBtnFresh.dataset.overhauled = '1';
+    exportBtnFresh.addEventListener('click', () => {
+      const config = collectAllSettings();
+      const jsonStr = JSON.stringify(config, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orbital-settings-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      markSettingsModified();
+      showToast('Settings exported (API keys excluded)', 'success', 2500);
+    });
+  }
+
+  if (importBtn && !importBtn.dataset.overhauled) {
+    importBtn.dataset.overhauled = '1';
+    // Replace the legacy handler's file input with a validated one
+    importBtn.replaceWith(importBtn.cloneNode(true));
+    const fresh = document.getElementById('btn-import-settings');
+    fresh.addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          const parsed = JSON.parse(await file.text());
+          const hasKnown = ['theme', 'agentMode', 'editor', 'terminal', 'defaultModels', 'endpoint', 'inlineComplete', 'autoSave']
+            .some(k => k in parsed);
+          if (!hasKnown) throw new Error('no recognized Orbital X settings keys found');
+          if (!confirm(`Import settings from "${file.name}"? Current matching settings will be overwritten (API keys are never imported).`)) return;
+          await applyImportedSettings(parsed);
+          showToast('Settings imported & applied', 'success', 2800);
+          markSettingsModified();
+          closeSettings();
+        } catch (err) {
+          alert(`Import failed — invalid settings file: ${err.message}`);
+        }
+      };
+      input.click();
+    });
+  }
+
+  // Bottom bar: settings.json + Reset + last-modified timestamp
+  const saveBtn = document.getElementById('btn-save-settings');
+  const bottomBar = saveBtn?.parentElement;
+  if (bottomBar && !document.getElementById('btn-open-settings-json')) {
+    const jsonBtn = document.createElement('button');
+    jsonBtn.className = 'btn btn-secondary btn-sm';
+    jsonBtn.id = 'btn-open-settings-json';
+    jsonBtn.textContent = 'settings.json';
+    jsonBtn.title = 'Edit all settings as JSON';
+    jsonBtn.addEventListener('click', openSettingsJsonEditor);
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'btn btn-danger btn-sm';
+    resetBtn.textContent = 'Reset to Defaults';
+    resetBtn.addEventListener('click', resetAllSettingsToDefaults);
+    const spacer = document.createElement('span');
+    spacer.style.cssText = 'display:flex; gap:6px; align-items:center;';
+    spacer.append(jsonBtn, resetBtn);
+    bottomBar.insertBefore(spacer, saveBtn);
+  }
+  markSettingsModified(); // shows the stored timestamp
+}
+
+// ---------------------------------------------------------------------------
+// G4 — editable keybindings table
+// ---------------------------------------------------------------------------
+
+function buildEditableShortcutsTable() {
+  const host = document.getElementById('spane-shortcuts');
+  if (!host) return;
+  const wrapper = host.querySelector('.settings-shortcuts-wrapper') || host;
+  wrapper.innerHTML = '';
+
+  const table = document.createElement('table');
+  table.className = 'settings-shortcuts-table';
+  table.style.cssText = 'width: 100%; font-size: 11px; border-collapse: collapse;';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th style="text-align:left; padding: 4px 6px;">Action</th>
+        <th style="text-align:left; padding: 4px 6px;">Shortcut</th>
+        <th style="text-align:right; padding: 4px 6px;">Scope</th>
+      </tr>
+    </thead>
+    <tbody id="keybindings-tbody"></tbody>
+  `;
+  wrapper.appendChild(table);
+
+  renderKeybindingRows();
+
+  const hint = document.createElement('div');
+  hint.style.cssText = 'font-size: 10px; color: var(--text-muted); margin-top: 8px;';
+  hint.textContent = 'Click Edit, then press the key combination. Conflicts are rejected. Editor-scoped bindings rebind immediately; app bindings apply on the next keypress.';
+  wrapper.appendChild(hint);
+}
+
+function renderKeybindingRows() {
+  const tbody = document.getElementById('keybindings-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  for (const b of getAllBindings()) {
+    const tr = document.createElement('tr');
+    tr.style.cssText = 'border-top: 1px solid var(--border-subtle);';
+    tr.innerHTML = `
+      <td style="padding: 4px 6px;">
+        ${b.title}${b.isCustom ? ' <span style="color: var(--accent-cyan); font-size: 9px;">custom</span>' : ''}
+      </td>
+      <td style="padding: 4px 6px;" class="kb-combo-cell">
+        <kbd class="kb-combo">${escapeHtml(b.combo)}</kbd>
+      </td>
+      <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">
+        <span style="color: var(--text-muted); font-size: 10px;">${b.scope === 'editor' ? 'Editor' : 'App'}</span>
+        <button class="btn btn-secondary btn-sm kb-edit" style="padding: 1px 7px; font-size: 10px;">Edit</button>
+        ${b.isCustom ? '<button class="btn btn-secondary btn-sm kb-reset" style="padding: 1px 7px; font-size: 10px;">Reset</button>' : ''}
+      </td>
+    `;
+    tr.querySelector('.kb-edit')?.addEventListener('click', () => startRecording(tr, b.id));
+    tr.querySelector('.kb-reset')?.addEventListener('click', async () => {
+      resetBinding(b.id);
+      await import('../editor/monaco.js').then(m => m.rebindEditorCommands());
+      renderKeybindingRows();
+      showToast(`Reset “${b.title}” to ${b.combo}`, 'success', 2000);
+    });
+    tbody.appendChild(tr);
+  }
+}
+
+function startRecording(tr, bindingId) {
+  const cell = tr.querySelector('.kb-combo-cell');
+  const original = cell.innerHTML;
+  cell.innerHTML = `<span class="kb-recording">Press keys… (Esc to cancel)</span>`;
+  tr.querySelectorAll('button').forEach(b => (b.disabled = true));
+
+  const onKey = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      cleanup();
+      return;
+    }
+    const combo = comboFromEvent(e);
+    if (!combo) return; // still pressing modifiers
+
+    const conflict = findConflict(bindingId, combo);
+    if (conflict) {
+      cell.innerHTML = `<span class="kb-recording" style="color: var(--accent-red);">“${combo}” conflicts with “${conflict}” — try again (Esc to cancel)</span>`;
+      return;
+    }
+    const ok = setBinding(bindingId, combo);
+    if (ok) {
+      await import('../editor/monaco.js').then(m => m.rebindEditorCommands());
+      renderKeybindingRows();
+      showToast(`Shortcut set: ${combo}`, 'success', 1800);
+    }
+    cleanup();
+  };
+
+  function cleanup() {
+    window.removeEventListener('keydown', onKey, true);
+    renderKeybindingRows(); // restores buttons + combo display
+  }
+  window.addEventListener('keydown', onKey, true);
+}
+
+// ---------------------------------------------------------------------------
+// G5 — workspace settings
+// ---------------------------------------------------------------------------
+
+async function refreshWorkspaceSettings() {
+  try {
+    const res = await invoke('read_file', { path: '.orbital/settings.json' });
+    let parsed = {};
+    try { parsed = JSON.parse(res.content || '{}'); } catch (e) { parsed = {}; }
+    state.settings.workspace = parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (e) {
+    state.settings.workspace = {};
+  }
+  const mon = await import('../editor/monaco.js');
+  mon.applyEditorSettings();
+  updateWorkspaceBadge();
+}
+
+function updateWorkspaceBadge() {
+  const badgeEl = document.getElementById('workspace-overrides-badge');
+  if (!badgeEl) return;
+  const wsEd = state.settings.workspace?.editor || {};
+  const keys = ['tabSize', 'wordWrap', 'wordWrapColumn', 'detectIndent'].filter(k => wsEd[k] !== undefined);
+  if (keys.length > 0) {
+    badgeEl.style.display = '';
+    badgeEl.textContent = `Workspace overrides active: ${keys.join(', ')} (from .orbital/settings.json)`;
+  } else {
+    badgeEl.style.display = 'none';
+  }
+}
+
+async function openWorkspaceSettingsFile() {
+  try {
+    let fileData;
+    try {
+      fileData = await invoke('read_file', { path: '.orbital/settings.json' });
+    } catch (e) {
+      // Create with a template on first open
+      const template = JSON.stringify({
+        $schema: 'Workspace overrides. Values here win over global settings for this workspace.',
+        editor: { tabSize: 2, wordWrap: 'on', detectIndent: true },
+      }, null, 2);
+      await invoke('save_file', { path: '.orbital/settings.json', content: template, description: 'Workspace settings created' });
+      fileData = await invoke('read_file', { path: '.orbital/settings.json' });
+    }
+    const mon = await import('../editor/monaco.js');
+    mon.openFileInTab(fileData);
+    showToast('Editing .orbital/settings.json — reload applies overrides', 'info', 3200);
+  } catch (e) {
+    showToast(`Could not open workspace settings: ${e}`, 'error', 3500);
+  }
+}
+
+function setupWorkspaceSettingsSection() {
+  const appearancePane = document.getElementById('spane-appearance');
+  if (!appearancePane || document.getElementById('workspace-overrides-badge')) return;
+
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top: 18px; border-top: 1px solid var(--border-subtle); padding-top: 12px;';
+  block.innerHTML = `
+    <div style="font-size: 13px; font-weight: 600; margin-bottom: 6px;">Workspace Settings</div>
+    <div id="workspace-overrides-badge" class="settings-section-desc" style="display: none; color: var(--accent-cyan);"></div>
+    <div class="settings-section-desc">
+      Settings in <code>.orbital/settings.json</code> (workspace root) override globals for tab size, word wrap, and indent detection — per project.
+    </div>
+    <button class="btn btn-secondary btn-sm" id="btn-open-workspace-settings" style="margin-top: 8px;">Open workspace settings.json</button>
+  `;
+  appearancePane.appendChild(block);
+  block.querySelector('#btn-open-workspace-settings').addEventListener('click', openWorkspaceSettingsFile);
+}
+
+// ---------------------------------------------------------------------------
+// E4 — terminal appearance settings pane
+// ---------------------------------------------------------------------------
+
+function setupTerminalSettingsUI() {
+  const pane = document.getElementById('spane-terminal');
+  if (!pane || document.getElementById('cfg-term-font-family')) return;
+
+  const block = document.createElement('div');
+  block.style.cssText = 'margin-top: 14px; display: flex; flex-direction: column; gap: 12px;';
+  block.innerHTML = `
+    <div style="font-size: 13px; font-weight: 600;">Terminal Appearance</div>
+    <div class="form-group" style="margin-bottom: 0;">
+      <label class="form-label">Font Family</label>
+      <input type="text" class="input-text" id="cfg-term-font-family" />
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Font Size (px)</label>
+        <input type="number" class="input-text" id="cfg-term-font-size" min="9" max="22" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Line Height</label>
+        <input type="number" class="input-text" id="cfg-term-line-height" min="1.1" max="2.2" step="0.05" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Scrollback (lines)</label>
+        <input type="number" class="input-text" id="cfg-term-scrollback" min="100" max="10000" step="100" />
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Cursor Style</label>
+        <select class="select-input" id="cfg-term-cursor-style">
+          <option value="block">Block</option>
+          <option value="underline">Underline</option>
+          <option value="bar">Bar</option>
+        </select>
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Cursor Blink</span>
+          <span class="settings-setting-caption">Pulse the text cursor.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-term-cursor-blink"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+    </div>
+  `;
+  pane.appendChild(block);
+
+  const loadIntoUI = () => {
+    const t = state.settings.terminal || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    set('cfg-term-font-family', t.fontFamily);
+    set('cfg-term-font-size', t.fontSize);
+    set('cfg-term-line-height', t.lineHeight);
+    set('cfg-term-scrollback', t.scrollback);
+    set('cfg-term-cursor-style', t.cursorStyle);
+    const blink = document.getElementById('cfg-term-cursor-blink');
+    if (blink) blink.checked = t.cursorBlink !== false;
+  };
+  loadIntoUI();
+
+  const apply = () => {
+    const t = state.settings.terminal || (state.settings.terminal = {});
+    const val = (id) => document.getElementById(id)?.value;
+    const num = (id, fb) => { const v = parseFloat(val(id)); return Number.isFinite(v) ? v : fb; };
+    t.fontFamily = val('cfg-term-font-family') || t.fontFamily;
+    t.fontSize = num('cfg-term-font-size', 13);
+    t.lineHeight = num('cfg-term-line-height', 1.5);
+    t.scrollback = num('cfg-term-scrollback', 1000);
+    t.cursorStyle = val('cfg-term-cursor-style') || 'block';
+    t.cursorBlink = document.getElementById('cfg-term-cursor-blink')?.checked !== false;
+    import('./terminal.js').then(m => { if (m.applyTerminalAppearance) m.applyTerminalAppearance(); });
+    markSettingsModified();
+  };
+  block.querySelectorAll('input, select').forEach(el => el.addEventListener('change', apply));
+
+  // Wire the default shell dropdown from the existing stub
+  const shellSel = document.getElementById('cfg-shell-type');
+  if (shellSel && !shellSel.dataset.wired) {
+    shellSel.dataset.wired = '1';
+    const map = { powershell: 'powershell', cmd: 'cmd', bash: 'gitbash' };
+    const rev = { powershell: 'powershell', cmd: 'cmd', gitbash: 'bash', wsl: 'bash', sh: 'bash' };
+    shellSel.value = map[state.terminal?.defaultShell] || 'powershell';
+    shellSel.addEventListener('change', async () => {
+      state.terminal = state.terminal || {};
+      state.terminal.defaultShell = map[shellSel.value] || 'powershell';
+      const term = await import('./terminal.js');
+      if (term.persistTerminalSettings) term.persistTerminalSettings();
+    });
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function setupSettingsOverhaul() {
+  setupSettingsSearch();
+  enhanceImportExport();
+  setupWorkspaceSettingsSection();
+  refreshWorkspaceSettings();
+  // The shortcuts pane becomes an editable keybinding table (G4)
+  buildEditableShortcutsTable();
 }

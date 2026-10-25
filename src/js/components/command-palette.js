@@ -20,13 +20,11 @@ let backdrop = null;
 
 export function initCommandPalette() {
   buildCommandRegistry();
-  // Global binding: Ctrl+Shift+P and F1
+  // Global open/close is owned by the keybinding dispatcher
+  // (app.commandPalette). Escape while open is handled here.
   window.addEventListener('keydown', (e) => {
-    const isPalette = (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'p') || e.key === 'F1';
-    if (isPalette) {
+    if (e.key === 'Escape' && backdrop) {
       e.preventDefault();
-      togglePalette();
-    } else if (e.key === 'Escape' && backdrop) {
       closePalette();
     }
   });

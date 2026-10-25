@@ -18,6 +18,7 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 import { state, notify } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { getBinding, comboToMonaco } from '../services/keybindings.js';
 
 // Setup Monaco Workers
 self.MonacoEnvironment = {
@@ -175,6 +176,23 @@ export function applyEditorSettings() {
     lineHeight: Number(s.lineHeight) || 22,
     letterSpacing: Number(s.letterSpacing) || 0,
   };
+
+  // G5: workspace settings (.orbital/settings.json) override globals for the
+  // supported subset — tab size, word wrap, and indent detection.
+  const wsEd = state.settings.workspace?.editor;
+  if (wsEd) {
+    if (Number.isFinite(Number(wsEd.tabSize)) && Number(wsEd.tabSize) > 0) {
+      s.tabSize = Number(wsEd.tabSize);
+    }
+    if (typeof wsEd.wordWrap === 'string' && ['off', 'on', 'wordWrapColumn', 'bounded'].includes(wsEd.wordWrap)) {
+      options.wordWrap = wsEd.wordWrap;
+    }
+    if (typeof wsEd.detectIndent === 'boolean') {
+      s.detectIndent = wsEd.detectIndent;
+    }
+    options.wordWrapColumn = Number(wsEd.wordWrapColumn) || options.wordWrapColumn;
+  }
+
   for (const ed of [editors.left, editors.right]) {
     if (ed) ed.updateOptions(options);
   }
@@ -412,47 +430,77 @@ function bindEditorBase(ed, panel) {
 
 function chord(k1, k2) { return monaco.KeyMod.Chord(k1, k2); }
 
+const editorCommandDisposables = new WeakMap();
+
+/** Combos from the keybinding service (custom overrides live). */
+function bcombo(id) {
+  return getBinding(id)?.combo || null;
+}
+
+function addBound(ed, disposables, bindingId, run) {
+  const combo = bcombo(bindingId);
+  if (!combo) return;
+  const mapped = comboToMonaco(monaco, combo);
+  if (!mapped) return;
+  const d = ed.addCommand(mapped[0] | mapped[1], run);
+  if (d) disposables.push(d);
+}
+
 function bindEditorCommands(ed) {
-  const C = monaco.KeyMod.CtrlCmd, S = monaco.KeyMod.Shift, A = monaco.KeyMod.Alt;
-  const K = monaco.KeyCode;
+  let disposables = editorCommandDisposables.get(ed) || [];
+  for (const d of disposables) { try { d.dispose(); } catch (e) { /* gone */ } }
+  disposables = [];
+  editorCommandDisposables.set(ed, disposables);
 
   const run = (actionId) => () => {
     const a = ed.getAction(actionId);
     if (a) a.run();
   };
 
-  // Existing editing commands
-  ed.addCommand(C | K.KeyF, () => triggerFindWidget());
-  ed.addCommand(C | K.KeyS, () => saveActiveFile());
-  ed.addCommand(C | K.KeyG, () => triggerGotoLine());
-  ed.addCommand(K.F12, () => triggerGotoDefinition());
-  ed.addCommand(C | S | K.KeyL, () => triggerSelectHighlights());
-  ed.addCommand(C | K.Equal, () => zoomIn());
-  ed.addCommand(C | K.Minus, () => zoomOut());
-  ed.addCommand(C | K.Digit0, () => zoomReset());
+  addBound(ed, disposables, 'editor.find', () => triggerFindWidget());
+  addBound(ed, disposables, 'app.save', () => saveActiveFile());
+  addBound(ed, disposables, 'editor.gotoLine', () => triggerGotoLine());
+  addBound(ed, disposables, 'editor.gotoDefinition', () => triggerGotoDefinition());
+  addBound(ed, disposables, 'editor.selectHighlights', () => triggerSelectHighlights());
+  addBound(ed, disposables, 'app.commandPalette', () => import('../components/command-palette.js').then(m => m.openPalette()));
+  addBound(ed, disposables, 'app.splitEditor', () => toggleSplitEditor());
 
-  // B2: folding
-  ed.addCommand(C | S | K.BracketLeft, run('editor.action.fold'));
-  ed.addCommand(C | S | K.BracketRight, run('editor.action.unfold'));
-  ed.addCommand(chord(C | K.KeyK, C | K.Digit0), run('editor.action.foldAll'));
-  ed.addCommand(chord(C | K.KeyK, C | K.KeyJ), run('editor.action.unfoldAll'));
+  // Folding chords (Ctrl+K prefixes — kept as fixed chord bindings)
+  const C = monaco.KeyMod.CtrlCmd, K = monaco.KeyCode;
+  const chord = (k1, k2) => monaco.KeyMod.Chord(k1, k2);
+  const addChord = (c1, c2, actionId) => {
+    const d = ed.addCommand(chord(C | c1, C | c2), run(actionId));
+    if (d) disposables.push(d);
+  };
+  addBound(ed, disposables, 'editor.fold', run('editor.action.fold'));
+  addBound(ed, disposables, 'editor.unfold', run('editor.action.unfold'));
+  addChord(K.KeyK, K.Digit0, 'editor.action.foldAll');
+  addChord(K.KeyK, K.KeyJ, 'editor.action.unfoldAll');
   for (let lvl = 1; lvl <= 5; lvl++) {
-    ed.addCommand(chord(C | K.KeyK, C | (K.Digit0 + lvl)), run(`editor.action.foldLevel${lvl}`));
+    addChord(K.KeyK, K.Digit0 + lvl, `editor.action.foldLevel${lvl}`);
   }
 
-  // B4: multiple cursors (explicit bindings in addition to Monaco defaults)
-  ed.addCommand(S | A | K.ArrowUp, run('editor.action.insertCursorAbove'));
-  ed.addCommand(S | A | K.ArrowDown, run('editor.action.insertCursorBelow'));
-  ed.addCommand(C | A | K.ArrowUp, run('editor.action.insertCursorAbove'));
-  ed.addCommand(C | A | K.ArrowDown, run('editor.action.insertCursorBelow'));
-  ed.addCommand(A | S | K.KeyI, run('editor.action.insertCursorAtEndOfEachLineSelected'));
+  // Multi-cursor bindings (explicit, in addition to Monaco defaults)
+  const S = monaco.KeyMod.Shift, A = monaco.KeyMod.Alt;
+  const addCmd = (mods, code, actionId) => {
+    const d = ed.addCommand(mods | code, run(actionId));
+    if (d) disposables.push(d);
+  };
+  addCmd(S | A, K.ArrowUp, 'editor.action.insertCursorAbove');
+  addCmd(S | A, K.ArrowDown, 'editor.action.insertCursorBelow');
+  addCmd(C | A, K.ArrowUp, 'editor.action.insertCursorAbove');
+  addCmd(C | A, K.ArrowDown, 'editor.action.insertCursorBelow');
+  addCmd(A | S, K.KeyI, 'editor.action.insertCursorAtEndOfEachLineSelected');
 
-  // B10: go to symbol
-  ed.addCommand(C | S | K.KeyO, run('editor.action.quickOutline'));
-  ed.addCommand(C | K.KeyT, () => openWorkspaceSymbolSearch());
+  addBound(ed, disposables, 'editor.symbolInFile', run('editor.action.quickOutline'));
+  addBound(ed, disposables, 'editor.symbolInWorkspace', () => openWorkspaceSymbolSearch());
+}
 
-  // Split editor toggle (single pane only; Ctrl+\ handled globally too)
-  ed.addCommand(C | K.Backslash, () => toggleSplitEditor());
+/** Re-applies editor keybindings after the user edits them (G4). */
+export function rebindEditorCommands() {
+  for (const ed of [editors.left, editors.right]) {
+    if (ed) bindEditorCommands(ed);
+  }
 }
 
 // ---------------------------------------------------------------------------
