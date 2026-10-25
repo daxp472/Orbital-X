@@ -128,6 +128,44 @@ fn undo_agent_change(state: State<'_, AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn search_workspace_advanced(
+    query: String,
+    is_regex: Option<bool>,
+    case_sensitive: Option<bool>,
+    whole_word: Option<bool>,
+    include: Option<String>,
+    exclude: Option<String>,
+    max_results: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.search_files_advanced(
+        &query,
+        is_regex.unwrap_or(false),
+        case_sensitive.unwrap_or(false),
+        whole_word.unwrap_or(false),
+        include.as_deref(),
+        exclude.as_deref(),
+        max_results.unwrap_or(200).min(500),
+    )
+}
+
+/// One-shot inline code completion for the editor ghost-text feature.
+#[tauri::command]
+async fn complete_code(
+    provider: String,
+    api_key: String,
+    model: String,
+    base_url: Option<String>,
+    prefix: String,
+    suffix: String,
+    language: String,
+) -> Result<serde_json::Value, String> {
+    let completion = ProviderService::complete_code(&provider, &api_key, &model, base_url, &prefix, &suffix, &language).await?;
+    Ok(serde_json::json!({ "completion": completion }))
+}
+
+#[tauri::command]
 fn search_workspace(query: String, max_results: Option<usize>, state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
     ws.search_files(&query, max_results.unwrap_or(20))
@@ -1462,6 +1500,8 @@ pub fn run() {
             get_file_diff,
             undo_agent_change,
             search_workspace,
+            search_workspace_advanced,
+            complete_code,
             run_command,
             create_interactive_terminal,
             send_terminal_input,

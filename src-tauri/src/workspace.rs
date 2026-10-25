@@ -807,6 +807,118 @@ impl WorkspaceService {
         Ok(matches)
     }
 
+    /// Glob pattern (comma-separated list, `*` within a segment, `**` across
+    /// segments, `?` single char) → matcher closure for include/exclude sets.
+    fn glob_matcher(patterns: &str) -> Option<Vec<regex::Regex>> {
+        let mut out = Vec::new();
+        for pat in patterns.split(',').map(|p| p.trim()).filter(|p| !p.is_empty()) {
+            let mut re = String::from("^");
+            let mut chars = pat.chars().peekable();
+            while let Some(c) = chars.next() {
+                match c {
+                    '*' => {
+                        if chars.peek() == Some(&'*') {
+                            chars.next();
+                            let _ = chars.next_if(|&x| x == '/'); // tolerate **/
+                            re.push_str(".*");
+                        } else {
+                            re.push_str("[^/]*");
+                        }
+                    }
+                    '?' => re.push_str("[^/]"),
+                    other => {
+                        re.push_str(&regex::escape(&other.to_string()));
+                    }
+                }
+            }
+            re.push('$');
+            match regex::RegexBuilder::new(&re).case_insensitive(true).build() {
+                Ok(r) => out.push(r),
+                Err(_) => return None,
+            }
+        }
+        if out.is_empty() { None } else { Some(out) }
+    }
+
+    /// Find & Replace backend: regex or literal search with case/whole-word
+    /// flags and include/exclude globs. Returns per-line matches.
+    pub fn search_files_advanced(
+        &self,
+        query: &str,
+        is_regex: bool,
+        case_sensitive: bool,
+        whole_word: bool,
+        include: Option<&str>,
+        exclude: Option<&str>,
+        max_results: usize,
+    ) -> Result<Vec<serde_json::Value>, String> {
+        let root = self.root.as_ref().ok_or("No workspace open")?;
+
+        // Build the line matcher
+        let pattern = if is_regex {
+            query.to_string()
+        } else {
+            regex::escape(query)
+        };
+        let pattern = if whole_word {
+            format!(r"(?:{})", pattern)
+        } else {
+            pattern
+        };
+        let matcher = regex::RegexBuilder::new(&pattern)
+            .case_insensitive(!case_sensitive)
+            .build()
+            .map_err(|e| format!("Invalid search pattern: {}", e))?;
+
+        let include_res = include.and_then(Self::glob_matcher);
+        let exclude_res = exclude.and_then(Self::glob_matcher);
+        let path_allowed = |rel: &str| -> bool {
+            if let Some(exs) = &exclude_res {
+                if exs.iter().any(|re| re.is_match(rel)) { return false; }
+            }
+            if let Some(incs) = &include_res {
+                return incs.iter().any(|re| re.is_match(rel));
+            }
+            true
+        };
+
+        let mut matches_out: Vec<serde_json::Value> = Vec::new();
+        let mut it = WalkDir::new(root).into_iter();
+        while let Some(entry) = it.next().map(|e| e.ok()).flatten() {
+            if matches_out.len() >= max_results { break; }
+            let path = entry.path();
+            if !path.is_file() {
+                let dname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                if dname == ".git" || dname == "node_modules" || dname == "target" || dname == "dist" || dname == ".orbital" {
+                    it.skip_current_dir();
+                }
+                continue;
+            }
+            if entry.file_type().is_symlink() { continue; }
+            if let Ok(meta) = entry.metadata() {
+                if meta.len() > 500 * 1024 { continue; }
+            }
+            let rel = path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/");
+            if !path_allowed(&rel) { continue; }
+            if let Ok(bytes) = fs::read(path) {
+                if bytes.iter().take(1024).any(|&b| b == 0) { continue; }
+                let text = String::from_utf8_lossy(&bytes);
+                for (idx, line) in text.lines().enumerate() {
+                    if matcher.is_match(line) {
+                        matches_out.push(serde_json::json!({
+                            "file": rel,
+                            "line": idx + 1,
+                            "snippet": line.trim().chars().take(400).collect::<String>(),
+                            "match_text": matcher.find(line).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                        }));
+                        if matches_out.len() >= max_results { break; }
+                    }
+                }
+            }
+        }
+        Ok(matches_out)
+    }
+
     pub fn read_multiple_files(&self, paths: &[String], max_lines_per_file: usize) -> Result<Vec<serde_json::Value>, String> {
         let max_paths = 10;
         let limit = if max_lines_per_file == 0 { 300 } else { max_lines_per_file.min(500) };

@@ -80,6 +80,9 @@ export function initSettings() {
   // Ollama Model Manager (pull/delete/info/running)
   setupOllamaManagerUI();
 
+  // Editor settings UI (appearance + formatting + inline autocomplete)
+  setupEditorSettingsUI();
+
   // Theme Select inside settings
   populateThemeDropdown();
   document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
@@ -545,6 +548,19 @@ function setupShortcutsTab() {
               <td>Open Settings</td>
               <td><kbd>Ctrl</kbd> + <kbd>,</kbd></td>
             </tr>
+            <tr><td>Command Palette</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> / <kbd>F1</kbd></td></tr>
+            <tr><td>Close Editor Tab</td><td><kbd>Ctrl</kbd> + <kbd>W</kbd></td></tr>
+            <tr><td>Toggle Split Editor</td><td><kbd>Ctrl</kbd> + <kbd>\\</kbd></td></tr>
+            <tr><td>Fold / Unfold Region</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td></tr>
+            <tr><td>Fold All / Unfold All</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> then <kbd>Ctrl</kbd>+<kbd>0</kbd> / <kbd>J</kbd></td></tr>
+            <tr><td>Fold by Level 1–5</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> then <kbd>Ctrl</kbd>+<kbd>1…5</kbd></td></tr>
+            <tr><td>Add Cursor Above / Below</td><td><kbd>Shift</kbd>+<kbd>Alt</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd> + <kbd>↑/↓</kbd></td></tr>
+            <tr><td>Cursor at End of Selected Lines</td><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td></tr>
+            <tr><td>Column Selection</td><td><kbd>Shift</kbd> + <kbd>Alt</kbd> + drag</td></tr>
+            <tr><td>Go to Symbol in File</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td></tr>
+            <tr><td>Go to Symbol in Workspace</td><td><kbd>Ctrl</kbd> + <kbd>T</kbd></td></tr>
+            <tr><td>Format Document</td><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></td></tr>
+            <tr><td>Toggle Word Wrap</td><td><kbd>Alt</kbd> + <kbd>Z</kbd></td></tr>
           </tbody>
         </table>
       </div>
@@ -561,11 +577,232 @@ function selectSecurityCard(mode) {
   if (sel) sel.value = mode;
 }
 
+
+// ==========================================================================
+// Editor settings UI — minimap, sticky scroll, word wrap, indent, fonts
+// (B3, B6-B9) and inline AI autocomplete (B1). Values live in
+// state.settings.editor / state.settings.inlineComplete and are applied
+// through monaco.applyEditorSettings().
+// ==========================================================================
+
+function setupEditorSettingsUI() {
+  const appearancePane = document.getElementById('spane-appearance');
+  if (appearancePane && !document.getElementById('cfg-minimap-side')) {
+    const block = document.createElement('div');
+    block.style.cssText = 'margin-top: 18px; display: flex; flex-direction: column; gap: 12px;';
+    block.innerHTML = `
+      <div style="font-size: 13px; font-weight: 600;">Editor Appearance</div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Minimap Side</label>
+        <select class="select-input" id="cfg-minimap-side">
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Minimap Scale (1–3)</label>
+        <input type="number" class="input-text" id="cfg-minimap-scale" min="1" max="3" step="0.5" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Minimap Slider</label>
+        <select class="select-input" id="cfg-minimap-slider">
+          <option value="always">Always</option>
+          <option value="mouseover">On mouse over</option>
+        </select>
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Sticky Scroll</span>
+          <span class="settings-setting-caption">Pin the current scope opening lines at the top of the editor.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-sticky-scroll"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Minimap</span>
+          <span class="settings-setting-caption">Overview minimap on the editor edge.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-editor-minimap-v2"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+    `;
+    appearancePane.appendChild(block);
+    block.querySelector('#cfg-minimap-side').addEventListener('change', applyFromUI);
+    block.querySelector('#cfg-minimap-scale').addEventListener('change', applyFromUI);
+    block.querySelector('#cfg-minimap-slider').addEventListener('change', applyFromUI);
+    block.querySelector('#cfg-sticky-scroll').addEventListener('change', applyFromUI);
+    block.querySelector('#cfg-editor-minimap-v2').addEventListener('change', applyFromUI);
+  }
+
+  if (appearancePane && !document.getElementById('cfg-word-wrap')) {
+    const fmt = document.createElement('div');
+    fmt.style.cssText = 'margin-top: 18px; display: flex; flex-direction: column; gap: 12px;';
+    fmt.innerHTML = `
+      <div style="font-size: 13px; font-weight: 600;">Editor Formatting, Indent & Font</div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Word Wrap</label>
+        <select class="select-input" id="cfg-word-wrap">
+          <option value="off">Off</option>
+          <option value="on">On (viewport)</option>
+          <option value="wordWrapColumn">At column</option>
+          <option value="bounded">Bounded</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Word Wrap Column</label>
+        <input type="number" class="input-text" id="cfg-word-wrap-column" min="20" max="500" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Tab Size</label>
+        <input type="number" class="input-text" id="cfg-tab-size" min="1" max="16" />
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Use Spaces for Indent</span>
+          <span class="settings-setting-caption">Insert spaces instead of tab characters.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-insert-spaces"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Detect Indentation from Files</span>
+          <span class="settings-setting-caption">Sniff each file's dominant indentation on open.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-detect-indent"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Font Family</label>
+        <input type="text" class="input-text" id="cfg-font-family" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Font Size (px)</label>
+        <input type="number" class="input-text" id="cfg-font-size-v2" min="9" max="30" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Line Height</label>
+        <input type="number" class="input-text" id="cfg-line-height" min="14" max="40" />
+      </div>
+      <div class="form-group" style="margin-bottom: 0;">
+        <label class="form-label">Letter Spacing (px)</label>
+        <input type="number" class="input-text" id="cfg-letter-spacing" min="-1" max="4" step="0.5" />
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Font Ligatures</span>
+          <span class="settings-setting-caption">Join glyphs like => and != when the font supports it.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-font-ligatures"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+    `;
+    appearancePane.appendChild(fmt);
+    fmt.querySelectorAll('input, select').forEach(el => el.addEventListener('change', applyFromUI));
+  }
+
+  const modelsPane = document.getElementById('spane-models');
+  if (modelsPane && !document.getElementById('cfg-inline-complete')) {
+    const ic = document.createElement('div');
+    ic.style.cssText = 'background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 12px;';
+    ic.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <strong>Inline AI Autocomplete</strong>
+      </div>
+      <div class="settings-setting-row">
+        <div class="settings-setting-info">
+          <span class="settings-setting-label">Ghost text completions</span>
+          <span class="settings-setting-caption">Complete code at the cursor with your AI provider after a short pause. Tab accepts, Escape dismisses.</span>
+        </div>
+        <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-inline-complete"><span class="settings-toggle-slider"></span></label></div>
+      </div>
+      <div class="form-group" style="margin-top: 8px; margin-bottom: 0;">
+        <label class="form-label">Completion Provider</label>
+        <select class="select-input" id="cfg-inline-provider">
+          <option value="ollama">Ollama (local)</option>
+          <option value="openai">OpenAI / compatible endpoint</option>
+        </select>
+      </div>
+    `;
+    modelsPane.appendChild(ic);
+    ic.querySelector('#cfg-inline-complete').addEventListener('change', applyFromUI);
+    ic.querySelector('#cfg-inline-provider').addEventListener('change', applyFromUI);
+  }
+
+  loadEditorSettingsIntoUI();
+}
+
+function loadEditorSettingsIntoUI() {
+  import('../editor/monaco.js').then((mon) => {
+    mon.applyEditorSettings(); // normalizes defaults into state.settings.editor
+    const s = state.settings.editor || {};
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v !== undefined && v !== null) el.value = v; };
+    const check = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+
+    set('cfg-minimap-side', s.minimapSide);
+    set('cfg-minimap-scale', s.minimapScale);
+    set('cfg-minimap-slider', s.minimapSlider);
+    check('cfg-sticky-scroll', s.stickyScroll);
+    check('cfg-editor-minimap-v2', s.minimap);
+    set('cfg-word-wrap', s.wordWrap);
+    set('cfg-word-wrap-column', s.wordWrapColumn);
+    set('cfg-tab-size', s.tabSize);
+    check('cfg-insert-spaces', s.insertSpaces);
+    check('cfg-detect-indent', s.detectIndent);
+    set('cfg-font-family', s.fontFamily);
+    set('cfg-font-size-v2', s.fontSize);
+    set('cfg-line-height', s.lineHeight);
+    set('cfg-letter-spacing', s.letterSpacing);
+    check('cfg-font-ligatures', s.fontLigatures);
+
+    const ic = state.settings.inlineComplete || {};
+    check('cfg-inline-complete', ic.enabled);
+    set('cfg-inline-provider', ic.provider);
+  });
+}
+
+function applyFromUI() {
+  import('../editor/monaco.js').then((mon) => {
+    const s = state.settings.editor || (state.settings.editor = {});
+    const val = (id, fallback) => {
+      const el = document.getElementById(id);
+      if (!el) return fallback;
+      return el.type === 'checkbox' ? el.checked : el.value;
+    };
+    const num = (id, fallback) => {
+      const v = parseFloat(val(id));
+      return Number.isFinite(v) ? v : fallback;
+    };
+
+    s.minimap = val('cfg-editor-minimap-v2', s.minimap);
+    s.minimapSide = val('cfg-minimap-side', s.minimapSide);
+    s.minimapScale = num('cfg-minimap-scale', s.minimapScale);
+    s.minimapSlider = val('cfg-minimap-slider', s.minimapSlider);
+    s.stickyScroll = val('cfg-sticky-scroll', s.stickyScroll);
+    s.wordWrap = val('cfg-word-wrap', s.wordWrap);
+    s.wordWrapColumn = num('cfg-word-wrap-column', s.wordWrapColumn);
+    s.tabSize = num('cfg-tab-size', s.tabSize);
+    s.insertSpaces = val('cfg-insert-spaces', s.insertSpaces);
+    s.detectIndent = val('cfg-detect-indent', s.detectIndent);
+    s.fontFamily = val('cfg-font-family', s.fontFamily);
+    s.fontSize = num('cfg-font-size-v2', s.fontSize);
+    s.lineHeight = num('cfg-line-height', s.lineHeight);
+    s.letterSpacing = num('cfg-letter-spacing', s.letterSpacing);
+    s.fontLigatures = val('cfg-font-ligatures', s.fontLigatures);
+
+    state.settings.inlineComplete = state.settings.inlineComplete || { enabled: false, provider: 'ollama' };
+    state.settings.inlineComplete.enabled = val('cfg-inline-complete', state.settings.inlineComplete.enabled);
+    state.settings.inlineComplete.provider = val('cfg-inline-provider', state.settings.inlineComplete.provider);
+    try {
+      localStorage.setItem('orbital_inline_complete', JSON.stringify(state.settings.inlineComplete));
+    } catch (e) { /* quota */ }
+
+    mon.applyEditorSettings();
+  });
+}
+
 export function openSettings() {
   const modal = document.getElementById('modal-settings');
   if (!modal) return;
   setupShortcutsTab();
   setupOllamaManagerUI();
+  setupEditorSettingsUI();
 
   // Workspace label
   const wsName = document.getElementById('settings-active-workspace-name');
