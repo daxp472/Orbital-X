@@ -12,9 +12,13 @@ export const state = {
 
   // Editor tabs
   editor: {
-    tabs: [], // { id, path, relativePath, name, content, originalContent, isDirty, language }
+    tabs: [], // { id, path, relativePath, name, content, originalContent, isDirty, isPinned, isPreview, language }
     activeTabId: null,
     fontSize: 13,
+    // Split editor state (Part A3): right pane tabs live here while splitMode is on
+    splitMode: false,
+    rightTabs: [],
+    rightActiveTabId: null,
   },
 
   // Operating Mode: 'agent_pro' | 'dev' | 'user'
@@ -75,6 +79,10 @@ export const state = {
   settings: {
     autoSave: true,
     autoSaveDelay: 1000,
+    // B1: inline AI autocomplete (ghost text)
+    inlineComplete: { enabled: false, provider: 'ollama' },
+    // Editor appearance/formatting options (monaco.js applyEditorSettings)
+    editor: {},
   },
 
   // Active Orchestration Plan & Task Execution

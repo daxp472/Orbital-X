@@ -129,6 +129,10 @@ function buildNodeElement(node, parentElem, indentLevel) {
     parentElem.appendChild(childContainer);
   }
 
+  nodeRow.dataset.path = node.path;
+
+  // A5: single click = preview tab; double click = permanent tab
+  let clickTimer = null;
   nodeRow.addEventListener('click', async (e) => {
     e.stopPropagation();
 
@@ -143,20 +147,43 @@ function buildNodeElement(node, parentElem, indentLevel) {
         arrow.classList.toggle('expanded', isExpanded);
         icon.textContent = getFileIcon(node.name, true, isExpanded);
       }
-    } else {
-      // It's a file, read and open in Monaco
+      return;
+    }
+
+    // File click — wait to disambiguate single vs double click
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(async () => {
       try {
         const fileData = await invoke('read_file', { path: node.path });
         if (fileData.is_binary) {
           showToast("Cannot view binary files in the code editor.", "warning");
           return;
         }
-        openFileInTab(fileData);
+        openFileInTab(fileData, { preview: true });
       } catch (err) {
         console.error("Error opening file:", err);
         showToast("Error opening file: " + err, "error");
       }
-    }
+    }, 200);
+  });
+
+  nodeRow.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (node.is_directory) return;
+    clearTimeout(clickTimer);
+    // Double click opens (or promotes) the tab as permanent
+    import('../editor/monaco.js').then(async (m) => {
+      // If a preview tab for this path exists, promote it
+      const existing = (m.getPanelTabs?.(m.getActivePanel()) || []).find(t => t.path === node.path);
+      if (existing && existing.isPreview) {
+        existing.isPreview = false;
+        m.renderTabs();
+      }
+      try {
+        const fileData = await invoke('read_file', { path: node.path });
+        if (!fileData.is_binary) m.openFileInTab(fileData);
+      } catch (err) { console.warn(err); }
+    });
   });
 
   // Right-click context menu
@@ -577,3 +604,39 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Reveal a file path in the tree: expands ancestors, scrolls, and flashes it.
+// Used by the tab context menu ("Reveal in File Explorer") and Ctrl+T results.
+// ---------------------------------------------------------------------------
+export function revealPathInTree(targetPath) {
+  const norm = (p) => String(p || '').replace(/\\/g, '/').toLowerCase().replace(/\/$/, '');
+  const target = norm(targetPath);
+  if (!target) return;
+
+  // Expand every ancestor directory row, root first
+  const parts = target.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    const prefix = parts.slice(0, i).join('/');
+    const row = document.querySelector(`.tree-node[data-path]`);
+    // find matching row (paths may differ in case/slash form)
+    const rows = Array.from(document.querySelectorAll('.tree-node'));
+    const dirRow = rows.find(r => norm(r.dataset.path) === prefix);
+    if (dirRow) {
+      // If its subtree is hidden, click to expand
+      const next = dirRow.nextElementSibling;
+      if (next && next.style && next.style.display === 'none') {
+        dirRow.click();
+      }
+    }
+  }
+
+  const allRows = Array.from(document.querySelectorAll('.tree-node'));
+  const fileRow = allRows.find(r => norm(r.dataset.path) === target);
+  if (fileRow) {
+    fileRow.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    document.querySelectorAll('.tree-node.selected').forEach(el => el.classList.remove('selected'));
+    fileRow.classList.add('selected');
+    fileRow.classList.add('reveal-flash');
+    setTimeout(() => fileRow.classList.remove('reveal-flash'), 1200);
+  }
+}
