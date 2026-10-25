@@ -494,6 +494,37 @@ function bindEditorCommands(ed) {
 
   addBound(ed, disposables, 'editor.symbolInFile', run('editor.action.quickOutline'));
   addBound(ed, disposables, 'editor.symbolInWorkspace', () => openWorkspaceSymbolSearch());
+
+  // Part J — AI code actions (context menu + keybindings)
+  const aiActions = [
+    { id: 'orbital.reviewSelection', label: 'Ask AI to Review Selection', keyCtx: 'editor' },
+    { id: 'orbital.explainSelection', label: 'Explain This (AI)', keyCtx: 'editor' },
+    { id: 'orbital.generateDocstring', label: 'Generate Docstring (AI)', keyCtx: 'editor' },
+  ];
+  const C2 = monaco.KeyMod.CtrlCmd, S2 = monaco.KeyMod.Shift, A2 = monaco.KeyMod.Alt, K2 = monaco.KeyCode;
+  ed.addAction({
+    id: 'orbital.reviewSelection',
+    label: 'Ask AI to Review Selection',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 0,
+    keybindings: [C2 | S2 | K2.KeyR],
+    run: (e) => runAIReview(e),
+  });
+  ed.addAction({
+    id: 'orbital.explainSelection',
+    label: 'Explain This (AI)',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 1,
+    keybindings: [C2 | A2 | K2.KeyE],
+    run: (e) => runExplainPopup(e),
+  });
+  ed.addAction({
+    id: 'orbital.generateDocstring',
+    label: 'Generate Docstring (AI)',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 2,
+    run: (e) => runGenerateDocstring(e),
+  });
 }
 
 /** Re-applies editor keybindings after the user edits them (G4). */
@@ -1110,6 +1141,160 @@ export function closeSplitEditor() {
   scheduleTabPersist();
 }
 
+// ---------------------------------------------------------------------------
+// Part J — AI code actions (review / explain / docstring)
+// ---------------------------------------------------------------------------
+
+async function askAI(systemPrompt, userPrompt) {
+  const { state } = await import('../state/store.js');
+  if (state.ai.isGenerating) {
+    const { showToast } = await import('../services/notifications.js');
+    showToast('The agent is busy — try again when it finishes', 'info', 2600);
+    return null;
+  }
+  const { dispatchAgentTurn } = await import('../components/agent.js');
+  const resp = await dispatchAgentTurn([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], {});
+  return resp?.content || null;
+}
+
+async function getSelectionOrNothing(ed) {
+  const model = ed.getModel();
+  const sel = ed.getSelection();
+  if (!model || sel.isEmpty()) return null;
+  return model.getValueInRange(sel);
+}
+
+function ensureReviewPanel() {
+  let panel = document.getElementById('ai-review-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'ai-review-panel';
+    panel.className = 'ai-side-panel';
+    panel.innerHTML = `
+      <div class="ai-side-header">
+        <strong>🧐 AI Code Review</strong>
+        <button class="btn btn-secondary btn-sm" id="ai-review-close">✕</button>
+      </div>
+      <div class="ai-side-body" id="ai-review-body"></div>
+      <div class="ai-side-footer">
+        <button class="btn btn-primary btn-sm" id="ai-review-apply" style="width: 100%;">Apply Suggestions in Agent Chat</button>
+      </div>
+    `;
+    document.body.appendChild(panel);
+    panel.querySelector('#ai-review-close').addEventListener('click', () => { panel.style.display = 'none'; });
+  }
+  return panel;
+}
+
+async function runAIReview(ed) {
+  const code = await getSelectionOrNothing(ed);
+  if (!code) {
+    const { showToast } = await import('../services/notifications.js');
+    showToast('Select some code first', 'info', 2200);
+    return;
+  }
+  const model = ed.getModel();
+  const panel = ensureReviewPanel();
+  const body = panel.querySelector('#ai-review-body');
+  panel.style.display = 'flex';
+  body.innerHTML = '<div class="pack-empty">Reviewing selection…</div>';
+  panel.querySelector('#ai-review-apply').style.display = 'none';
+
+  const review = await askAI(
+    'You are an expert code reviewer. Review this code for: bugs, security issues, performance, style, and suggest improvements. Be concise. Use short sections with concrete line references.',
+    `Language: ${model?.getLanguageId() || 'unknown'}\n\n\`\`\`\n${code}\n\`\`\`\n\nProvide the review now.`
+  );
+
+  if (review === null) { body.innerHTML = '<div class="pack-empty">Review cancelled (agent busy).</div>'; return; }
+  const { formatMarkdown } = await import('../components/agent.js');
+  body.innerHTML = formatMarkdown(review || '(no review returned)');
+  panel.querySelector('#ai-review-apply').style.display = '';
+  panel.querySelector('#ai-review-apply').onclick = () => {
+    panel.style.display = 'none';
+    const agentPanel = document.getElementById('agent-panel');
+    agentPanel?.classList.remove('hidden');
+    const input = document.getElementById('agent-input');
+    if (input) {
+      input.value = `Implement these code review suggestions on the selected code:\n\n${review.slice(0, 2500)}`;
+      input.focus();
+    }
+  };
+}
+
+async function runExplainPopup(ed) {
+  const code = await getSelectionOrNothing(ed);
+  if (!code) return;
+  document.getElementById('ai-explain-popover')?.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'ai-explain-popover';
+  pop.className = 'ai-popover';
+  pop.innerHTML = '<div class="pack-empty">Explaining…</div>';
+  document.body.appendChild(pop);
+
+  // Position near the end of the selection
+  const pos = ed.getScrolledVisiblePosition(ed.getSelection().getEndPosition());
+  const edRect = ed.getDomNode().getBoundingClientRect();
+  const x = Math.min(edRect.left + (pos?.left || 100) , window.innerWidth - 380);
+  const y = Math.min(edRect.top + (pos?.top || 100) + 18, window.innerHeight - 240);
+  pop.style.left = `${Math.max(8, x)}px`;
+  pop.style.top = `${Math.max(8, y)}px`;
+
+  const explanation = await askAI(
+    'Explain code simply and clearly. 3-6 short sentences max. No preamble.',
+    `\`\`\`\n${code.slice(0, 3000)}\n\`\`\``
+  );
+  if (explanation === null) { pop.remove(); return; }
+  const { formatMarkdown } = await import('../components/agent.js');
+  pop.innerHTML = `<div class="ai-popover-title">💡 Explanation</div><div class="ai-popover-body">${formatMarkdown(explanation || '')}</div>`;
+
+  const onDown = (e) => {
+    if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('mousedown', onDown); }
+  };
+  setTimeout(() => document.addEventListener('mousedown', onDown), 0);
+}
+
+const DOCSTRING_FORMATS = {
+  typescript: (d) => `/**\n${d.split('\n').map(l => ` * ${l}`).join('\n')}\n */`,
+  javascript: (d) => `/**\n${d.split('\n').map(l => ` * ${l}`).join('\n')}\n */`,
+  rust: (d) => `/// ${d.split('\n').join('\n/// ')}`,
+  python: (d) => `"""${d.split('\n').join('\n')}"""`,
+};
+
+async function runGenerateDocstring(ed) {
+  const code = await getSelectionOrNothing(ed);
+  if (!code) {
+    const { showToast } = await import('../services/notifications.js');
+    showToast('Select the function to document', 'info', 2200);
+    return;
+  }
+  const lang = ed.getModel()?.getLanguageId() || 'javascript';
+  const format = DOCSTRING_FORMATS[lang] || DOCSTRING_FORMATS.javascript;
+  const { showToast } = await import('../services/notifications.js');
+  showToast('Generating docstring…', 'info', 1800);
+
+  const doc = await askAI(
+    `You write documentation comments. Output ONLY the documentation comment text for the given function — no code, no fences, no prose. Format: ${lang === 'rust' ? 'rustdoc (/// lines)' : lang === 'python' ? 'Python docstring body' : 'JSDoc body without the /** */ wrappers'}. Include params, return value, and one-line purpose.`,
+    `\`\`\`${lang}\n${code.slice(0, 2500)}\n\`\`\``
+  );
+  if (!doc) { showToast('Docstring generation failed', 'error', 2600); return; }
+
+  const wrapped = format(doc.replace(/^```[a-z]*\n?|```$/g, '').trim());
+  const sel = ed.getSelection();
+  const model = ed.getModel();
+  if (!model) return;
+  ed.executeEdits('orbital-docstring', [{
+    range: new monaco.Range(sel.startLineNumber, 1, sel.startLineNumber, 1),
+    text: wrapped + '\n',
+    forceMoveMarkers: false,
+  }]);
+  showToast('Docstring inserted above the selection', 'success', 2200);
+}
+
+/** Closes the focused pane's active tab (used by Ctrl+W and the palette). */
 export function toggleSplitEditor() {
   if (state.editor.splitMode) closeSplitEditor();
   else openSplitRight();
