@@ -12,9 +12,13 @@ export const state = {
 
   // Editor tabs
   editor: {
-    tabs: [], // { id, path, relativePath, name, content, originalContent, isDirty, language }
+    tabs: [], // { id, path, relativePath, name, content, originalContent, isDirty, isPinned, isPreview, language }
     activeTabId: null,
     fontSize: 13,
+    // Split editor state (Part A3): right pane tabs live here while splitMode is on
+    splitMode: false,
+    rightTabs: [],
+    rightActiveTabId: null,
   },
 
   // Operating Mode: 'agent_pro' | 'dev' | 'user'
@@ -50,6 +54,12 @@ export const state = {
       numPredict: 2048,    // max generated tokens per turn
       maxIterations: 30,   // agent loop step cap
     },
+    // I5: smart routing — specialist models per task type (Ollama only)
+    smartRouting: { enabled: false, codeModel: '', explainModel: '', fastModel: '' },
+    // I9: verbose agent debug output
+    debugMode: false,
+    // I4: per-session approval allowlist set by "Remember this decision"
+    sessionAllowlist: { writes: false, commands: {} },
     // Cache of per-model facts fetched from /api/show — never fabricated.
     modelInfo: {},
     isGenerating: false,
@@ -65,6 +75,13 @@ export const state = {
   // Project memories
   memories: [],
 
+  // Terminal configuration (profiles, split state, default shell)
+  terminal: {
+    profiles: [],
+    splitMode: false,
+    defaultShell: 'powershell',
+  },
+
   // Bottom panel state
   bottomPanel: {
     activeTab: 'terminal',
@@ -75,6 +92,10 @@ export const state = {
   settings: {
     autoSave: true,
     autoSaveDelay: 1000,
+    // B1: inline AI autocomplete (ghost text)
+    inlineComplete: { enabled: false, provider: 'ollama' },
+    // Editor appearance/formatting options (monaco.js applyEditorSettings)
+    editor: {},
   },
 
   // Active Orchestration Plan & Task Execution
@@ -138,6 +159,12 @@ export function loadPersistedState() {
       } catch (e) { /* keep defaults */ }
     }
 
+    const savedSmartRouting = localStorage.getItem('orbital_smart_routing');
+    if (savedSmartRouting) {
+      try { state.ai.smartRouting = { ...state.ai.smartRouting, ...JSON.parse(savedSmartRouting) }; } catch (e) { /* keep defaults */ }
+    }
+    state.ai.debugMode = localStorage.getItem('orbital_debug_mode') === 'true';
+
     const savedModelInfo = localStorage.getItem('orbital_model_info');
     if (savedModelInfo) {
       try {
@@ -183,6 +210,8 @@ export function persistState() {
     localStorage.setItem('orbital_openai_base_url', state.ai.openaiBaseUrl || '');
     localStorage.setItem('orbital_ai_settings', JSON.stringify(state.ai.settings));
     localStorage.setItem('orbital_model_info', JSON.stringify(state.ai.modelInfo || {}));
+    localStorage.setItem('orbital_smart_routing', JSON.stringify(state.ai.smartRouting || {}));
+    localStorage.setItem('orbital_debug_mode', state.ai.debugMode ? 'true' : 'false');
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');

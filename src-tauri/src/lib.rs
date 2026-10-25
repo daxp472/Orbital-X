@@ -128,6 +128,44 @@ fn undo_agent_change(state: State<'_, AppState>) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn search_workspace_advanced(
+    query: String,
+    is_regex: Option<bool>,
+    case_sensitive: Option<bool>,
+    whole_word: Option<bool>,
+    include: Option<String>,
+    exclude: Option<String>,
+    max_results: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.search_files_advanced(
+        &query,
+        is_regex.unwrap_or(false),
+        case_sensitive.unwrap_or(false),
+        whole_word.unwrap_or(false),
+        include.as_deref(),
+        exclude.as_deref(),
+        max_results.unwrap_or(200).min(500),
+    )
+}
+
+/// One-shot inline code completion for the editor ghost-text feature.
+#[tauri::command]
+async fn complete_code(
+    provider: String,
+    api_key: String,
+    model: String,
+    base_url: Option<String>,
+    prefix: String,
+    suffix: String,
+    language: String,
+) -> Result<serde_json::Value, String> {
+    let completion = ProviderService::complete_code(&provider, &api_key, &model, base_url, &prefix, &suffix, &language).await?;
+    Ok(serde_json::json!({ "completion": completion }))
+}
+
+#[tauri::command]
 fn search_workspace(query: String, max_results: Option<usize>, state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
     ws.search_files(&query, max_results.unwrap_or(20))
@@ -877,6 +915,44 @@ fn list_memories(state: State<'_, AppState>) -> Result<serde_json::Value, String
     }
 }
 
+/// Sets the importance (1-5) of a memory entry — agent prompt injection
+/// orders by importance.
+#[tauri::command]
+fn set_memory_importance(id: String, importance: u32, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = ws.get_root().ok_or("No workspace open")?;
+    let clamped = importance.clamp(1, 5);
+    let mut memories = MemoryService::load_memories(&root);
+    let mut updated = false;
+    for m in memories.iter_mut() {
+        if m.id == id {
+            m.importance = clamped;
+            updated = true;
+        }
+    }
+    if !updated {
+        return Ok(serde_json::json!({ "success": false, "error": "Memory entry not found" }));
+    }
+    let file = root.join(".orbital").join("memory.json");
+    let serialized = serde_json::to_string_pretty(&memories).map_err(|e| e.to_string())?;
+    std::fs::write(file, serialized).map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "success": true, "id": id, "importance": clamped }))
+}
+
+/// Checkpoint list (last 20 change-journal entries) for the agent panel.
+#[tauri::command]
+fn list_checkpoints(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    Ok(ws.list_journal_summary())
+}
+
+/// Reverts every agent change newer than the given checkpoint index.
+#[tauri::command]
+fn restore_checkpoint(index: usize, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.restore_to_checkpoint(index)
+}
+
 #[tauri::command]
 fn delete_memory(id: String, state: State<'_, AppState>) -> Result<bool, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -895,6 +971,9 @@ pub struct GitStatusResult {
     pub is_repo: bool,
     pub branch: String,
     pub changes: Vec<GitFileChange>,
+    /// Raw `git status --porcelain=v1 -b` output — the two-char XY codes the
+    /// Git panel needs to group staged/unstaged/conflict/untracked precisely.
+    pub raw: String,
 }
 
 #[tauri::command]
@@ -907,6 +986,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
                 is_repo: false,
                 branch: "No Workspace".into(),
                 changes: vec![],
+                raw: String::new(),
             }),
         }
     };
@@ -917,6 +997,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
             is_repo: false,
             branch: "Not a git repository".into(),
             changes: vec![],
+            raw: String::new(),
         });
     }
 
@@ -938,6 +1019,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
         is_repo: true,
         branch,
         changes,
+        raw: res.stdout,
     })
 }
 
@@ -979,6 +1061,24 @@ async fn get_git_diff(path: Option<String>, state: State<'_, AppState>) -> Resul
     };
     let res = TerminalService::run_git(&git_args, &cwd, 15).await?;
     Ok(res.stdout)
+}
+
+/// Direct git invocation for the Git panel (user-initiated actions).
+/// Argument-array execution — no shell, no interpolation. Agent-driven git
+/// through execute_tool keeps its own policy gating; this command is for the
+/// human clicking buttons in the Source Control panel.
+#[tauri::command]
+async fn run_git_command(args: Vec<String>, state: State<'_, AppState>) -> Result<CommandResult, String> {
+    let cwd = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+            .ok_or("No workspace open")?
+            .to_string_lossy()
+            .to_string()
+    };
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let timeout: u64 = if arg_refs.first().map(|s| *s == "push" || *s == "pull").unwrap_or(false) { 120 } else { 60 };
+    TerminalService::run_git(&arg_refs, &cwd, timeout).await
 }
 
 #[tauri::command]
@@ -1366,6 +1466,50 @@ fn detect_gpus() -> Vec<GpuInfo> {
     Vec::new()
 }
 
+/// K3: native OS notification through the Tauri notification plugin.
+#[tauri::command]
+fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+    use tauri_plugin_notification::NotificationExt;
+    app.notification()
+        .builder()
+        .title(title)
+        .body(body)
+        .show()
+        .map_err(|e| format!("Native notification failed: {}", e))
+}
+
+/// P3: latest release tag from the GitHub API (server-side fetch keeps the
+/// CSP tight — the webview never talks to api.github.com directly).
+#[tauri::command]
+async fn check_latest_release() -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("OrbitalX-IDE/2.2.3")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get("https://api.github.com/repos/daxp472/Orbital-X/releases/latest")
+        .send()
+        .await
+        .map_err(|e| format!("Release check failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "tag": json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default(),
+        "url": json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default(),
+        "name": json.get("name").and_then(|t| t.as_str()).unwrap_or_default(),
+    }))
+}
+
+/// M4: workspace statistics for the Overview panel.
+#[tauri::command]
+fn get_workspace_stats(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.get_workspace_stats()
+}
+
 #[tauri::command]
 fn get_hardware_info() -> Result<HardwareInfo, String> {
     let mut sys = sysinfo::System::new();
@@ -1444,9 +1588,25 @@ pub fn run() {
         active_ops: Mutex::new(HashMap::new()),
     };
 
+    // P1: catch Rust panics into ~/.orbital/orbital.log so a crash leaves a trace
+    let log_dir = dirs::home_dir()
+        .map(|h| h.join(".orbital"))
+        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let _ = std::fs::create_dir_all(&log_dir);
+    let panic_log = log_dir.join("orbital.log");
+    std::panic::set_hook(Box::new(move |info| {
+        let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
+        let _ = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&panic_log)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, format!("[{ts}] PANIC: {info}\n").as_bytes()));
+    }));
+
     tauri::Builder::default()
         .manage(state)
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_log::Builder::default()
                 .level(log::LevelFilter::Info)
@@ -1462,6 +1622,9 @@ pub fn run() {
             get_file_diff,
             undo_agent_change,
             search_workspace,
+            search_workspace_advanced,
+            complete_code,
+            run_git_command,
             run_command,
             create_interactive_terminal,
             send_terminal_input,
@@ -1481,6 +1644,12 @@ pub fn run() {
             save_memory_entry,
             list_memories,
             delete_memory,
+            set_memory_importance,
+            list_checkpoints,
+            notify_native,
+            check_latest_release,
+            get_workspace_stats,
+            restore_checkpoint,
             get_git_status,
             git_stage_and_commit,
             get_git_diff,

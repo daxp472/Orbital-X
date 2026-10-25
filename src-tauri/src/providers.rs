@@ -309,6 +309,99 @@ impl ProviderService {
         }
     }
 
+    /// Lightweight single-shot code completion (no tools, no agent loop) for
+    /// the inline ghost-text feature. Short timeout and small num_predict keep
+    /// it snappy; failures return Err and the frontend silently gives up.
+    pub async fn complete_code(
+        provider: &str,
+        api_key: &str,
+        model: &str,
+        base_url: Option<String>,
+        prefix: &str,
+        suffix: &str,
+        language: &str,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        let system_prompt = "You are a code completion engine. Complete the code at the cursor. Return ONLY the completion text, no explanation. 1-5 lines max.";
+        let user_prompt = format!(
+            "Language: {}
+Code before cursor:
+{}
+
+Code after cursor:
+{}
+
+Continue the code at the cursor. Return only the raw completion text.",
+            language, prefix, suffix
+        );
+
+        match provider.to_lowercase().as_str() {
+            "ollama" => {
+                let url = base_url.unwrap_or_else(|| "http://localhost:11434".into());
+                let payload = serde_json::json!({
+                    "model": if model.is_empty() { "qwen2.5-coder:7b" } else { model },
+                    "messages": [
+                        { "role": "system", "content": system_prompt },
+                        { "role": "user", "content": user_prompt }
+                    ],
+                    "stream": false,
+                    "keep_alive": "10m",
+                    "options": { "num_predict": 96, "temperature": 0.2, "stop": ["```"] }
+                });
+                let resp = client
+                    .post(format!("{}/api/chat", url.trim_end_matches('/')))
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|e| format!("completion request failed: {}", e))?;
+                if !resp.status().is_success() {
+                    return Err(format!("completion HTTP {}", resp.status()));
+                }
+                let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                Ok(json
+                    .pointer("/message/content")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string())
+            }
+            "openai" => {
+                let endpoint = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".into());
+                let payload = serde_json::json!({
+                    "model": if model.is_empty() { "gpt-4o-mini" } else { model },
+                    "messages": [
+                        { "role": "system", "content": system_prompt },
+                        { "role": "user", "content": user_prompt }
+                    ],
+                    "max_tokens": 96,
+                    "temperature": 0.2
+                });
+                let resp = client
+                    .post(&endpoint)
+                    .header("Authorization", format!("Bearer {}", api_key.trim()))
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|e| format!("completion request failed: {}", e))?;
+                if !resp.status().is_success() {
+                    return Err(format!("completion HTTP {}", resp.status()));
+                }
+                let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                Ok(json
+                    .pointer("/choices/0/message/content")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string())
+            }
+            _ => Err(format!("Inline completion is not supported for provider '{}'", provider)),
+        }
+    }
+
     /// Sends a prompt and tools to the chosen provider and standardizes the response
     pub async fn dispatch_turn(
         provider: &str,
@@ -1063,6 +1156,20 @@ pub async fn stream_ollama_turn(
 }
 
 fn extract_json_tool_calls(content: &str) -> Option<Vec<ToolCall>> {
+    // Reasoning models (qwen3-thinking, deepseek-r1, …) wrap chain-of-thought
+    // in <think>…</think>. Never mine tool calls out of the reasoning — only
+    // from the actual response body.
+    let stripped = if content.contains("<think>") {
+        let re = regex::Regex::new(r"(?s)<think>.*?</think>").ok();
+        match re {
+            Some(re) => re.replace_all(content, "").to_string(),
+            None => content.to_string(),
+        }
+    } else {
+        content.to_string()
+    };
+    let content = stripped.as_str();
+
     let mut calls = Vec::new();
     let mut search_str = content;
 

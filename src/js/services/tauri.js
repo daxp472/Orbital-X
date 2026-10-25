@@ -176,6 +176,10 @@ async function getInvoke() {
         return { name: args.name, context_length: null, parameter_size: null, quantization: null, supports_tools: null };
       case 'ollama_running_models':
         return { models: [] };
+      case 'complete_code':
+        return { completion: '' };
+      case 'search_workspace_advanced':
+        return [];
       case 'get_hardware_info':
         return { totalRamBytes: null, gpus: [] };
       default:
