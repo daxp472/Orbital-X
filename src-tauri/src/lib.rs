@@ -933,6 +933,9 @@ pub struct GitStatusResult {
     pub is_repo: bool,
     pub branch: String,
     pub changes: Vec<GitFileChange>,
+    /// Raw `git status --porcelain=v1 -b` output — the two-char XY codes the
+    /// Git panel needs to group staged/unstaged/conflict/untracked precisely.
+    pub raw: String,
 }
 
 #[tauri::command]
@@ -945,6 +948,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
                 is_repo: false,
                 branch: "No Workspace".into(),
                 changes: vec![],
+                raw: String::new(),
             }),
         }
     };
@@ -955,6 +959,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
             is_repo: false,
             branch: "Not a git repository".into(),
             changes: vec![],
+            raw: String::new(),
         });
     }
 
@@ -976,6 +981,7 @@ async fn get_git_status(state: State<'_, AppState>) -> Result<GitStatusResult, S
         is_repo: true,
         branch,
         changes,
+        raw: res.stdout,
     })
 }
 
@@ -1017,6 +1023,24 @@ async fn get_git_diff(path: Option<String>, state: State<'_, AppState>) -> Resul
     };
     let res = TerminalService::run_git(&git_args, &cwd, 15).await?;
     Ok(res.stdout)
+}
+
+/// Direct git invocation for the Git panel (user-initiated actions).
+/// Argument-array execution — no shell, no interpolation. Agent-driven git
+/// through execute_tool keeps its own policy gating; this command is for the
+/// human clicking buttons in the Source Control panel.
+#[tauri::command]
+async fn run_git_command(args: Vec<String>, state: State<'_, AppState>) -> Result<CommandResult, String> {
+    let cwd = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+            .ok_or("No workspace open")?
+            .to_string_lossy()
+            .to_string()
+    };
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let timeout: u64 = if arg_refs.first().map(|s| *s == "push" || *s == "pull").unwrap_or(false) { 120 } else { 60 };
+    TerminalService::run_git(&arg_refs, &cwd, timeout).await
 }
 
 #[tauri::command]
@@ -1502,6 +1526,7 @@ pub fn run() {
             search_workspace,
             search_workspace_advanced,
             complete_code,
+            run_git_command,
             run_command,
             create_interactive_terminal,
             send_terminal_input,

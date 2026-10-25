@@ -406,8 +406,13 @@ function initGlobalShortcuts() {
       e.preventDefault();
       document.getElementById('rail-search')?.click();
     }
+    // Ctrl + Shift + ` (backtick): create a new terminal
+    else if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') {
+      e.preventDefault();
+      import('./components/terminal.js').then(m => m.createTerminalInstance());
+    }
     // Ctrl + ` (backtick) or Ctrl + J: Toggle Terminal Panel & Focus Terminal Input
-    else if (e.ctrlKey && (e.key === '`' || e.key.toLowerCase() === 'j')) {
+    else if (e.ctrlKey && !e.shiftKey && (e.key === '`' || e.key.toLowerCase() === 'j')) {
       e.preventDefault();
       const bottom = document.getElementById('bottom-panel');
       const isCollapsed = bottom?.classList.contains('collapsed');

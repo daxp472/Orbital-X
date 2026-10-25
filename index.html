@@ -490,26 +490,15 @@
 
           <div class="panel-body">
             <!-- Terminal Tab Body (Integrated Console + Sessions Sidebar matching VS Code) -->
-            <div id="tab-content-terminal" style="display: flex; flex-direction: row; height: 100%; position: relative;">
-              <!-- Main Terminal Output & Prompt Area -->
-              <div style="flex: 1; display: flex; flex-direction: column; height: 100%; min-width: 0;">
-                <div class="terminal-view" id="terminal-stdout">PS D:\1work\YT\Orbital X> ready for workspace commands...</div>
-                <div class="terminal-prompt-bar">
-                  <span id="terminal-prompt-label" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS D:\1work\YT\Orbital X&gt;</span>
-                  <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command (e.g. npm test, cargo check, git status) and press Enter..." />
-                  <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Run</button>
-                </div>
-              </div>
+            <div id="tab-content-terminal" style="display: flex; flex-direction: column; height: 100%; position: relative;">
+              <!-- Terminal panes + tab bars are built into this mount by terminal.js -->
+              <div id="terminal-mount" style="display: flex; flex: 1; min-height: 0; width: 100%; flex-direction: column;"></div>
 
-              <!-- Terminal Sessions Sidebar (Right column matching screenshot) -->
-              <div class="terminal-sessions-sidebar" id="terminal-sessions-sidebar" style="width: 170px; border-left: 1px solid var(--border-color); background: var(--bg-sidebar); display: flex; flex-direction: column; flex-shrink: 0;">
-                <div style="padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
-                  <span>SESSIONS</span>
-                  <button class="icon-btn" id="btn-sidebar-new-terminal" title="New Session (+)" style="padding: 1px 4px; font-size: 12px; line-height: 1;">+</button>
-                </div>
-                <div class="terminal-sessions-list" id="terminal-sessions-list" style="flex: 1; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 4px;">
-                  <!-- Dynamically rendered by terminal.js -->
-                </div>
+              <!-- Command prompt bar (shared; acts on the focused pane) -->
+              <div class="terminal-prompt-bar">
+                <span id="terminal-prompt-label" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS&gt;</span>
+                <input type="text" class="terminal-input" id="terminal-command-input" placeholder="Type command and press Enter… (Ctrl+R history, Ctrl+F find)" />
+                <button class="btn btn-primary btn-sm" id="btn-run-terminal-command">Run</button>
               </div>
             </div>
 

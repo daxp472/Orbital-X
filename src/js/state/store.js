@@ -69,6 +69,13 @@ export const state = {
   // Project memories
   memories: [],
 
+  // Terminal configuration (profiles, split state, default shell)
+  terminal: {
+    profiles: [],
+    splitMode: false,
+    defaultShell: 'powershell',
+  },
+
   // Bottom panel state
   bottomPanel: {
     activeTab: 'terminal',

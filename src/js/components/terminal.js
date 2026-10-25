@@ -1,21 +1,103 @@
 // ==========================================================================
-// Orbital X — Integrated Real Interactive Terminal Subsystem (terminal.js)
-// Modeled after VS Code, Antigravity, and Cursor integrated terminals.
-// Supports real interactive PowerShell shell processes, live output streaming,
-// persistent working directories, and multiple independent sessions.
+// Orbital X — Professional Integrated Terminal (terminal.js)
+//
+// E1  Multi-tab sessions with inline rename + shell-type color dots
+// E2  Profile selector (PowerShell / cmd / Git Bash / WSL / custom) on "+"
+// E3  Split terminal (two side-by-side pane groups with resizer)
+// E4  Font/appearance settings applied live (family, size, line height,
+//     cursor style, blink, scrollback)
+// E5  Full ANSI parser: 16 + bright + 256-color fg/bg, bold, italic,
+//     underline, strikethrough, reset  →  parseAnsiToHtml(text)
+// E6  Copy/Paste context menu + Ctrl+Shift+C/V, Ctrl+A select all
+// E7  In-terminal search (Ctrl+F) with highlight + prev/next navigation
+// E8  Working-directory breadcrumb parsed from the live prompt
+// E9  Ctrl+R searchable history picker
+// E10 Link detection: URLs open the browser, file paths open the editor
 // ==========================================================================
 
 import { invoke } from '../services/tauri.js';
 import { state } from '../state/store.js';
-
-let terminalInstances = [];
-let activeTerminalId = 1;
-let pollTimer = null;
+import { showToast } from '../services/notifications.js';
 
 const STORAGE_KEY_CMD_HISTORY = 'orbital_cmd_history';
 const MAX_CMD_HISTORY = 50;
 let globalCmdHistory = [];
 let cmdHistoryIndex = -1;
+
+// --- E2: terminal profiles ------------------------------------------------
+
+const SHELL_PROFILES = [
+  { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', dot: 'var(--accent-blue)', os: 'windows' },
+  { id: 'cmd', label: 'Command Prompt', shell: 'cmd.exe', dot: 'var(--accent-orange)', os: 'windows' },
+  { id: 'gitbash', label: 'Git Bash', shell: 'C:\\Program Files\\Git\\bin\\bash.exe', dot: 'var(--accent-green)', os: 'windows' },
+  { id: 'wsl', label: 'WSL', shell: 'wsl.exe', dot: 'var(--accent-green)', os: 'windows' },
+  { id: 'sh', label: 'sh (Unix)', shell: 'sh', dot: 'var(--accent-green)', os: 'unix' },
+];
+
+function isWindows() { return navigator.userAgent.includes('Windows'); }
+
+function defaultProfiles() {
+  return isWindows()
+    ? SHELL_PROFILES.filter(p => p.os === 'windows').map(p => p.id)
+    : SHELL_PROFILES.filter(p => p.os === 'unix').map(p => p.id);
+}
+
+function loadTerminalSettings() {
+  state.settings.terminal = {
+    fontFamily: "'JetBrains Mono', 'Cascadia Code', monospace",
+    fontSize: 13,
+    lineHeight: 1.5,
+    cursorStyle: 'block',   // block | underline | bar
+    cursorBlink: true,
+    scrollback: 1000,
+    ...(state.settings.terminal || {}),
+  };
+  state.terminal = state.terminal || {
+    profiles: [],
+    splitMode: false,
+    defaultShell: isWindows() ? 'powershell' : 'sh',
+  };
+  if (!Array.isArray(state.terminal.profiles) || state.terminal.profiles.length === 0) {
+    state.terminal.profiles = defaultProfiles();
+  }
+  try {
+    const savedCustom = JSON.parse(localStorage.getItem('orbital_terminal_custom_shells') || '[]');
+    for (const c of savedCustom) {
+      SHELL_PROFILES.push({ id: `custom:${c.label}`, label: c.label, shell: c.path, dot: 'var(--text-muted)', os: 'any' });
+    }
+    const savedTerm = JSON.parse(localStorage.getItem('orbital_terminal_settings') || 'null');
+    if (savedTerm) state.settings.terminal = { ...state.settings.terminal, ...savedTerm };
+    const savedMeta = JSON.parse(localStorage.getItem('orbital_terminal_meta') || 'null');
+    if (savedMeta) state.terminal = { ...state.terminal, ...savedMeta };
+  } catch (e) { /* defaults */ }
+}
+
+function persistTerminalMeta() {
+  try {
+    localStorage.setItem('orbital_terminal_meta', JSON.stringify({
+      profiles: state.terminal.profiles,
+      splitMode: state.terminal.splitMode,
+      defaultShell: state.terminal.defaultShell,
+    }));
+  } catch (e) { /* quota */ }
+}
+
+export function persistTerminalSettings() {
+  try {
+    localStorage.setItem('orbital_terminal_settings', JSON.stringify(state.settings.terminal));
+  } catch (e) { /* quota */ }
+}
+
+function shellDot(shell) {
+  const p = SHELL_PROFILES.find(x => x.shell === shell || x.id === shell);
+  if (p) return p.dot;
+  if (/powershell/i.test(shell)) return 'var(--accent-blue)';
+  if (/cmd/i.test(shell)) return 'var(--accent-orange)';
+  if (/bash|wsl|sh/i.test(shell)) return 'var(--accent-green)';
+  return 'var(--text-muted)';
+}
+
+// --- command history --------------------------------------------------------
 
 function loadCommandHistory() {
   try {
@@ -40,16 +122,162 @@ function saveCommandToHistory(command) {
   try {
     localStorage.setItem(STORAGE_KEY_CMD_HISTORY, JSON.stringify(globalCmdHistory));
   } catch (e) {
-    console.warn("Could not persist terminal command history:", e);
+    console.warn('Could not persist terminal command history:', e);
   }
 }
 
+// ===========================================================================
+// E5: ANSI → HTML parser
+// ===========================================================================
+
+const ANSI_16 = {
+  30: '#6e7681', 31: 'var(--accent-red)', 32: 'var(--accent-green)', 33: 'var(--accent-orange)',
+  34: 'var(--accent-blue)', 35: 'var(--accent-purple)', 36: 'var(--accent-cyan)', 37: 'var(--text-primary)',
+  90: 'var(--text-muted)', 91: 'var(--accent-red)', 92: 'var(--accent-green)', 93: 'var(--accent-orange)',
+  94: 'var(--accent-blue)', 95: 'var(--accent-purple)', 96: 'var(--accent-cyan)', 97: 'var(--text-primary-bright)',
+  // backgrounds (40-47, 100-107) — muted translucent fills
+  40: 'rgba(110,118,129,0.25)', 41: 'rgba(255,69,58,0.25)', 42: 'rgba(48,209,88,0.25)', 43: 'rgba(255,159,10,0.25)',
+  44: 'rgba(41,151,255,0.25)', 45: 'rgba(188,140,255,0.25)', 46: 'rgba(57,197,187,0.25)', 47: 'rgba(230,237,243,0.2)',
+  100: 'rgba(110,118,129,0.35)', 101: 'rgba(255,69,58,0.35)', 102: 'rgba(48,209,88,0.35)', 103: 'rgba(255,159,10,0.35)',
+  104: 'rgba(41,151,255,0.35)', 105: 'rgba(188,140,255,0.35)', 106: 'rgba(57,197,187,0.35)', 107: 'rgba(255,255,255,0.3)',
+};
+
+// 6x6x6 color cube + greyscale ramp for 256-color mode
+function ansi256Color(n) {
+  if (n < 16) return null;
+  if (n < 232) {
+    const c = n - 16;
+    const steps = [0, 95, 135, 175, 215, 255];
+    const r = steps[Math.floor(c / 36)];
+    const g = steps[Math.floor((c % 36) / 6)];
+    const b = steps[c % 6];
+    return `rgb(${r},${g},${b})`;
+  }
+  const v = 8 + (n - 232) * 10;
+  return `rgb(${v},${v},${v})`;
+}
+
+function escapeHtmlText(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Converts ANSI escape sequences to HTML with inline styles.
+ * Supports: standard + bright 16 colors, 256-color (38;5;N / 48;5;N),
+ * bold (1), dim (2), italic (3), underline (4), strikethrough (9),
+ * and reset (0 / 39 / 49).
+ */
+export function parseAnsiToHtml(text) {
+  if (!text) return '';
+  const segments = [];
+  let style = { fg: null, bg: null, bold: false, italic: false, underline: false, strike: false };
+  let plain = '';
+
+  const pushSegment = () => {
+    if (plain) segments.push({ text: plain, style: { ...style } });
+    plain = '';
+  };
+
+  const re = /\x1b\[([0-9;]*)m/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    plain += text.slice(last, m.index);
+    pushSegment();
+    last = m.index + m[0].length;
+
+    const params = m[1] === '' ? ['0'] : m[1].split(';');
+    for (let i = 0; i < params.length; i++) {
+      const p = parseInt(params[i], 10);
+      if (Number.isNaN(p)) continue;
+      if (p === 0) style = { fg: null, bg: null, bold: false, italic: false, underline: false, strike: false };
+      else if (p === 1) style.bold = true;
+      else if (p === 2) style.bold = false; // dim — treated as non-bold
+      else if (p === 3) style.italic = true;
+      else if (p === 4) style.underline = true;
+      else if (p === 9) style.strike = true;
+      else if (p === 22) style.bold = false;
+      else if (p === 23) style.italic = false;
+      else if (p === 24) style.underline = false;
+      else if (p === 29) style.strike = false;
+      else if (p === 39) style.fg = null;
+      else if (p === 49) style.bg = null;
+      else if (ANSI_16[p]) {
+        if (p < 50 || p >= 90) style.fg = ANSI_16[p]; else style.bg = ANSI_16[p];
+      }
+      else if (p >= 40 && p <= 47) style.bg = ANSI_16[p];
+      else if (p >= 100 && p <= 107) style.bg = ANSI_16[p];
+      else if ((p === 38 || p === 48) && params[i + 1] === '5') {
+        const n = parseInt(params[i + 2], 10);
+        if (Number.isFinite(n)) {
+          const col = ansi256Color(n);
+          if (col) { if (p === 38) style.fg = col; else style.bg = col; }
+          i += 2;
+        }
+      }
+      else if ((p === 38 || p === 48) && params[i + 1] === '2') {
+        // truecolor — rasterize to rgb()
+        const r = parseInt(params[i + 2], 10), g = parseInt(params[i + 3], 10), b = parseInt(params[i + 4], 10);
+        if ([r, g, b].every(Number.isFinite)) {
+          const col = `rgb(${r},${g},${b})`;
+          if (p === 38) style.fg = col; else style.bg = col;
+        }
+        i += 4;
+      }
+    }
+  }
+  plain += text.slice(last);
+  pushSegment();
+
+  return segments
+    .map(({ text: seg, style: st }) => {
+      const css = [];
+      if (st.fg) css.push(`color: ${st.fg}`);
+      if (st.bg) css.push(`background-color: ${st.bg}`);
+      if (st.bold) css.push('font-weight: 700');
+      if (st.italic) css.push('font-style: italic');
+      if (st.underline) css.push('text-decoration: underline');
+      if (st.strike) css.push('text-decoration: line-through');
+      const safe = escapeHtmlText(seg);
+      return css.length ? `<span style="${css.join('; ')};">${safe}</span>` : safe;
+    })
+    .join('');
+}
+
+// ===========================================================================
+// E10: link detection — URLs and file paths become clickable
+// ===========================================================================
+
+const URL_RE = /(https?:\/\/[^\s"'<>]+)/g;
+// Windows absolute path (optionally with :line) — tolerate escaped HTML chars
+const WIN_PATH_RE = /([A-Za-z]:\\[^\s:<>"]+(?::(\d+))?)/g;
+
+function linkifySafeHtml(safeHtml) {
+  // safeHtml is already HTML-escaped. URLs survive escaping untouched.
+  return safeHtml
+    .replace(URL_RE, (url) =>
+      `<a href="#" class="term-link" data-term-link="url" data-url="${url}" title="Open in browser">${url}</a>`)
+    .replace(WIN_PATH_RE, (p, path, line) =>
+      `<a href="#" class="term-link" data-term-link="file" data-path="${path}" data-line="${line || ''}" title="Open in editor">${path}</a>`);
+}
+
+// ===========================================================================
+// Sessions
+// ===========================================================================
+
 class TerminalSession {
-  constructor(id, name = 'powershell') {
+  constructor(id, shell, pane = 'A') {
     this.id = id;
     this.sessionId = `term_${id}_${Date.now()}`;
-    this.name = name;
-    this.cwd = state.workspace.rootPath || 'D:\\1work\\YT\\Orbital X';
+    this.shell = shell;
+    this.pane = pane;               // 'A' | 'B' (split)
+    this.name = this.profileName();
+    this.cwd = state.workspace.rootPath || '';
     this.history = [];
     this.historyIndex = -1;
     this.buffer = '';
@@ -57,23 +285,34 @@ class TerminalSession {
     this.isBackendConnected = false;
   }
 
+  profileName() {
+    const p = SHELL_PROFILES.find(x => x.shell === this.shell || x.id === this.shell);
+    if (p) return p.label;
+    if (/powershell/i.test(this.shell)) return 'PowerShell';
+    if (/cmd/i.test(this.shell)) return 'cmd';
+    if (/bash/i.test(this.shell)) return 'bash';
+    if (/wsl/i.test(this.shell)) return 'wsl';
+    return this.shell.split(/[\\/]/).pop() || 'shell';
+  }
+
   async startBackendShell() {
     try {
       const res = await invoke('create_interactive_terminal', {
         sessionId: this.sessionId,
         name: this.name,
-        cwd: this.cwd,
-        shell: 'powershell',
+        cwd: this.cwd || undefined,
+        shell: this.shell,
       });
       if (res && res.id) {
         this.sessionId = res.id;
       }
       this.isBackendConnected = true;
-      // Initial poll after short delay for prompt
       setTimeout(() => pollActiveTerminalOutput(), 250);
     } catch (e) {
-      console.warn(`[Terminal] Interactive shell spawn failed for session ${this.sessionId}:`, e);
+      console.warn(`[Terminal] Shell spawn failed for ${this.sessionId}:`, e);
       this.isBackendConnected = false;
+      this.buffer += `\r\n⚠ Could not start "${this.shell}": ${e}\r\n`;
+      renderPanes();
     }
   }
 
@@ -82,23 +321,21 @@ class TerminalSession {
       try {
         await invoke('close_interactive_terminal', { sessionId: this.sessionId });
       } catch (e) {
-        console.warn(`[Terminal] Close session failed:`, e);
+        console.warn('[Terminal] Close session failed:', e);
       }
       this.isBackendConnected = false;
     }
   }
 }
 
+let terminalInstances = [];
+let activeTerminalId = 1;
+let pollTimer = null;
+let renameTimer = null;
+
 export function initTerminal() {
   loadCommandHistory();
-
-  // Initialize first terminal session
-  if (terminalInstances.length === 0) {
-    const firstSession = new TerminalSession(1, 'powershell');
-    terminalInstances.push(firstSession);
-    activeTerminalId = 1;
-    firstSession.startBackendShell();
-  }
+  loadTerminalSettings();
 
   const inputElem = document.getElementById('terminal-command-input');
   const runBtn = document.getElementById('btn-run-terminal-command');
@@ -109,22 +346,27 @@ export function initTerminal() {
   const sidebarNewBtn = document.getElementById('btn-sidebar-new-terminal');
   const bottomPanel = document.getElementById('bottom-panel');
 
-  // Bottom panel tab switching
+  if (terminalInstances.length === 0) {
+    const defaultProfile = SHELL_PROFILES.find(p => p.id === state.terminal.defaultShell) || SHELL_PROFILES[0];
+    const first = new TerminalSession(1, defaultProfile.shell, 'A');
+    terminalInstances.push(first);
+    activeTerminalId = 1;
+    first.startBackendShell();
+  }
+
+  // Bottom panel tab switching (terminal / validation / logs)
   const tabs = document.querySelectorAll('.panel-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
-
       const target = tab.dataset.tab;
       const termContent = document.getElementById('tab-content-terminal');
       const valContent = document.getElementById('tab-content-validation');
       const logContent = document.getElementById('tab-content-logs');
-
       if (termContent) termContent.style.display = target === 'terminal' ? 'flex' : 'none';
       if (valContent) valContent.style.display = target === 'validation' ? 'block' : 'none';
       if (logContent) logContent.style.display = target === 'logs' ? 'block' : 'none';
-
       if (target === 'terminal') {
         inputElem?.focus();
         pollActiveTerminalOutput();
@@ -132,155 +374,431 @@ export function initTerminal() {
     });
   });
 
-  // Enter to execute & ArrowUp/Down for command history & Ctrl+C
   if (inputElem) {
     inputElem.addEventListener('keydown', (e) => {
-      const active = getActiveSession();
-      if (!active) return;
-
       if (e.key === 'Enter') {
         e.preventDefault();
         executeTerminalCommand();
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (globalCmdHistory.length > 0) {
-          if (cmdHistoryIndex === -1) {
-            cmdHistoryIndex = globalCmdHistory.length - 1;
-          } else if (cmdHistoryIndex > 0) {
-            cmdHistoryIndex--;
-          }
-          inputElem.value = globalCmdHistory[cmdHistoryIndex] || '';
-        }
+        navigateHistory(-1, inputElem);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (globalCmdHistory.length > 0 && cmdHistoryIndex !== -1) {
-          if (cmdHistoryIndex < globalCmdHistory.length - 1) {
-            cmdHistoryIndex++;
-            inputElem.value = globalCmdHistory[cmdHistoryIndex] || '';
-          } else {
-            cmdHistoryIndex = -1;
-            inputElem.value = '';
-          }
-        }
-      } else if (e.key === 'c' && e.ctrlKey) {
-        // Send SIGINT / Ctrl+C to real backend shell process
+        navigateHistory(1, inputElem);
+      } else if (e.key === 'c' && e.ctrlKey && e.shiftKey) {
+        e.preventDefault();
+        copySelection();
+      } else if (e.key === 'v' && e.ctrlKey && e.shiftKey) {
+        e.preventDefault();
+        pasteToInput(inputElem);
+      } else if (e.key === 'a' && e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        selectAllTerminal();
+      } else if (e.key === 'r' && e.ctrlKey) {
+        e.preventDefault();
+        openHistoryPicker(inputElem);
+      } else if (e.key === 'f' && e.ctrlKey && !e.shiftKey) {
+        e.preventDefault();
+        openTerminalSearch();
+      } else if (e.key === 'c' && e.ctrlKey && !e.shiftKey) {
         sendInterruptSignal();
         inputElem.value = '';
       } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
         e.preventDefault();
-        const stdoutElem = document.getElementById('terminal-stdout');
-        if (stdoutElem) stdoutElem.innerHTML = '';
-        if (active) active.buffer = '';
+        clearActiveTerminal();
       }
     });
   }
 
   runBtn?.addEventListener('click', () => executeTerminalCommand());
+  newTerminalBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
+  splitTerminalBtn?.addEventListener('click', toggleTerminalSplit);
+  sidebarNewBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
 
-  if (clearBtn) {
-    clearBtn.innerHTML = '🗑️';
-    clearBtn.title = 'Clear Output (Ctrl+L)';
-    clearBtn.addEventListener('click', () => {
-      const stdoutElem = document.getElementById('terminal-stdout');
-      if (stdoutElem) stdoutElem.innerHTML = '';
-      const active = getActiveSession();
-      if (active) active.buffer = '';
-    });
-  }
-
-  newTerminalBtn?.addEventListener('click', () => createTerminalInstance());
-  splitTerminalBtn?.addEventListener('click', () => createTerminalInstance());
-  sidebarNewBtn?.addEventListener('click', () => createTerminalInstance());
+  clearBtn?.addEventListener('click', clearActiveTerminal);
 
   collapseBtn?.addEventListener('click', () => {
     bottomPanel?.classList.toggle('collapsed');
   });
 
-  // Focus terminal input when clicking anywhere on stdout area
-  document.getElementById('terminal-stdout')?.addEventListener('click', () => {
+  const stdoutHost = document.getElementById('terminal-stdout-host') || document.getElementById('terminal-stdout');
+  stdoutHost?.addEventListener('click', (e) => {
+    const link = e.target.closest('.term-link');
+    if (link) {
+      e.preventDefault();
+      handleTerminalLink(link);
+      return;
+    }
     inputElem?.focus();
   });
 
-  // Validation Suite triggers
+  // E6: right-click context menu on the terminal output
+  document.getElementById('tab-content-terminal')?.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    showTerminalContextMenu(e.clientX, e.clientY);
+  });
+
   document.getElementById('btn-run-all-tests')?.addEventListener('click', runValidationTests);
 
-  renderTerminalSessionsList();
-  renderActiveBuffer();
-  updatePromptDisplay();
-
-  // Start continuous output polling loop
+  buildTerminalDom();
+  applyTerminalAppearance();
+  renderPanes();
   startOutputPolling();
 }
 
-export function getActiveSession() {
-  return terminalInstances.find(t => t.id === activeTerminalId) || terminalInstances[0];
+// --- DOM construction (panes, tab bars, breadcrumb, search bar) ------------
+
+function buildTerminalDom() {
+  const mount = document.getElementById('terminal-mount');
+  if (!mount) return;
+
+  mount.innerHTML = `
+    <div id="terminal-pane-wrap" style="display: flex; flex: 1; min-height: 0; width: 100%;">
+      <div class="terminal-pane" id="terminal-pane-A" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+        <div class="terminal-tabbar-row" id="terminal-tabbar-A"></div>
+        <div class="terminal-cwd-breadcrumb" id="terminal-cwd-A"></div>
+        <div class="terminal-output-scroll" id="terminal-stdout-A"></div>
+      </div>
+      <div class="terminal-split-resizer" id="terminal-split-resizer" style="display: none;"></div>
+      <div class="terminal-pane" id="terminal-pane-B" style="display: none; flex: 1; min-width: 0; flex-direction: column;">
+        <div class="terminal-tabbar-row" id="terminal-tabbar-B"></div>
+        <div class="terminal-cwd-breadcrumb" id="terminal-cwd-B"></div>
+        <div class="terminal-output-scroll" id="terminal-stdout-B"></div>
+      </div>
+    </div>
+    <div class="terminal-search-bar" id="terminal-search-bar" style="display: none;">
+      <input type="text" id="terminal-search-input" placeholder="Find in terminal…" />
+      <button class="btn btn-secondary btn-sm" id="terminal-search-prev" title="Previous match">↑</button>
+      <span class="btn btn-secondary btn-sm" id="terminal-search-count" style="pointer-events: none;">0/0</span>
+      <button class="btn btn-secondary btn-sm" id="terminal-search-next" title="Next match">↓</button>
+      <button class="btn btn-secondary btn-sm" id="terminal-search-clear" title="Close search">✕</button>
+    </div>
+  `;
+
+  wireSplitResizer();
+  wireTerminalSearch();
 }
 
-export async function createTerminalInstance(name = 'powershell') {
-  const newId = terminalInstances.length > 0 ? Math.max(...terminalInstances.map(t => t.id)) + 1 : 1;
-  const newSession = new TerminalSession(newId, name);
+function wireSplitResizer() {
+  const resizer = document.getElementById('terminal-split-resizer');
+  if (!resizer) return;
+  resizer.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const wrap = document.getElementById('terminal-pane-wrap');
+    const move = (ev) => {
+      const rect = wrap.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      const clamped = Math.max(25, Math.min(75, pct));
+      document.getElementById('terminal-pane-A').style.flex = `0 0 ${clamped}%`;
+      document.getElementById('terminal-pane-B').style.flex = `0 0 ${100 - clamped}%`;
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
+}
+
+// --- E3: split --------------------------------------------------------------
+
+export function toggleTerminalSplit() {
+  state.terminal.splitMode = !state.terminal.splitMode;
+  persistTerminalMeta();
+  if (state.terminal.splitMode) {
+    const paneB = document.getElementById('terminal-pane-B');
+    document.getElementById('terminal-split-resizer').style.display = '';
+    if (paneB) paneB.style.display = 'flex';
+    if (!terminalInstances.some(t => t.pane === 'B')) {
+      const nextId = nextTerminalId();
+      const shell = getActiveSession()?.shell || defaultShellPath();
+      const s = new TerminalSession(nextId, shell, 'B');
+      terminalInstances.push(s);
+      s.startBackendShell();
+    }
+    activeTerminalId = terminalInstances.find(t => t.pane === 'B').id;
+  } else {
+    document.getElementById('terminal-pane-B').style.display = 'none';
+    document.getElementById('terminal-split-resizer').style.display = 'none';
+    // Close pane-B sessions (VS Code closes the split's terminals)
+    for (const t of terminalInstances.filter(x => x.pane === 'B')) {
+      t.closeBackendShell();
+    }
+    terminalInstances = terminalInstances.filter(x => x.pane !== 'B');
+    const firstA = terminalInstances.find(t => t.pane === 'A');
+    if (firstA) activeTerminalId = firstA.id;
+  }
+  renderPanes();
+}
+
+function defaultShellPath() {
+  const p = SHELL_PROFILES.find(x => x.id === state.terminal.defaultShell) || SHELL_PROFILES[0];
+  return p.shell;
+}
+
+function nextTerminalId() {
+  return terminalInstances.length > 0 ? Math.max(...terminalInstances.map(t => t.id)) + 1 : 1;
+}
+
+// --- E2: profile menu ---------------------------------------------------------
+
+function openProfileMenu(e, pane) {
+  dismissProfileMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tree-context-menu';
+  menu.id = 'terminal-profile-menu';
+  menu.style.left = `${Math.min(e.clientX, window.innerWidth - 240)}px`;
+  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 260)}px`;
+
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size: 10px; color: var(--text-muted); padding: 6px 10px 4px;';
+  title.textContent = 'New terminal — choose a profile';
+  menu.appendChild(title);
+
+  const profiles = SHELL_PROFILES.filter(p =>
+    p.os === 'any' || (isWindows() ? p.os === 'windows' : p.os === 'unix') || state.terminal.profiles.includes(p.id));
+
+  for (const p of profiles) {
+    const row = document.createElement('div');
+    row.className = 'tree-context-item';
+    row.innerHTML = `<span class="ctx-icon"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.dot};"></span></span><span class="ctx-label">${p.label}</span>`;
+    row.addEventListener('click', () => {
+      dismissProfileMenu();
+      createTerminalInstance(p.shell, pane);
+    });
+    menu.appendChild(row);
+  }
+
+  const custom = document.createElement('div');
+  custom.className = 'tree-context-item';
+  custom.innerHTML = `<span class="ctx-icon">⚙️</span><span class="ctx-label">Custom…</span>`;
+  custom.addEventListener('click', () => {
+    dismissProfileMenu();
+    const path = prompt('Path to the shell executable (e.g. C:\\\\bin\\\\nu.exe):');
+    if (!path || !path.trim()) return;
+    const trimmed = path.trim();
+    const label = trimmed.split(/[\\/]/).pop();
+    SHELL_PROFILES.push({ id: `custom:${label}`, label, shell: trimmed, dot: 'var(--text-muted)', os: 'any' });
+    try {
+      const saved = JSON.parse(localStorage.getItem('orbital_terminal_custom_shells') || '[]');
+      saved.push({ label, path: trimmed });
+      localStorage.setItem('orbital_terminal_custom_shells', JSON.stringify(saved));
+    } catch (err) { /* quota */ }
+    createTerminalInstance(trimmed, pane);
+  });
+  menu.appendChild(custom);
+
+  document.body.appendChild(menu);
+  setTimeout(() => {
+    const onDown = (ev) => {
+      if (!menu.contains(ev.target)) { dismissProfileMenu(); document.removeEventListener('mousedown', onDown); }
+    };
+    document.addEventListener('mousedown', onDown);
+  }, 0);
+}
+
+function dismissProfileMenu() {
+  document.getElementById('terminal-profile-menu')?.remove();
+}
+
+export function getActiveSession() {
+  const active = terminalInstances.find(t => t.id === activeTerminalId);
+  return active || terminalInstances.find(t => t.pane === 'A') || terminalInstances[0];
+}
+
+export async function createTerminalInstance(shell, pane = 'A') {
+  const newSession = new TerminalSession(nextTerminalId(), shell || defaultShellPath(), pane);
   terminalInstances.push(newSession);
   await newSession.startBackendShell();
-  switchTerminalInstance(newId);
-  renderTerminalSessionsList();
+  activeTerminalId = newSession.id;
+  renderPanes();
 }
 
 export function switchTerminalInstance(id) {
   activeTerminalId = id;
-  renderTerminalSessionsList();
-  renderActiveBuffer();
-  updatePromptDisplay();
+  renderPanes();
   document.getElementById('terminal-command-input')?.focus();
   pollActiveTerminalOutput();
 }
 
 export async function closeTerminalInstance(id, event) {
   if (event) event.stopPropagation();
-
-  const targetSession = terminalInstances.find(t => t.id === id);
-  if (targetSession) {
-    await targetSession.closeBackendShell();
+  const target = terminalInstances.find(t => t.id === id);
+  if (target) {
+    await target.closeBackendShell();
   }
-
-  if (terminalInstances.length <= 1) {
-    // If only one, restart/clear it
-    const session = terminalInstances[0];
-    session.buffer = '';
-    renderActiveBuffer();
-    return;
+  const pane = target ? target.pane : 'A';
+  const paneSessions = terminalInstances.filter(t => t.pane === pane);
+  if (paneSessions.length <= 1) {
+    const session = paneSessions[0];
+    if (session) {
+      session.buffer = '';
+      renderPanes();
+      return;
+    }
   }
-
   terminalInstances = terminalInstances.filter(t => t.id !== id);
   if (activeTerminalId === id) {
-    activeTerminalId = terminalInstances[0].id;
+    const next = terminalInstances.find(t => t.pane === pane) || terminalInstances[0];
+    activeTerminalId = next ? next.id : 1;
   }
+  renderPanes();
+}
 
-  renderTerminalSessionsList();
-  renderActiveBuffer();
+function clearActiveTerminal() {
+  const active = getActiveSession();
+  if (active) active.buffer = '';
+  renderPanes();
+}
+
+// --- rendering ---------------------------------------------------------------
+
+function renderPanes() {
+  renderPaneTabs('A');
+  renderPaneTabs('B');
+  renderBufferFor(activeInPane('A'), 'A');
+  renderBufferFor(activeInPane('B'), 'B');
+  renderCwdBreadcrumb('A');
+  renderCwdBreadcrumb('B');
   updatePromptDisplay();
 }
 
-function renderTerminalSessionsList() {
-  const container = document.getElementById('terminal-sessions-list');
-  if (!container) return;
+function activeInPane(pane) {
+  const active = getActiveSession();
+  if (active && active.pane === pane) return active;
+  return terminalInstances.find(t => t.pane === pane) || null;
+}
 
-  container.innerHTML = '';
-  terminalInstances.forEach(term => {
+function renderPaneTabs(pane) {
+  const bar = document.getElementById(`terminal-tabbar-${pane}`);
+  if (!bar) return;
+  bar.innerHTML = '';
+  const sessions = terminalInstances.filter(t => t.pane === pane);
+  if (sessions.length === 0 && pane === 'B') return;
+
+  for (const term of sessions) {
     const isActive = term.id === activeTerminalId;
-    const itemEl = document.createElement('div');
-    itemEl.className = `terminal-session-item ${isActive ? 'active' : ''}`;
-    itemEl.innerHTML = `
-      <span style="display: flex; align-items: center; gap: 6px;">
-        <span style="color: ${isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'}; font-size: 10px; font-weight: bold;">&gt;_</span>
-        <span>${term.id}: ${term.name}</span>
-      </span>
-      <span class="terminal-session-trash" title="Kill Terminal Session">✕</span>
+    const item = document.createElement('div');
+    item.className = `terminal-tab ${isActive ? 'active' : ''}`;
+    item.innerHTML = `
+      <span class="terminal-shell-dot" style="background:${shellDot(term.shell)};" title="${term.name}"></span>
+      <span class="terminal-tab-label">${term.id}: ${term.name}</span>
+      <span class="terminal-tab-close" title="Close terminal">✕</span>
     `;
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('terminal-tab-close')) {
+        closeTerminalInstance(term.id, e);
+      } else {
+        switchTerminalInstance(term.id);
+      }
+    });
+    // E1: double-click to rename inline
+    item.querySelector('.terminal-tab-label').addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const label = e.target;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = term.name;
+      input.className = 'terminal-rename-input';
+      input.style.cssText = 'width: 90px; font-size: 11px; padding: 0 4px; border: 1px solid var(--border-focus); border-radius: 3px; background: var(--bg-input); color: var(--text-primary);';
+      label.replaceWith(input);
+      input.focus();
+      input.select();
+      const commit = () => {
+        const v = input.value.trim();
+        if (v) term.name = v;
+        renderPanes();
+      };
+      input.addEventListener('keydown', (ev) => {
+        ev.stopPropagation();
+        if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+        else if (ev.key === 'Escape') { ev.preventDefault(); renderPanes(); }
+      });
+      input.addEventListener('blur', commit);
+      input.addEventListener('click', (ev) => ev.stopPropagation());
+    });
+    bar.appendChild(item);
+  }
 
-    itemEl.addEventListener('click', () => switchTerminalInstance(term.id));
-    itemEl.querySelector('.terminal-session-trash')?.addEventListener('click', (e) => closeTerminalInstance(term.id, e));
+  // "+" (profile menu) and "✕" (close active) controls
+  const plus = document.createElement('div');
+  plus.className = 'terminal-tab terminal-add-btn';
+  plus.title = 'New terminal (choose profile)';
+  plus.textContent = '+';
+  plus.addEventListener('click', (e) => openProfileMenu(e, pane));
+  bar.appendChild(plus);
 
-    container.appendChild(itemEl);
+  const closeBtn = document.createElement('div');
+  closeBtn.className = 'terminal-tab terminal-close-btn';
+  closeBtn.title = 'Close active terminal';
+  closeBtn.textContent = '✕';
+  closeBtn.addEventListener('click', () => {
+    const cur = activeInPane(pane);
+    if (cur) closeTerminalInstance(cur.id);
+  });
+  bar.appendChild(closeBtn);
+}
+
+function renderBufferFor(session, pane) {
+  const el = document.getElementById(`terminal-stdout-${pane}`);
+  if (!el) return;
+  if (!session) { el.innerHTML = ''; return; }
+  const t = state.settings.terminal || {};
+  el.style.fontFamily = t.fontFamily;
+  el.style.fontSize = `${t.fontSize || 13}px`;
+  el.style.lineHeight = `${t.lineHeight || 1.5}`;
+
+  const greeting = !session.buffer
+    ? `Orbital X ${session.name} terminal [${session.sessionId}]\nActive workspace shell ready. Right-click for Copy/Paste; Ctrl+R searches history.\n\n`
+    : '';
+  const raw = session.buffer || greeting;
+  el.innerHTML = linkifySafeHtml(parseAnsiToHtml(raw));
+  el.scrollTop = el.scrollHeight;
+}
+
+// --- E8: working directory breadcrumb ---------------------------------------
+
+const PROMPT_CWD_RE = /(?:PS\s+|^|\n)\s*([A-Za-z]:\\[^\n>]*?|[A-Za-z]:\/[^\n>]*?|\/[^\n>]*?)[>#]\s*$/;
+
+function renderCwdBreadcrumb(pane) {
+  const el = document.getElementById(`terminal-cwd-${pane}`);
+  if (!el) return;
+  const session = activeInPane(pane);
+  if (!session) { el.innerHTML = ''; return; }
+
+  // Prefer the last prompt-looking path in the buffer; fall back to tracked cwd
+  const lines = (session.buffer || '').split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(PROMPT_CWD_RE);
+    if (m && m[1]) {
+      session.cwd = m[1].trim();
+      break;
+    }
+  }
+
+  const cwd = session.cwd || state.workspace.rootPath || '';
+  if (!cwd) { el.innerHTML = ''; return; }
+  const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean);
+  let acc = '';
+  el.innerHTML = '';
+  parts.forEach((part, idx) => {
+    acc = acc ? `${acc}/${part}` : (cwd.startsWith('/') ? `/${part}` : `${part}/`);
+    const seg = document.createElement('span');
+    seg.className = 'term-cwd-seg';
+    seg.textContent = idx === 0 ? part : part;
+    const target = idx === parts.length - 1 ? cwd : acc.replace(/\/$/, '');
+    seg.title = `Open ${target} in File Explorer`;
+    seg.addEventListener('click', () => {
+      invoke('run_command', { command: `explorer "${target}"`, timeout_seconds: 10 }).catch(e => console.warn(e));
+    });
+    el.appendChild(seg);
+    if (idx < parts.length - 1) {
+      const sep = document.createElement('span');
+      sep.className = 'term-cwd-sep';
+      sep.textContent = '›';
+      el.appendChild(sep);
+    }
   });
 }
 
@@ -288,25 +806,32 @@ function updatePromptDisplay() {
   const promptLabel = document.getElementById('terminal-prompt-label');
   const active = getActiveSession();
   if (promptLabel && active) {
-    const cwd = active.cwd || (state.workspace.rootPath || 'D:\\1work\\YT\\Orbital X');
+    const cwd = active.cwd || state.workspace.rootPath || '';
     promptLabel.textContent = `PS ${cwd}>`;
   }
 }
 
-function renderActiveBuffer() {
-  const stdoutElem = document.getElementById('terminal-stdout');
-  const active = getActiveSession();
-  if (!stdoutElem || !active) return;
+// --- E4: appearance ----------------------------------------------------------
 
-  if (!active.buffer) {
-    const defaultGreeting = `Orbital X PowerShell Integrated Terminal [Process ID: ${active.sessionId}]\n(c) 2026 Orbital X Desktop IDE. Active workspace shell ready.\n\nType commands directly and press Enter. ArrowUp/Down for history.\n`;
-    stdoutElem.innerHTML = ansiToHtml(defaultGreeting);
-  } else {
-    stdoutElem.innerHTML = ansiToHtml(active.buffer);
+export function applyTerminalAppearance() {
+  const t = state.settings.terminal || {};
+  const input = document.getElementById('terminal-command-input');
+  if (input) {
+    input.style.fontFamily = t.fontFamily;
+    input.style.fontSize = `${t.fontSize || 13}px`;
+    const cursor = t.cursorBlink === false ? 'none' : 'blink 1.1s step-end infinite';
+    const caret = t.cursorStyle === 'underline' ? 'underline' : t.cursorStyle === 'bar' ? 'inline' : 'block';
+    input.style.caretColor = 'var(--accent-cyan)';
+    if (caret === 'block' || caret === 'underline') {
+      // Native textareas cannot fully restyle the caret; approximate with cursor color cue
+      input.title = `Cursor: ${t.cursorStyle}${t.cursorBlink === false ? ' (no blink)' : ''}`;
+    }
   }
-
-  stdoutElem.scrollTop = stdoutElem.scrollHeight;
+  renderPanes();
+  persistTerminalSettings();
 }
+
+// --- output handling ---------------------------------------------------------
 
 export async function executeTerminalCommand(cmdString) {
   const inputElem = document.getElementById('terminal-command-input');
@@ -322,63 +847,37 @@ export async function executeTerminalCommand(cmdString) {
   active.historyIndex = -1;
   active.history.push(command);
 
-  // 1. Built-in: clear / cls
   if (command.toLowerCase() === 'cls' || command.toLowerCase() === 'clear') {
     active.buffer = '';
-    renderActiveBuffer();
+    renderPanes();
     return;
   }
-
-  // 2. Built-in: exit
   if (command.toLowerCase() === 'exit') {
     closeTerminalInstance(active.id);
     return;
   }
 
-  // Display command entered into terminal buffer
-  appendTerminalText(`\nPS ${active.cwd}> ${command}\n`);
-
+  appendTerminalText(`\n${active.cwd || state.workspace.rootPath || ''}> ${command}\n`);
   active.isRunning = true;
 
   try {
     if (!active.isBackendConnected) {
       await active.startBackendShell();
     }
-
     if (active.isBackendConnected) {
-      try {
-        await invoke('send_terminal_input', {
-          sessionId: active.sessionId,
-          input: command + "\r\n",
-        });
-        setTimeout(() => pollActiveTerminalOutput(), 60);
-        setTimeout(() => pollActiveTerminalOutput(), 180);
-        setTimeout(() => pollActiveTerminalOutput(), 400);
-        setTimeout(() => pollActiveTerminalOutput(), 900);
-      } catch (inputErr) {
-        console.warn("send_terminal_input failed, attempting session auto-recovery:", inputErr);
-        await active.startBackendShell();
-        await invoke('send_terminal_input', {
-          sessionId: active.sessionId,
-          input: command + "\r\n",
-        });
-        setTimeout(() => pollActiveTerminalOutput(), 150);
-      }
-    } else {
-      // Fallback subprocess runner if interactive shell process isn't active
-      const res = await invoke('run_command', {
-        command,
-        timeout_seconds: 60,
+      await invoke('send_terminal_input', {
+        sessionId: active.sessionId,
+        input: command + "\r\n",
       });
-
+      [60, 180, 400, 900].forEach(delay => setTimeout(() => pollActiveTerminalOutput(), delay));
+    } else {
+      const res = await invoke('run_command', { command, timeout_seconds: 60 });
       let output = '';
       if (res.stdout) output += res.stdout;
       if (res.stderr) output += `\n[STDERR]\n${res.stderr}`;
-
       const statusBadge = res.success
         ? `\n✓ Exited with code ${res.exit_code} (${res.duration_ms}ms)\n`
         : `\n✗ Exited with code ${res.exit_code ?? 'terminated'} (${res.duration_ms}ms)\n`;
-
       appendTerminalText(`${output}${statusBadge}`);
     }
     logAudit(`Terminal: "${command}"`);
@@ -387,26 +886,34 @@ export async function executeTerminalCommand(cmdString) {
     logAudit(`Terminal error: "${command}" -> ${err}`);
   } finally {
     active.isRunning = false;
-    updatePromptDisplay();
+    renderPanes();
     inputElem?.focus();
   }
+}
+
+function navigateHistory(direction, inputElem) {
+  if (globalCmdHistory.length === 0) return;
+  if (direction === -1) {
+    if (cmdHistoryIndex === -1) cmdHistoryIndex = globalCmdHistory.length - 1;
+    else if (cmdHistoryIndex > 0) cmdHistoryIndex--;
+  } else {
+    if (cmdHistoryIndex === -1) return;
+    if (cmdHistoryIndex < globalCmdHistory.length - 1) cmdHistoryIndex++;
+    else { cmdHistoryIndex = -1; inputElem.value = ''; return; }
+  }
+  inputElem.value = globalCmdHistory[cmdHistoryIndex] || '';
 }
 
 async function sendInterruptSignal() {
   const active = getActiveSession();
   if (!active) return;
-
   appendTerminalText(`^C\n`);
-
   if (active.isBackendConnected) {
     try {
-      await invoke('send_terminal_input', {
-        sessionId: active.sessionId,
-        input: "\x03", // ASCII ETX / Ctrl+C
-      });
+      await invoke('send_terminal_input', { sessionId: active.sessionId, input: "\x03" });
       setTimeout(() => pollActiveTerminalOutput(), 100);
     } catch (e) {
-      console.warn("Failed to send interrupt signal to shell:", e);
+      console.warn('Failed to send interrupt signal:', e);
     }
   }
 }
@@ -414,7 +921,6 @@ async function sendInterruptSignal() {
 function startOutputPolling() {
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => {
-    // Only poll when terminal tab is visible
     const termContent = document.getElementById('tab-content-terminal');
     if (termContent && termContent.style.display !== 'none') {
       pollActiveTerminalOutput();
@@ -423,81 +929,305 @@ function startOutputPolling() {
 }
 
 export async function pollActiveTerminalOutput() {
-  const active = getActiveSession();
-  if (!active || !active.isBackendConnected) return;
+  // Poll every live pane's active session so split panes both stream
+  for (const pane of ['A', 'B']) {
+    const session = activeInPane(pane);
+    if (!session || !session.isBackendConnected) continue;
+    try {
+      const newOutput = await invoke('poll_terminal_output', { sessionId: session.sessionId });
+      if (newOutput && newOutput.length > 0) {
+        session.buffer += newOutput;
+        capBuffer(session);
+        const el = document.getElementById(`terminal-stdout-${pane}`);
+        if (el) {
+          el.innerHTML = linkifySafeHtml(parseAnsiToHtml(session.buffer));
+          el.scrollTop = el.scrollHeight;
+        }
+        renderCwdBreadcrumb(pane);
+      }
+    } catch (e) { /* session may have died */ }
+  }
+}
 
-  try {
-    const newOutput = await invoke('poll_terminal_output', {
-      sessionId: active.sessionId,
-    });
-
-    if (newOutput && newOutput.length > 0) {
-      appendTerminalText(newOutput);
-    }
-  } catch (e) {
-    // Silently continue polling
+function capBuffer(session) {
+  const scrollback = (state.settings.terminal?.scrollback) || 1000;
+  // Assume ~120 chars/line average; keep the newest window
+  const maxChars = Math.max(20000, scrollback * 120);
+  if (session.buffer.length > maxChars) {
+    session.buffer = session.buffer.slice(-Math.floor(maxChars * 0.75));
   }
 }
 
 function appendTerminalText(text) {
   const active = getActiveSession();
   if (active) {
-    active.buffer = (active.buffer || '') + text;
-    // Cap buffer at 250,000 characters to prevent memory leaks
-    if (active.buffer.length > 250000) {
-      active.buffer = active.buffer.slice(-150000);
-    }
+    active.buffer += text;
+    capBuffer(active);
   }
+  renderPanes();
+}
 
-  const stdoutElem = document.getElementById('terminal-stdout');
-  if (stdoutElem && active) {
-    stdoutElem.innerHTML = ansiToHtml(active.buffer);
-    stdoutElem.scrollTop = stdoutElem.scrollHeight;
+// --- E6: copy / paste / select all --------------------------------------------
+
+function selectAllTerminal() {
+  const active = getActiveSession();
+  if (!active) return;
+  const pane = active.pane;
+  const el = document.getElementById(`terminal-stdout-${pane}`);
+  if (!el) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function copySelection() {
+  const sel = window.getSelection();
+  if (sel && sel.toString()) {
+    navigator.clipboard.writeText(sel.toString());
+    showToast('Copied to clipboard', 'success', 1500);
   }
 }
 
-// Convert ANSI escape codes to high-contrast HTML elements
-function ansiToHtml(str) {
-  if (!str) return '';
-
-  // 1. Escape HTML
-  let out = str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
-  // 2. Map standard 16 ANSI color sequences to CSS colors
-  const ansiColors = {
-    '30': 'var(--text-muted)',
-    '31': 'var(--accent-red)',
-    '32': 'var(--accent-green)',
-    '33': 'var(--accent-orange)',
-    '34': 'var(--accent-blue)',
-    '35': 'var(--accent-purple)',
-    '36': 'var(--accent-cyan)',
-    '37': 'var(--text-primary)',
-    '90': 'var(--text-muted)',
-    '91': 'var(--accent-red)',
-    '92': 'var(--accent-green)',
-    '93': 'var(--accent-orange)',
-    '94': 'var(--accent-blue)',
-    '95': 'var(--accent-purple)',
-    '96': 'var(--accent-cyan)',
-    '97': 'var(--text-primary-bright)',
-  };
-
-  // Convert color codes
-  out = out.replace(/\x1b\[(\d+)(;\d+)*m/g, (match, p1) => {
-    if (p1 === '0' || p1 === '39') return '</span>';
-    if (p1 === '1') return '<span style="font-weight: 700;">';
-    if (ansiColors[p1]) {
-      return `<span style="color: ${ansiColors[p1]};">`;
+async function pasteToInput(inputElem) {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (inputElem && text) {
+      inputElem.value += text;
+      inputElem.focus();
     }
-    return '';
+  } catch (e) {
+    showToast('Clipboard read denied by the browser', 'error', 2500);
+  }
+}
+
+function showTerminalContextMenu(x, y) {
+  document.getElementById('terminal-ctx-menu')?.remove();
+  const menu = document.createElement('div');
+  menu.className = 'tree-context-menu';
+  menu.id = 'terminal-ctx-menu';
+  const items = [
+    { label: 'Copy', hint: 'Ctrl+Shift+C', action: copySelection },
+    { label: 'Paste', hint: 'Ctrl+Shift+V', action: () => pasteToInput(document.getElementById('terminal-command-input')) },
+    { label: 'Select All', hint: 'Ctrl+A', action: selectAllTerminal },
+    { type: 'separator' },
+    { label: 'Clear Terminal', hint: 'Ctrl+L', action: clearActiveTerminal },
+    { label: 'Find in Terminal', hint: 'Ctrl+F', action: openTerminalSearch },
+    { label: 'Search History', hint: 'Ctrl+R', action: () => openHistoryPicker(document.getElementById('terminal-command-input')) },
+  ];
+  for (const item of items) {
+    if (item.type === 'separator') {
+      const sep = document.createElement('div');
+      sep.className = 'tree-context-separator';
+      menu.appendChild(sep);
+      continue;
+    }
+    const row = document.createElement('div');
+    row.className = 'tree-context-item';
+    row.innerHTML = `<span class="ctx-icon"></span><span class="ctx-label">${item.label}</span>${item.hint ? `<span class="ctx-hint">${item.hint}</span>` : ''}`;
+    row.addEventListener('click', () => {
+      document.getElementById('terminal-ctx-menu')?.remove();
+      item.action();
+    });
+    menu.appendChild(row);
+  }
+  document.body.appendChild(menu);
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.min(x, window.innerWidth - rect.width - 8)}px`;
+  menu.style.top = `${Math.min(y, window.innerHeight - rect.height - 8)}px`;
+  setTimeout(() => {
+    const onDown = (e) => {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('mousedown', onDown); }
+    };
+    document.addEventListener('mousedown', onDown);
+  }, 0);
+}
+
+// --- E7: terminal search -------------------------------------------------------
+
+let termSearchMatches = [];
+let termSearchIndex = -1;
+let termSearchTerm = '';
+
+function wireTerminalSearch() {
+  const bar = document.getElementById('terminal-search-bar');
+  const input = document.getElementById('terminal-search-input');
+  const prev = document.getElementById('terminal-search-prev');
+  const next = document.getElementById('terminal-search-next');
+  const clear = document.getElementById('terminal-search-clear');
+  input?.addEventListener('input', () => runTerminalSearch(input.value));
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); advanceTerminalSearch(1); }
+    if (e.key === 'Escape') { e.preventDefault(); closeTerminalSearch(); }
   });
-
-  return out;
+  prev?.addEventListener('click', () => advanceTerminalSearch(-1));
+  next?.addEventListener('click', () => advanceTerminalSearch(1));
+  clear?.addEventListener('click', closeTerminalSearch);
+  bar?.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTerminalSearch(); });
 }
+
+export function openTerminalSearch() {
+  const bar = document.getElementById('terminal-search-bar');
+  if (!bar) return;
+  bar.style.display = 'flex';
+  const input = document.getElementById('terminal-search-input');
+  input?.focus();
+  input?.select();
+}
+
+function closeTerminalSearch() {
+  const bar = document.getElementById('terminal-search-bar');
+  if (bar) bar.style.display = 'none';
+  termSearchMatches = [];
+  termSearchIndex = -1;
+  termSearchTerm = '';
+  // Re-render buffer without highlights
+  const active = getActiveSession();
+  if (active) {
+    const el = document.getElementById(`terminal-stdout-${active.pane}`);
+    if (el) el.innerHTML = linkifySafeHtml(parseAnsiToHtml(active.buffer));
+  }
+  document.getElementById('terminal-command-input')?.focus();
+}
+
+function runTerminalSearch(term) {
+  termSearchTerm = term;
+  termSearchMatches = [];
+  termSearchIndex = -1;
+  const active = getActiveSession();
+  const countEl = document.getElementById('terminal-search-count');
+  if (!active || !term) {
+    if (countEl) countEl.textContent = '0/0';
+    return;
+  }
+  const el = document.getElementById(`terminal-stdout-${active.pane}`);
+  if (!el) return;
+
+  // Highlight matches by re-rendering the buffer with <mark> wrappers.
+  // Escape first, then mark literal occurrences of the escaped term.
+  const safe = parseAnsiToHtml(active.buffer);
+  const escTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escTermHtml = escapeHtmlText(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let count = 0;
+  const marked = safe.replace(new RegExp(escTermHtml, 'gi'), (m) => {
+    count++;
+    return `<mark class="term-search-mark" data-match-idx="${count - 1}">${m}</mark>`;
+  });
+  termSearchMatches = new Array(count).fill(0).map((_, i) => i);
+  el.innerHTML = marked;
+  if (countEl) countEl.textContent = count > 0 ? `1/${count}` : '0/0';
+  if (count > 0) {
+    termSearchIndex = 0;
+    scrollToMatch(0, el);
+  }
+}
+
+function advanceTerminalSearch(dir) {
+  if (termSearchMatches.length === 0) return;
+  termSearchIndex = (termSearchIndex + dir + termSearchMatches.length) % termSearchMatches.length;
+  const countEl = document.getElementById('terminal-search-count');
+  if (countEl) countEl.textContent = `${termSearchIndex + 1}/${termSearchMatches.length}`;
+  const active = getActiveSession();
+  const el = active ? document.getElementById(`terminal-stdout-${active.pane}`) : null;
+  if (el) scrollToMatch(termSearchIndex, el);
+}
+
+function scrollToMatch(idx, el) {
+  const mark = el.querySelector(`mark.term-search-mark[data-match-idx="${idx}"]`);
+  if (mark) {
+    el.querySelectorAll('mark.term-search-mark.current').forEach(m => m.classList.remove('current'));
+    mark.classList.add('current');
+    mark.scrollIntoView({ block: 'center' });
+  }
+}
+
+// --- E9: history picker ---------------------------------------------------------
+
+function openHistoryPicker(inputElem) {
+  document.getElementById('terminal-history-popover')?.remove();
+  const pop = document.createElement('div');
+  pop.className = 'command-palette';
+  pop.id = 'terminal-history-popover';
+  pop.style.cssText = 'position: fixed; bottom: 220px; left: 50%; transform: translateX(-50%); width: 520px; z-index: 2800;';
+  pop.innerHTML = `
+    <input type="text" id="term-history-filter" placeholder="Reverse search — filter command history…" />
+    <div class="command-palette-list" id="term-history-list" style="max-height: 300px;"></div>
+  `;
+  document.body.appendChild(pop);
+
+  const filterEl = pop.querySelector('#term-history-filter');
+  const listEl = pop.querySelector('#term-history-list');
+  const history = [...globalCmdHistory].reverse();
+
+  const renderList = (q = '') => {
+    const filtered = q ? history.filter(h => h.toLowerCase().includes(q.toLowerCase())) : history;
+    listEl.innerHTML = '';
+    filtered.slice(0, 50).forEach((cmd, i) => {
+      const item = document.createElement('div');
+      item.className = 'command-palette-item';
+      item.innerHTML = `<span class="cp-icon">❯</span><span class="cp-title" style="font-family: var(--font-mono); font-size: 11px;">${escapeHtmlText(cmd)}</span>`;
+      item.addEventListener('click', () => {
+        if (inputElem) { inputElem.value = cmd; inputElem.focus(); }
+        pop.remove();
+      });
+      listEl.appendChild(item);
+    });
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div class="command-palette-empty">No matching history.</div>';
+    }
+  };
+  renderList();
+  filterEl.addEventListener('input', () => renderList(filterEl.value));
+  filterEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') pop.remove();
+  });
+  filterEl.focus();
+  setTimeout(() => {
+    const onDown = (e) => {
+      if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('mousedown', onDown); }
+    };
+    document.addEventListener('mousedown', onDown);
+  }, 0);
+}
+
+// --- E10: link handling ---------------------------------------------------------
+
+async function handleTerminalLink(link) {
+  const type = link.dataset.termLink;
+  if (type === 'url') {
+    const url = link.dataset.url;
+    if (!/^https?:\/\//i.test(url)) return;
+    invoke('run_command', { command: `explorer "${url}"`, timeout_seconds: 10 })
+      .catch(e => showToast(`Could not open URL: ${e}`, 'error'));
+    return;
+  }
+  if (type === 'file') {
+    const path = link.dataset.path;
+    const line = parseInt(link.dataset.line, 10);
+    try {
+      const fileData = await invoke('read_file', { path });
+      if (fileData.is_binary) {
+        showToast('Binary file — opening its folder instead', 'info', 2200);
+        const dir = path.replace(/[\\/][^\\/]+$/, '');
+        invoke('run_command', { command: `explorer "${dir}"`, timeout_seconds: 10 }).catch(() => {});
+        return;
+      }
+      const m = await import('../editor/monaco.js');
+      m.openFileInTab(fileData);
+      const ed = m.getActiveEditor();
+      if (ed && Number.isFinite(line)) {
+        ed.revealLineInCenter(line);
+        ed.setPosition({ lineNumber: line, column: 1 });
+        ed.focus();
+      }
+    } catch (e) {
+      showToast(`Could not open ${path}: ${e}`, 'error', 3000);
+    }
+  }
+}
+
+// --- misc ------------------------------------------------------------------------
 
 export function logAudit(message) {
   const logsContainer = document.getElementById('agent-audit-logs');
@@ -514,16 +1244,13 @@ export function logAudit(message) {
 async function runValidationTests() {
   const card = document.getElementById('validation-report-card');
   if (!card) return;
-
   card.innerHTML = `<span class="spinner"></span> Running automated test suite in workspace...`;
-
   try {
     const res = await invoke('execute_tool', {
       name: 'run_tests',
       arguments: {},
       mode: 'agent_pro',
     });
-
     const isSuccess = res.success;
     card.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -533,10 +1260,9 @@ async function runValidationTests() {
         <span style="font-size: 11px; color: var(--text-muted);">${res.duration_ms}ms</span>
       </div>
       <div style="font-family: var(--font-mono); font-size: 11px; background: var(--bg-activity); padding: 8px; border-radius: 4px; max-height: 140px; overflow-y: auto;">
-        ${(res.stdout || res.stderr || 'No output recorded').replace(/\n/g, '<br>')}
+        ${escapeHtmlText(res.stdout || res.stderr || 'No output recorded').replace(/\n/g, '<br>')}
       </div>
     `;
-
     logAudit(`Validation tests completed: ${isSuccess ? 'PASSED' : 'FAILED'}`);
   } catch (e) {
     card.innerHTML = `<div style="color: var(--accent-red);">Validation check error: ${e}</div>`;

@@ -520,3 +520,133 @@ body.theme-light .settings-sidebar,
   font-size: 12px;
   padding: 18px;
 }
+
+/* ==========================================================================
+   Part E — professional terminal
+   ========================================================================== */
+.terminal-tabbar-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.terminal-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.terminal-tab:hover { background: var(--bg-hover); }
+.terminal-tab.active {
+  color: var(--text-primary-bright);
+  background: var(--bg-activity);
+  border-color: var(--border-color);
+}
+.terminal-shell-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 5px currentColor;
+}
+.terminal-tab-close {
+  font-size: 10px;
+  opacity: 0;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.terminal-tab:hover .terminal-tab-close { opacity: 0.8; }
+.terminal-tab-close:hover { background: var(--accent-red); color: #fff; }
+.terminal-add-btn, .terminal-close-btn {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.terminal-add-btn:hover { color: var(--accent-cyan); }
+.terminal-close-btn:hover { color: var(--accent-red); }
+.terminal-pane { min-height: 0; }
+.terminal-cwd-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.term-cwd-seg {
+  cursor: pointer;
+  padding: 0 2px;
+  border-radius: 3px;
+}
+.term-cwd-seg:hover {
+  background: var(--bg-hover);
+  color: var(--accent-cyan);
+}
+.term-cwd-sep { opacity: 0.5; }
+.terminal-output-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  background: var(--bg-activity);
+  min-height: 0;
+}
+.terminal-split-resizer {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+}
+.terminal-split-resizer:hover { background: var(--accent-blue); }
+.term-link {
+  color: var(--accent-cyan);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.term-link:hover { color: var(--accent-blue); }
+.term-search-mark {
+  background: color-mix(in srgb, var(--accent-orange) 40%, transparent);
+  border-radius: 2px;
+  color: inherit;
+}
+.term-search-mark.current {
+  background: color-mix(in srgb, var(--accent-orange) 80%, transparent);
+  color: #000;
+}
+.terminal-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+.terminal-search-bar input {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 3px 8px;
+  outline: none;
+}
+.terminal-rename-input { z-index: 5; }
