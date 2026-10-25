@@ -1137,3 +1137,67 @@ export function initExplorerA11y() {
   }
 }
 setTimeout(initExplorerA11y, 500);
+
+// ==========================================================================
+// FIX 3: auto-refresh the explorer whenever the agent (or the user) mutates
+// the filesystem. The agent already dispatches orbital:file-written on every
+// write; we also listen for a broader mutation event and refresh debounced.
+// ==========================================================================
+
+let treeRefreshTimer = null;
+
+function scheduleTreeRefresh() {
+  clearTimeout(treeRefreshTimer);
+  treeRefreshTimer = setTimeout(async () => {
+    try {
+      await refreshFileTree();
+      // Re-apply any active filter after the tree re-renders
+      if (treeFilter) applyTreeFilter();
+    } catch (e) {
+      console.warn('Explorer auto-refresh failed:', e);
+    }
+  }, 350); // debounce: batch rapid mutations (multi-file writes) into one refresh
+}
+
+// Agent writes via the write/patch tools
+window.addEventListener('orbital:file-written', scheduleTreeRefresh);
+
+// Broader mutations: deletes, renames, directory creates, batch deletes,
+// git operations that change the tree, checkpoint restores
+window.addEventListener('orbital:files-changed', scheduleTreeRefresh);
+
+// Hook into the agent's tool execution: after any filesystem-mutating tool
+// completes, fire the refresh event
+(function hookAgentToolRefresh() {
+  const origDispatch = window.dispatchEvent.bind(window);
+  // The agent already dispatches orbital:file-written for write_file/patch_file.
+  // We piggyback on tool completion by watching for tool-box status changes:
+  const observer = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node.nodeType === 1 && node.classList?.contains('tool-box')) {
+          // A new tool box was added — watch its status for completion
+          const statusEl = node.querySelector('.tool-status-badge');
+          if (statusEl) {
+            const watch = new MutationObserver(() => {
+              const txt = statusEl.textContent || '';
+              if (txt.includes('✓') || txt.includes('✗') || txt.includes('Deleted') || txt.includes('Renamed')) {
+                // Check which tool it was by looking at the header
+                const toolName = node.querySelector('.tool-name-badge')?.textContent || '';
+                if (/write|patch|delete|rename|create_dir|batch|mkdir/i.test(toolName)) {
+                  scheduleTreeRefresh();
+                }
+                watch.disconnect();
+              }
+            });
+            watch.observe(statusEl, { childList: true, characterData: true, subtree: true });
+          }
+        }
+      }
+    }
+  });
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    observer.observe(timeline, { childList: true, subtree: true });
+  }
+})();

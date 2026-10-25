@@ -274,12 +274,22 @@ function attachMessageActions(card, { role, messageId, getText, onEdit, onRegene
   bar.className = 'msg-action-bar';
   const buttons = [];
 
-  buttons.push(`<button class="msg-action" data-act="copy" title="Copy message">📋</button>`);
-  if (role === 'user' && onEdit) buttons.push(`<button class="msg-action" data-act="edit" title="Edit and re-run">✏️</button>`);
-  if (role === 'assistant' && onRegenerate) buttons.push(`<button class="msg-action" data-act="regen" title="Regenerate response">🔄</button>`);
-  buttons.push(`<button class="msg-action" data-act="up" title="Good response">👍</button>`);
-  buttons.push(`<button class="msg-action" data-act="down" title="Bad response">👎</button>`);
-  buttons.push(`<button class="msg-action" data-act="speak" title="Read aloud">🗣️</button>`);
+  // Professional stroke-based SVG icons (Lucide design language)
+  const ICON_SVG = {
+    copy: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+    edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path><path d="m15 5 4 4"></path></svg>',
+    regen: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path><path d="M16 16h5v5"></path></svg>',
+    up: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"></path><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"></path></svg>',
+    down: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"></path><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"></path></svg>',
+    speak: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>',
+  };
+
+  buttons.push(`<button class="msg-action" data-act="copy" title="Copy message" aria-label="Copy message">${ICON_SVG.copy}</button>`);
+  if (role === 'user' && onEdit) buttons.push(`<button class="msg-action" data-act="edit" title="Edit and re-run" aria-label="Edit message">${ICON_SVG.edit}</button>`);
+  if (role === 'assistant' && onRegenerate) buttons.push(`<button class="msg-action" data-act="regen" title="Regenerate response" aria-label="Regenerate response">${ICON_SVG.regen}</button>`);
+  buttons.push(`<button class="msg-action" data-act="up" title="Good response" aria-label="Good response">${ICON_SVG.up}</button>`);
+  buttons.push(`<button class="msg-action" data-act="down" title="Bad response" aria-label="Bad response">${ICON_SVG.down}</button>`);
+  buttons.push(`<button class="msg-action" data-act="speak" title="Read aloud" aria-label="Read aloud">${ICON_SVG.speak}</button>`);
 
   bar.innerHTML = buttons.join('');
   card.appendChild(bar);
@@ -1091,6 +1101,7 @@ async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
   const maxIterations = parseInt(state.ai.settings?.maxIterations, 10) || 30;
   let hasSavedMemoryThisTurn = false;
   let noToolStallCount = 0;   // consecutive turns with content but no tool calls
+  let emptyResponseCount = 0; // consecutive empty model responses (retry, then stop)
   let consecutiveErrors = 0;  // bounded failure recovery
   const numCtx = getEffectiveNumCtx();
 
@@ -1099,14 +1110,23 @@ async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
   // I5: smart routing — pick this run's specialist model once from the prompt
   const routedModel = pickRoutedModel(initialUserPrompt);
 
-  // 1. Load durable project memories (brief, token-efficient format)
+  // 1. Load durable project memories — richer injection so the model always
+  //    knows the project even after a context reset. Ordered by importance,
+  //    capped to stay token-efficient for local models.
   let memoryContext = '';
   try {
     const mems = await invoke('list_memories');
     if (mems && mems.length > 0) {
-      const recent = mems.slice(-5);
-      memoryContext = '\n\n## Project Memory:\n' +
-        recent.map(m => `• ${m.title}: ${String(m.content || '').substring(0, 120)}`).join('\n');
+      // Sort by importance (desc), then by recency
+      const sorted = [...mems].sort((a, b) => {
+        const imp = (b.importance || 3) - (a.importance || 3);
+        if (imp !== 0) return imp;
+        return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+      });
+      const top = sorted.slice(0, 8); // 8 most important memories
+      memoryContext = '\n\n## Project Memory (persistent across sessions):\n' +
+        top.map(m => `• [${m.category || 'info'}] ${m.title}: ${String(m.content || '').substring(0, 200)}`).join('\n') +
+        `\n(You can call search_project_memory or list_memories to see ALL ${mems.length} memories at any time.)`;
     }
   } catch (e) {
     console.warn("Could not load memories:", e);
@@ -1219,11 +1239,18 @@ STRATEGY:
     const assistantMid = newMessageId();
     const { thinking: turnThinking, display: turnDisplay } = extractThinking(resp.content || streamed);
     const finalText = (turnDisplay || streamed || '').trim();
-    if (liveCard?.card) {
-      liveCard.card.dataset.mid = assistantMid;
-      if (turnThinking) renderThinkingSection(liveCard.card, turnThinking);
+
+    // Never show an empty response box to the user — remove the card
+    // entirely and let the empty-response retry path handle it
+    if (!finalText && !resp.cancelled && (!resp.tool_calls || resp.tool_calls.length === 0)) {
+      liveCard?.card?.remove();
+    } else {
+      if (liveCard?.card) {
+        liveCard.card.dataset.mid = assistantMid;
+        if (turnThinking) renderThinkingSection(liveCard.card, turnThinking);
+      }
+      liveCard?.finalize(finalText || (resp.cancelled ? '*(stopped)*' : ''));
     }
-    liveCard?.finalize(finalText || (resp.cancelled ? '*(stopped)*' : '*(empty response)*'));
     if (liveCard?.card) {
       attachMessageActions(liveCard.card, {
         role: 'assistant',
@@ -1266,26 +1293,50 @@ STRATEGY:
     import('./chat-sessions.js').then(m => m.saveActiveSession());
 
     if (!resp.tool_calls || resp.tool_calls.length === 0) {
+      // Empty response with no tools — retry with a nudge instead of dying
+      // (local models occasionally emit empty turns under load)
       if (!finalText) {
-        // Empty response with no tools — stop instead of burning iterations
-        break;
+        emptyResponseCount++;
+        if (emptyResponseCount >= 3) {
+          break; // genuinely stuck — stop cleanly without a visible card
+        }
+        // Silent retry — remove the empty streaming card so the user never
+        // sees a blank response box
+        liveCard?.card?.remove();
+        state.conversation.push({
+          role: 'user',
+          content: 'Your last response was empty. Continue the task by calling the next required tool.',
+          _ephemeral: true,
+          timestamp: Date.now(),
+        });
+        continue;
       }
+      emptyResponseCount = 0;
 
       // Stall detection: model keeps narrating without calling tools.
+      // Only stop on VERY explicit completion signals or after many stalls —
+      // local models often narrate progress between tool batches mid-task.
       noToolStallCount++;
-      const isDoneSignal = /\b(task complete|all done|finished|done!|completed successfully|nothing more to do)\b/i.test(finalText);
-      const isGenuinelyDone = isDoneSignal || noToolStallCount >= 3;
+      const hasStrongDoneSignal =
+        /\b(task complete|all done|completed successfully|nothing more to do|the (task|project|portfolio|app|application|website) is (now )?(complete|done|finished|ready))\b/i.test(finalText) ||
+        /^\s*(done|finished|complete)\s*[.!]?\s*$/im.test(finalText);
+      const hasRecentToolActivity = sessionStats.turns > 0 &&
+        Object.keys(sessionToolTally).length > 0 && noToolStallCount <= 4;
 
-      if (isGenuinelyDone) {
+      if (hasStrongDoneSignal || noToolStallCount >= 5) {
         if (!hasSavedMemoryThisTurn && finalText && initialUserPrompt) {
           checkAndAutoExtractMemory(initialUserPrompt, finalText);
+        }
+        // FIX 4: save a task-completion memory so the next session knows
+        // what was accomplished, even after a full context reset
+        if (Object.keys(sessionToolTally).length > 0) {
+          saveTaskCompletionMemory(initialUserPrompt, sessionToolTally);
         }
         break;
       }
 
-      // Nudge marked ephemeral: visible in the timeline, but excluded from
-      // future requests and from persisted sessions.
-      appendTimelineCard('assistant', '…continuing automatically');
+      // Silent nudge — the user never sees "continuing automatically";
+      // it only goes into the model context as an ephemeral instruction
       state.conversation.push({
         role: 'user',
         content: 'Continue. Call the next required tool to make progress on the task. Do not explain — just act.',
@@ -1310,6 +1361,18 @@ STRATEGY:
       sessionStats.toolCounts[toolCall.name] = (sessionStats.toolCounts[toolCall.name] || 0) + 1;
       sessionToolTally[toolCall.name] = (sessionToolTally[toolCall.name] || 0) + 1;
       renderRichToolResult(toolCall, toolResult);
+
+      // FIX 3: notify the explorer after any filesystem mutation so the
+      // tree refreshes automatically — no manual reload needed
+      if (['write_file', 'patch_file', 'delete_file', 'delete_directory', 'rename_file', 'create_directory', 'batch_delete_files'].includes(toolCall.name)) {
+        window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name } }));
+      }
+
+      // FIX 4: auto-save a progress memory milestone when the agent writes
+      // significant files — so the project state survives context resets
+      if (['write_file', 'patch_file'].includes(toolCall.name) && toolCall.arguments?.path) {
+        autoSaveTaskMilestone(toolCall.arguments.path, sessionToolTally);
+      }
 
       // Compact before storing: the model needs the outcome, not the full
       // file bodies / command output, on every subsequent request.
@@ -1338,6 +1401,66 @@ STRATEGY:
   autoExtractProjectFacts();
 
   updateStatusBarAgentStatus();
+}
+
+// ---------------------------------------------------------------------------
+// FIX 4: save a completion memory when a task finishes — the model can recall
+// what was done in previous sessions via list_memories / search_project_memory
+// ---------------------------------------------------------------------------
+
+async function saveTaskCompletionMemory(userPrompt, tally) {
+  try {
+    const files = [...milestonePaths].slice(-15);
+    const toolSummary = Object.entries(tally)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([n, c]) => `${n}×${c}`)
+      .join(', ');
+    await invoke('save_memory_entry', {
+      category: 'progress',
+      title: `Completed: ${userPrompt.substring(0, 60)}`,
+      content: `Task accomplished. Files: ${files.join(', ') || 'none'}. Tools: ${toolSummary}. This memory persists across context resets — the agent can continue or reference this work in future sessions.`,
+    });
+  } catch (e) {
+    // Silent
+  }
+}
+
+// ---------------------------------------------------------------------------
+// FIX 4: auto-save task milestones so project state survives context resets.
+// When the agent writes/patches files, record what was done — the next
+// session (or a context-reset mid-session) can pick up from where it left off.
+// ---------------------------------------------------------------------------
+
+const MILESTONE_COOLDOWN_MS = 30000; // at most one milestone per 30s
+let lastMilestoneAt = 0;
+const milestonePaths = new Set();
+
+async function autoSaveTaskMilestone(path, tally) {
+  const now = Date.now();
+  milestonePaths.add(path);
+
+  // Batch: only save every 30 seconds or when the loop ends, not per file
+  if (now - lastMilestoneAt < MILESTONE_COOLDOWN_MS) return;
+  lastMilestoneAt = now;
+
+  const files = [...milestonePaths].slice(-10); // most recent 10 files
+  const toolSummary = Object.entries(tally)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([n, c]) => `${n}×${c}`)
+    .join(', ');
+
+  try {
+    await invoke('save_memory_entry', {
+      category: 'progress',
+      title: 'Recent Task Progress',
+      content: `Files modified: ${files.join(', ')}. Tools used: ${toolSummary}. The agent is actively working on this project — use this context to continue where it left off.`,
+    });
+    // Silent — never interrupt the user
+  } catch (e) {
+    // Silent by design
+  }
 }
 
 // ---------------------------------------------------------------------------
