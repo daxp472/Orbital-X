@@ -1291,3 +1291,156 @@ body.theme-light .settings-sidebar,
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
 }
+
+/* ==========================================================================
+   UI Polish: Outline/Timeline styling, empty states, terminal share button
+   ========================================================================== */
+
+/* Outline & Timeline — better collapsed styling with visible indicators */
+.sidebar-outline-section,
+.sidebar-timeline-section {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  margin: 3px 8px;
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-surface);
+  transition: border-color 0.15s;
+}
+.sidebar-outline-section:hover,
+.sidebar-timeline-section:hover {
+  border-color: var(--border-color);
+}
+.sidebar-outline-section summary,
+.sidebar-timeline-section summary {
+  list-style: none;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  transition: background-color 0.12s, color 0.12s;
+  position: relative;
+}
+.sidebar-outline-section summary:hover,
+.sidebar-timeline-section summary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary-bright);
+}
+.sidebar-outline-section summary::-webkit-details-marker,
+.sidebar-timeline-section summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-outline-section summary::after,
+.sidebar-timeline-section summary::after {
+  content: '';
+  width: 0; height: 0;
+  border-left: 4px solid var(--text-muted);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  margin-left: auto;
+  transition: transform 0.18s var(--ease-apple);
+}
+.sidebar-outline-section[open] summary::after,
+.sidebar-timeline-section[open] summary::after {
+  transform: rotate(90deg);
+  border-left-color: var(--accent-cyan);
+}
+.sidebar-outline-section summary svg,
+.sidebar-timeline-section summary svg {
+  opacity: 0.6;
+}
+.sidebar-outline-section[open] summary svg,
+.sidebar-timeline-section[open] summary svg {
+  opacity: 1;
+  color: var(--accent-cyan);
+}
+.sidebar-outline-section > div,
+.sidebar-timeline-section > div {
+  padding: 4px 8px 6px 12px;
+  font-size: 10.5px;
+  border-top: 1px solid var(--border-subtle);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Empty file tree state — more welcoming */
+#file-tree-container .empty-state,
+.view-explorer .empty-state {
+  text-align: center;
+  padding: 24px 16px;
+}
+.view-explorer .empty-state svg {
+  opacity: 0.3;
+  margin-bottom: 8px;
+}
+
+/* Terminal share button — compact, icon-only with tooltip */
+.terminal-share-btn {
+  font-size: 0;
+  width: 28px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs, 4px);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: all 0.15s;
+}
+.terminal-share-btn::before {
+  content: '🤖';
+  font-size: 13px;
+}
+.terminal-share-btn:hover {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  background: color-mix(in srgb, var(--accent-cyan) 8%, transparent);
+}
+
+/* Explorer top sections — compact filter + favorites/recents */
+#explorer-top-sections {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+#explorer-top-sections details {
+  margin: 2px 8px;
+}
+#explorer-top-sections summary {
+  font-size: 10px !important;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 0;
+  user-select: none;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+#explorer-top-sections summary:hover {
+  color: var(--text-secondary);
+}
+
+/* Sidebar header — cleaner look */
+.sidebar-header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  background: var(--bg-surface);
+}

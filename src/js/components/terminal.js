@@ -738,9 +738,9 @@ function renderPaneTabs(pane) {
   // E: Share terminal output with the AI chat
   const shareBtn = document.createElement('button');
   shareBtn.className = 'terminal-share-btn terminal-tab';
-  shareBtn.title = 'Attach the last 40 lines of terminal output to the AI chat';
-  shareBtn.textContent = '🤖 Share with AI';
-  shareBtn.style.marginLeft = 'auto';
+  shareBtn.title = 'Share terminal output with AI';
+  shareBtn.textContent = '';  // CSS ::before renders the icon
+  shareBtn.style.marginLeft = 'auto'; shareBtn.style.width = '28px'; shareBtn.style.height = '24px';
   shareBtn.addEventListener('click', async () => {
     const sess = activeInPane(pane);
     if (!sess || !sess.buffer?.trim()) {
