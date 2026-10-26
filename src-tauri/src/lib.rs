@@ -392,6 +392,38 @@ async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, Str
 }
 
 #[tauri::command]
+async fn pick_save_file(
+    app: tauri::AppHandle,
+    default_name: Option<String>,
+    filter_name: Option<String>,
+    filter_extensions: Option<Vec<String>>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let mut dialog = app.dialog().file();
+    if let Some(name) = default_name {
+        dialog = dialog.set_file_name(&name);
+    }
+    if let (Some(fname), Some(exts)) = (filter_name, filter_extensions) {
+        let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter(fname, &ext_refs);
+    }
+    let chosen = dialog.blocking_save_file();
+    match chosen {
+        Some(path) => {
+            let path_str = path.to_string();
+            let p = std::path::Path::new(&path_str);
+            if let Some(parent) = p.parent() {
+                if !parent.exists() {
+                    return Err("Selected directory does not exist".into());
+                }
+            }
+            Ok(Some(path_str))
+        }
+        None => Ok(None),
+    }
+}
+
+#[tauri::command]
 async fn execute_tool(
     name: String,
     arguments: serde_json::Value,
@@ -1484,7 +1516,7 @@ fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.2.4")
+        .user_agent("OrbitalX-IDE/2.2.5")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -1635,6 +1667,7 @@ pub fn run() {
             get_token_usage_stats,
             clear_token_usage,
             open_folder_dialog,
+            pick_save_file,
             test_provider_connection,
             evaluate_tool_policy,
             get_available_tools,

@@ -27,8 +27,8 @@ let cmdHistoryIndex = -1;
 // --- E2: terminal profiles ------------------------------------------------
 
 const SHELL_PROFILES = [
-  { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', dot: 'var(--accent-blue)', os: 'windows' },
   { id: 'cmd', label: 'Command Prompt', shell: 'cmd.exe', dot: 'var(--accent-orange)', os: 'windows' },
+  { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', dot: 'var(--accent-blue)', os: 'windows' },
   { id: 'gitbash', label: 'Git Bash', shell: 'C:\\Program Files\\Git\\bin\\bash.exe', dot: 'var(--accent-green)', os: 'windows' },
   { id: 'wsl', label: 'WSL', shell: 'wsl.exe', dot: 'var(--accent-green)', os: 'windows' },
   { id: 'sh', label: 'sh (Unix)', shell: 'sh', dot: 'var(--accent-green)', os: 'unix' },
@@ -55,7 +55,7 @@ function loadTerminalSettings() {
   state.terminal = state.terminal || {
     profiles: [],
     splitMode: false,
-    defaultShell: isWindows() ? 'powershell' : 'sh',
+    defaultShell: isWindows() ? 'cmd' : 'sh',
   };
   if (!Array.isArray(state.terminal.profiles) || state.terminal.profiles.length === 0) {
     state.terminal.profiles = defaultProfiles();
@@ -337,8 +337,6 @@ export function initTerminal() {
   loadCommandHistory();
   loadTerminalSettings();
 
-  const inputElem = document.getElementById('terminal-command-input');
-  const runBtn = document.getElementById('btn-run-terminal-command');
   const clearBtn = document.getElementById('btn-clear-terminal');
   const collapseBtn = document.getElementById('btn-collapse-panel');
   const newTerminalBtn = document.getElementById('btn-new-terminal');
@@ -368,52 +366,16 @@ export function initTerminal() {
       if (valContent) valContent.style.display = target === 'validation' ? 'block' : 'none';
       if (logContent) logContent.style.display = target === 'logs' ? 'block' : 'none';
       if (target === 'terminal') {
-        inputElem?.focus();
+        focusActiveTerminalInput();
         pollActiveTerminalOutput();
       }
     });
   });
 
-  if (inputElem) {
-    inputElem.addEventListener('keydown', async (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        executeTerminalCommand();
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateHistory(-1, inputElem);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateHistory(1, inputElem);
-      } else if (e.key === 'c' && e.ctrlKey && e.shiftKey) {
-        e.preventDefault();
-        copySelection();
-      } else if (e.key === 'v' && e.ctrlKey && e.shiftKey) {
-        e.preventDefault();
-        pasteToInput(inputElem);
-      } else if (e.key === 'a' && e.ctrlKey && !e.shiftKey) {
-        e.preventDefault();
-        selectAllTerminal();
-      } else if (e.key === 'r' && e.ctrlKey) {
-        e.preventDefault();
-        openHistoryPicker(inputElem);
-      } else if (e.key === 'f' && e.ctrlKey && !e.shiftKey) {
-        e.preventDefault();
-        openTerminalSearch();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        await handleTabCompletion(inputElem);
-      } else if (e.key === 'c' && e.ctrlKey && !e.shiftKey) {
-        sendInterruptSignal();
-        inputElem.value = '';
-      } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
-        e.preventDefault();
-        clearActiveTerminal();
-      }
-    });
-  }
+  // Per-pane inline prompt wiring — each pane owns its own input + run button
+  wireInlinePrompt('A');
+  wireInlinePrompt('B');
 
-  runBtn?.addEventListener('click', () => executeTerminalCommand());
   newTerminalBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
   splitTerminalBtn?.addEventListener('click', toggleTerminalSplit);
   sidebarNewBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
@@ -435,7 +397,7 @@ export function initTerminal() {
       handleTerminalLink(link);
       return;
     }
-    inputElem?.focus();
+    focusActiveTerminalInput();
   });
 
   // E6: right-click context menu on the terminal output
@@ -452,6 +414,69 @@ export function initTerminal() {
   startOutputPolling();
 }
 
+// --- Per-pane inline prompt wiring ------------------------------------------
+// The prompt bar now lives inside each pane (so split terminals each get their
+// own input). Each pane's input shares the same keydown handlers; the active
+// pane is resolved at event time so the focused input always wins.
+
+function wireInlinePrompt(pane) {
+  const input = document.getElementById(`terminal-command-input-${pane}`);
+  const runBtn = document.getElementById(`btn-run-terminal-command-${pane}`);
+  if (!input) return;
+
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      executeTerminalCommand();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      navigateHistory(-1, input);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      navigateHistory(1, input);
+    } else if (e.key === 'c' && e.ctrlKey && e.shiftKey) {
+      e.preventDefault();
+      copySelection();
+    } else if (e.key === 'v' && e.ctrlKey && e.shiftKey) {
+      e.preventDefault();
+      pasteToInput(input);
+    } else if (e.key === 'a' && e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      selectAllTerminal();
+    } else if (e.key === 'r' && e.ctrlKey) {
+      e.preventDefault();
+      openHistoryPicker(input);
+    } else if (e.key === 'f' && e.ctrlKey && !e.shiftKey) {
+      e.preventDefault();
+      openTerminalSearch();
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      await handleTabCompletion(input);
+    } else if (e.key === 'c' && e.ctrlKey && !e.shiftKey) {
+      sendInterruptSignal();
+      input.value = '';
+    } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
+      e.preventDefault();
+      clearActiveTerminal();
+    }
+  });
+
+  runBtn?.addEventListener('click', () => executeTerminalCommand());
+}
+
+function focusActiveTerminalInput() {
+  const active = getActiveSession();
+  const pane = active ? active.pane : 'A';
+  const input = document.getElementById(`terminal-command-input-${pane}`);
+  if (input) input.focus();
+}
+
+function getActiveTerminalInput() {
+  const active = getActiveSession();
+  if (!active) return document.getElementById('terminal-command-input-A');
+  return document.getElementById(`terminal-command-input-${active.pane}`);
+}
+
 // --- DOM construction (panes, tab bars, breadcrumb, search bar) ------------
 
 function buildTerminalDom() {
@@ -464,12 +489,30 @@ function buildTerminalDom() {
         <div class="terminal-tabbar-row" id="terminal-tabbar-A"></div>
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-A"></div>
         <div class="terminal-output-scroll" id="terminal-stdout-A"></div>
+        <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-A">
+          <span id="terminal-prompt-label-A" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS&gt;</span>
+          <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-A" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
+          <button class="terminal-inline-run" id="btn-run-terminal-command-A" title="Run (Enter)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="terminal-split-resizer" id="terminal-split-resizer" style="display: none;"></div>
       <div class="terminal-pane" id="terminal-pane-B" style="display: none; flex: 1; min-width: 0; flex-direction: column;">
         <div class="terminal-tabbar-row" id="terminal-tabbar-B"></div>
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-B"></div>
         <div class="terminal-output-scroll" id="terminal-stdout-B"></div>
+        <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-B">
+          <span id="terminal-prompt-label-B" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS&gt;</span>
+          <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-B" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
+          <button class="terminal-inline-run" id="btn-run-terminal-command-B" title="Run (Enter)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
     <div class="terminal-search-bar" id="terminal-search-bar" style="display: none;">
@@ -624,7 +667,7 @@ export async function createTerminalInstance(shell, pane = 'A') {
 export function switchTerminalInstance(id) {
   activeTerminalId = id;
   renderPanes();
-  document.getElementById('terminal-command-input')?.focus();
+  focusActiveTerminalInput()?.focus();
   pollActiveTerminalOutput();
 }
 
@@ -738,8 +781,12 @@ function renderPaneTabs(pane) {
   // E: Share terminal output with the AI chat
   const shareBtn = document.createElement('button');
   shareBtn.className = 'terminal-share-btn terminal-tab';
-  shareBtn.title = 'Share terminal output with AI';
-  shareBtn.textContent = '';  // CSS ::before renders the icon
+  shareBtn.title = 'Share terminal output with AI Agent';
+  shareBtn.innerHTML = `
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path>
+    </svg>
+  `;
   shareBtn.style.marginLeft = 'auto'; shareBtn.style.width = '28px'; shareBtn.style.height = '24px';
   shareBtn.addEventListener('click', async () => {
     const sess = activeInPane(pane);
@@ -835,11 +882,22 @@ function renderCwdBreadcrumb(pane) {
 }
 
 function updatePromptDisplay() {
-  const promptLabel = document.getElementById('terminal-prompt-label');
-  const active = getActiveSession();
-  if (promptLabel && active) {
+  for (const pane of ['A', 'B']) {
+    const promptLabel = document.getElementById(`terminal-prompt-label-${pane}`);
+    if (!promptLabel) continue;
+    const active = activeInPane(pane);
+    if (!active) { promptLabel.textContent = '>'; continue; }
     const cwd = active.cwd || state.workspace.rootPath || '';
-    promptLabel.textContent = `PS ${cwd}>`;
+    const short = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).slice(-2).join('\\');
+    const isCmd = /cmd\.exe|cmd$/i.test(active.shell || '');
+    const isBash = /bash|sh/i.test(active.shell || '');
+    if (isCmd) {
+      promptLabel.textContent = short ? `${short}>` : 'CMD>';
+    } else if (isBash) {
+      promptLabel.textContent = short ? `${short}$` : '$';
+    } else {
+      promptLabel.textContent = short ? `PS ${short}>` : 'PS>';
+    }
   }
 }
 
@@ -847,11 +905,11 @@ function updatePromptDisplay() {
 
 export function applyTerminalAppearance() {
   const t = state.settings.terminal || {};
-  const input = document.getElementById('terminal-command-input');
-  if (input) {
+  for (const pane of ['A', 'B']) {
+    const input = document.getElementById(`terminal-command-input-${pane}`);
+    if (!input) continue;
     input.style.fontFamily = t.fontFamily;
     input.style.fontSize = `${t.fontSize || 13}px`;
-    const cursor = t.cursorBlink === false ? 'none' : 'blink 1.1s step-end infinite';
     const caret = t.cursorStyle === 'underline' ? 'underline' : t.cursorStyle === 'bar' ? 'inline' : 'block';
     input.style.caretColor = 'var(--accent-cyan)';
     if (caret === 'block' || caret === 'underline') {
@@ -866,7 +924,7 @@ export function applyTerminalAppearance() {
 // --- output handling ---------------------------------------------------------
 
 export async function executeTerminalCommand(cmdString) {
-  const inputElem = document.getElementById('terminal-command-input');
+  const inputElem = getActiveTerminalInput();
   const active = getActiveSession();
   if (!active) return;
 
@@ -1041,12 +1099,12 @@ function showTerminalContextMenu(x, y) {
   menu.id = 'terminal-ctx-menu';
   const items = [
     { label: 'Copy', hint: 'Ctrl+Shift+C', action: copySelection },
-    { label: 'Paste', hint: 'Ctrl+Shift+V', action: () => pasteToInput(document.getElementById('terminal-command-input')) },
+    { label: 'Paste', hint: 'Ctrl+Shift+V', action: () => pasteToInput(focusActiveTerminalInput()) },
     { label: 'Select All', hint: 'Ctrl+A', action: selectAllTerminal },
     { type: 'separator' },
     { label: 'Clear Terminal', hint: 'Ctrl+L', action: clearActiveTerminal },
     { label: 'Find in Terminal', hint: 'Ctrl+F', action: openTerminalSearch },
-    { label: 'Search History', hint: 'Ctrl+R', action: () => openHistoryPicker(document.getElementById('terminal-command-input')) },
+    { label: 'Search History', hint: 'Ctrl+R', action: () => openHistoryPicker(focusActiveTerminalInput()) },
   ];
   for (const item of items) {
     if (item.type === 'separator') {
@@ -1120,7 +1178,7 @@ function closeTerminalSearch() {
     const el = document.getElementById(`terminal-stdout-${active.pane}`);
     if (el) el.innerHTML = linkifySafeHtml(parseAnsiToHtml(active.buffer));
   }
-  document.getElementById('terminal-command-input')?.focus();
+  focusActiveTerminalInput()?.focus();
 }
 
 function runTerminalSearch(term) {

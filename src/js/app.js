@@ -589,7 +589,7 @@ function initAboutModal() {
     setTimeout(() => {
       btnCheckUpdates.textContent = '✓ Up to Date';
       import('./services/notifications.js').then(m => {
-        m.showToast('Orbital X is up to date (v2.2.4 Latest Release)', 'success');
+        m.showToast('Orbital X is up to date (v2.2.5 Latest Release)', 'success');
       });
       setTimeout(() => {
         btnCheckUpdates.textContent = 'Check for Updates';

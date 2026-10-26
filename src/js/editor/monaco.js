@@ -392,6 +392,20 @@ export function initMonaco(containerElement) {
     }
   });
 
+  // Markdown preview button & shortcut Ctrl+Shift+V
+  document.getElementById('btn-toggle-markdown-preview')?.addEventListener('click', () => {
+    toggleMarkdownPreview();
+  });
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'v') {
+      const activeTab = panelState('left').tabs.find(t => t.id === panelState('left').activeTabId);
+      if (activeTab && (activeTab.language === 'markdown' || Boolean(activeTab.name && activeTab.name.match(/\.(md|markdown)$/i)))) {
+        e.preventDefault();
+        toggleMarkdownPreview();
+      }
+    }
+  });
+
   return editors.left;
 }
 
@@ -823,6 +837,9 @@ export function openFileInTab(fileData, opts = {}) {
         if (state.settings?.autoSave && isDirty) {
           scheduleAutoSave(pnl, currentTab);
         }
+        if (pnl === 'left' && isMarkdownPreviewActive && pp.activeTabId === currentTab.id) {
+          renderMarkdownPreview();
+        }
       }
     });
   }
@@ -1011,6 +1028,93 @@ export function updateBreadcrumb(tab) {
   updateBreadcrumbFor(getActivePanel());
 }
 
+let isMarkdownPreviewActive = false;
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function toggleMarkdownPreview(forceState = null) {
+  const p = panelState('left');
+  const tab = p.tabs.find(t => t.id === p.activeTabId);
+  if (!tab || (tab.language !== 'markdown' && !Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i)))) {
+    return;
+  }
+  isMarkdownPreviewActive = forceState !== null ? forceState : !isMarkdownPreviewActive;
+  renderMarkdownPreview();
+}
+
+export function renderMarkdownPreview() {
+  const previewContainer = document.getElementById('editor-markdown-preview');
+  const monacoContainer = document.getElementById('monaco-container');
+  const toggleBtn = document.getElementById('btn-toggle-markdown-preview');
+  const p = panelState('left');
+  const tab = p.tabs.find(t => t.id === p.activeTabId);
+
+  const isMd = tab && (tab.language === 'markdown' || Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i)));
+
+  if (!isMd) {
+    if (toggleBtn) toggleBtn.style.display = 'none';
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (monacoContainer) {
+      monacoContainer.style.display = '';
+      const ed = editorFor('left');
+      if (ed) ed.layout();
+    }
+    isMarkdownPreviewActive = false;
+    return;
+  }
+
+  if (toggleBtn) {
+    toggleBtn.style.display = 'inline-flex';
+    toggleBtn.title = isMarkdownPreviewActive ? 'Switch to Source Code (Ctrl+Shift+V)' : 'Open Markdown Preview (Ctrl+Shift+V)';
+    toggleBtn.classList.toggle('active', isMarkdownPreviewActive);
+    toggleBtn.innerHTML = isMarkdownPreviewActive
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  }
+
+  if (!isMarkdownPreviewActive) {
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (monacoContainer) {
+      monacoContainer.style.display = '';
+      const ed = editorFor('left');
+      if (ed) ed.layout();
+    }
+    return;
+  }
+
+  if (!previewContainer) return;
+  if (monacoContainer) monacoContainer.style.display = 'none';
+  previewContainer.style.display = 'block';
+
+  const model = editorModels.get(tab.path);
+  const content = model ? model.getValue() : (tab.content || '');
+
+  import('../components/agent.js').then(({ formatMarkdown }) => {
+    previewContainer.innerHTML = `
+      <div class="markdown-preview-header">
+        <div class="markdown-preview-badge">Markdown Preview</div>
+        <div class="markdown-preview-filename">${escapeHtml(tab.name)}</div>
+        <button class="btn btn-sm btn-secondary" id="btn-close-md-preview" style="font-size: 11px; padding: 2px 8px; margin-left: auto;">Edit Source</button>
+      </div>
+      <div class="markdown-preview-body">
+        ${formatMarkdown(content || '(Empty markdown document)')}
+      </div>
+    `;
+    document.getElementById('btn-close-md-preview')?.addEventListener('click', () => {
+      toggleMarkdownPreview(false);
+    });
+  }).catch(e => {
+    console.warn("Could not render markdown preview:", e);
+  });
+}
+
 export function switchToTab(tabId, panel = 'left') {
   const p = panelState(panel);
   const tab = p.tabs.find(t => t.id === tabId);
@@ -1033,6 +1137,9 @@ export function switchToTab(tabId, panel = 'left') {
   updateBreadcrumbFor(panel);
   updateIndentStatus();
   renderTabs(panel);
+  if (panel === 'left') {
+    renderMarkdownPreview();
+  }
   scheduleTabPersist();
 }
 
@@ -1074,6 +1181,7 @@ function closeTabInternal(tabId, panel = 'left', opts = {}) {
       const langElem = document.getElementById('status-language');
       if (panel === 'left' && langElem) langElem.textContent = 'PLAIN TEXT';
       updateBreadcrumbFor(panel);
+      if (panel === 'left') renderMarkdownPreview();
     }
   }
   renderTabs(panel);

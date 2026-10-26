@@ -639,6 +639,47 @@ body {
   color: #ffffff;
 }
 
+/* Agent Context Meter — inline bar in the agent panel header that fills as
+   the conversation grows. Clicking it opens the Token Usage Dashboard. */
+.agent-context-meter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background var(--trans-fast), border-color var(--trans-fast);
+}
+.agent-context-meter:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus);
+}
+.agent-context-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 60px;
+}
+.agent-context-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent-cyan);
+  border-radius: 3px;
+  transition: width 0.3s ease, background 0.2s ease;
+}
+.agent-context-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 78px;
+  text-align: right;
+}
+
 /* Agent Composer Box (Apple-Style Floating Glass Input) */
 .agent-composer {
   padding: 10px 12px;

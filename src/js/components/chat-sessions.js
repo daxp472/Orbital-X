@@ -6,7 +6,8 @@
 // ==========================================================================
 
 import { state } from '../state/store.js';
-import { invoke } from '../services/tauri.js';
+import { invoke, pickSaveFile } from '../services/tauri.js';
+import { showToast } from '../services/notifications.js';
 import { appendTimelineCard, renderFullTimeline } from './agent.js';
 
 const STORAGE_KEY_SESSIONS = 'orbital_chat_sessions';
@@ -125,24 +126,28 @@ async function exportActiveSessionMarkdown() {
   lines.push('---', `_Session id: ${current.id}_`);
   const markdown = lines.join('\n');
 
-  // FIX: browser blob downloads don't work in the Tauri WebView —
-  // write to disk through the backend instead
+  // Ask user where to save the file using the native file picker
   const safeName = (current.title || 'session').replace(/[^a-z0-9]+/gi, '-').slice(0, 40).toLowerCase();
   const now = new Date().toISOString().slice(0, 10);
+  const defaultFilename = `orbital-chat-${safeName}-${now}.md`;
+
   try {
-    const home = await invoke('run_command', { command: 'echo $env:USERPROFILE', timeout_seconds: 5 });
-    const homeDir = (home.stdout || '.').trim();
-    const path = `${homeDir}/Downloads/orbital-chat-${safeName}-${now}.md`;
-    await invoke('save_file', { path, content: markdown, description: 'Chat export' });
-    showToast(`Exported to ${path}`, 'success', 3500);
+    const destinationPath = await pickSaveFile(defaultFilename, 'Markdown Document (*.md)', ['md']);
+    if (!destinationPath) {
+      // User cancelled the file picker dialog
+      return;
+    }
+    await invoke('save_file', { path: destinationPath, content: markdown, description: 'Chat export' });
+    showToast(`Chat exported successfully to ${destinationPath}`, 'success', 3500);
   } catch (e) {
-    // Fallback: try browser download (works in dev mode)
+    console.error("Save file dialog error:", e);
+    // Fallback: try browser download if native dialog fails
     try {
       const blob = new Blob([markdown], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `orbital-chat-${safeName}-${now}.md`;
+      a.download = defaultFilename;
       a.click();
       URL.revokeObjectURL(url);
       showToast('Chat exported', 'success', 2500);
