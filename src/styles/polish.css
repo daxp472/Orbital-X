@@ -620,11 +620,13 @@ body.theme-light .settings-sidebar,
    output scrolls above it and the prompt stays pinned to the bottom
    (Antigravity / VS Code behaviour). */
 .terminal-inline-prompt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-shrink: 0;
-  padding: 2px 10px 6px;
+  padding: 4px 12px 6px;
   background: var(--bg-activity);
   border-top: 1px solid var(--border-subtle);
-  align-items: center;
 }
 .terminal-inline-prompt .terminal-input {
   flex: 1;
@@ -1437,6 +1439,7 @@ body.theme-light .settings-sidebar,
   flex-shrink: 0;
   padding: 0;
   transition: all 0.15s;
+}
 .terminal-share-btn svg {
   color: var(--text-muted);
   transition: color 0.15s ease;

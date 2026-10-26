@@ -358,6 +358,7 @@ export function initTerminal() {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
+      bottomPanel?.classList.remove('collapsed');
       const target = tab.dataset.tab;
       const termContent = document.getElementById('tab-content-terminal');
       const valContent = document.getElementById('tab-content-validation');
@@ -372,13 +373,22 @@ export function initTerminal() {
     });
   });
 
+  // Build the terminal DOM into #terminal-mount FIRST before wiring event listeners!
+  buildTerminalDom();
+
   // Per-pane inline prompt wiring — each pane owns its own input + run button
   wireInlinePrompt('A');
   wireInlinePrompt('B');
 
-  newTerminalBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
+  newTerminalBtn?.addEventListener('click', (e) => {
+    bottomPanel?.classList.remove('collapsed');
+    openProfileMenu(e, 'A');
+  });
   splitTerminalBtn?.addEventListener('click', toggleTerminalSplit);
-  sidebarNewBtn?.addEventListener('click', (e) => openProfileMenu(e, 'A'));
+  sidebarNewBtn?.addEventListener('click', (e) => {
+    bottomPanel?.classList.remove('collapsed');
+    openProfileMenu(e, 'A');
+  });
 
   clearBtn?.addEventListener('click', clearActiveTerminal);
 
@@ -408,7 +418,6 @@ export function initTerminal() {
 
   document.getElementById('btn-run-all-tests')?.addEventListener('click', runValidationTests);
 
-  buildTerminalDom();
   applyTerminalAppearance();
   renderPanes();
   startOutputPolling();
@@ -464,11 +473,17 @@ function wireInlinePrompt(pane) {
   runBtn?.addEventListener('click', () => executeTerminalCommand());
 }
 
-function focusActiveTerminalInput() {
+export function focusActiveTerminalInput() {
   const active = getActiveSession();
   const pane = active ? active.pane : 'A';
   const input = document.getElementById(`terminal-command-input-${pane}`);
-  if (input) input.focus();
+  if (input) {
+    input.focus();
+    return input;
+  }
+  const fallback = document.getElementById('terminal-command-input-A');
+  if (fallback) fallback.focus();
+  return fallback;
 }
 
 function getActiveTerminalInput() {

@@ -326,7 +326,7 @@ function initActivityRail() {
     if (isCollapsed) {
       bottom?.classList.remove('collapsed');
       document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
-      document.getElementById('terminal-command-input')?.focus();
+      import('./components/terminal.js').then(m => m.focusActiveTerminalInput());
     } else {
       bottom?.classList.add('collapsed');
     }
@@ -431,7 +431,7 @@ function initGlobalShortcuts() {
       if (isCollapsed) {
         bottom?.classList.remove('collapsed');
         document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
-        document.getElementById('terminal-command-input')?.focus();
+        import('./components/terminal.js').then(m => m.focusActiveTerminalInput());
       } else {
         bottom?.classList.add('collapsed');
       }
@@ -1065,7 +1065,10 @@ function initResizerPersistence() {
   if (savedSidebar && sidebar) sidebar.style.width = `${savedSidebar}px`;
   const bottom = document.getElementById('bottom-panel');
   const savedBottom = localStorage.getItem(BOTTOM_KEY);
-  if (savedBottom && bottom) bottom.style.height = `${savedBottom}px`;
+  if (savedBottom && bottom) {
+    const parsedH = parseInt(savedBottom, 10);
+    bottom.style.height = (!isNaN(parsedH) && parsedH >= 140 ? parsedH : 240) + 'px';
+  }
   const agent = document.getElementById('agent-panel');
   const savedAgent = localStorage.getItem(AGENT_KEY);
   if (savedAgent && agent) agent.style.width = `${savedAgent}px`;
@@ -1089,7 +1092,12 @@ function initResizerPersistence() {
     });
   };
   persistOn('resizer-sidebar', SIDEBAR_KEY, () => document.getElementById('sidebar')?.offsetWidth);
-  persistOn('resizer-bottom', BOTTOM_KEY, () => document.getElementById('bottom-panel')?.offsetHeight);
+  persistOn('resizer-bottom', BOTTOM_KEY, () => {
+    const b = document.getElementById('bottom-panel');
+    if (!b || b.classList.contains('collapsed')) return null;
+    const h = b.offsetHeight;
+    return h >= 140 ? h : null;
+  });
   persistOn('resizer-agent', AGENT_KEY, () => document.getElementById('agent-panel')?.offsetWidth);
 }
 

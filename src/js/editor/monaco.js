@@ -726,6 +726,27 @@ export function renderTabs(panel = 'left') {
     dom.tabsBar.appendChild(tabEl);
   }
 
+  // Preserve editor tabs action buttons (Markdown Preview, etc.) in the left tabs bar
+  if (panel === 'left') {
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'editor-tabs-actions';
+    actionsWrap.style.cssText = 'margin-left: auto; display: flex; align-items: center; gap: 4px; padding-right: 8px; flex-shrink: 0;';
+
+    const mdBtn = document.createElement('button');
+    mdBtn.className = 'icon-btn' + (isMarkdownPreviewActive ? ' active' : '');
+    mdBtn.id = 'btn-toggle-markdown-preview';
+    mdBtn.title = isMarkdownPreviewActive ? 'Switch to Source Code (Ctrl+Shift+V)' : 'Open Markdown Preview (Ctrl+Shift+V)';
+    const activeTab = p.tabs.find(t => t.id === p.activeTabId);
+    const isMd = activeTab && (activeTab.language === 'markdown' || Boolean(activeTab.name && activeTab.name.match(/\.(md|markdown)$/i)));
+    mdBtn.style.display = isMd ? 'inline-flex' : 'none';
+    mdBtn.innerHTML = isMarkdownPreviewActive
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    mdBtn.addEventListener('click', () => toggleMarkdownPreview());
+    actionsWrap.appendChild(mdBtn);
+    dom.tabsBar.appendChild(actionsWrap);
+  }
+
   updateEmptyState(panel);
 }
 
