@@ -36,15 +36,16 @@ export function initAgent() {
     timestampIntervalId = setInterval(updateAllTimelineTimestamps, 60000);
   }
 
-  // Mode buttons
-  const modeProBtn = document.getElementById('btn-mode-pro');
-  const modeDevBtn = document.getElementById('btn-mode-dev');
-  const modeUserBtn = document.getElementById('btn-mode-user');
+  // Mode cycling is handled by the header mode pill (Alt+M) — the segmented
+  // selector was removed in favour of the inline context meter bar.
 
-  if (modeProBtn && modeDevBtn && modeUserBtn) {
-    modeProBtn.addEventListener('click', () => switchMode('agent_pro'));
-    modeDevBtn.addEventListener('click', () => switchMode('dev'));
-    modeUserBtn.addEventListener('click', () => switchMode('user'));
+  // Agent Context Meter — click to open the token-usage dashboard
+  const ctxMeter = document.getElementById('agent-context-meter');
+  if (ctxMeter) {
+    ctxMeter.addEventListener('click', () => {
+      const dashboard = document.getElementById('modal-usage-dashboard');
+      if (dashboard) dashboard.style.display = 'flex';
+    });
   }
 
   // Live token estimate counter below input
@@ -227,14 +228,67 @@ function initChatDropZone() {
 
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
-      state.conversation = [];
-      const timeline = document.getElementById('agent-timeline');
-      if (timeline) {
-        timeline.innerHTML = '';
-        appendTimelineCard('assistant', `Conversation reset. Active Mode: <strong>${state.agentMode.toUpperCase()}</strong>.`);
-      }
+      clearAgentContext();
     });
   }
+
+  // C2: explicit context clearing / compacting buttons in the panel header
+  document.getElementById('btn-clear-agent-context')?.addEventListener('click', () => {
+    clearAgentContext();
+  });
+  document.getElementById('btn-compact-context')?.addEventListener('click', () => {
+    compactAgentContext();
+  });
+}
+
+// Active Execution & Decision Memory — persists across context compactions to stop hallucinations & question repetition
+export const activeExecutionMemory = {
+  completedActions: [], // strings of verified tool outputs / file changes
+  userDecisions: [],    // user answers to questions and stated preferences
+};
+
+function clearAgentContext() {
+  state.conversation = [];
+  activeExecutionMemory.completedActions = [];
+  activeExecutionMemory.userDecisions = [];
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    timeline.innerHTML = '';
+    appendTimelineCard('assistant', `Conversation reset. Active Mode: <strong>${state.agentMode.toUpperCase()}</strong>.`);
+  }
+  showToast('Conversation cleared', 'info', 2000);
+  updateContextMeter(0, getEffectiveNumCtx(), null);
+}
+
+export function compactAgentContext(isAutomatic = false) {
+  const before = state.conversation.length;
+  if (before < 4) {
+    if (!isAutomatic) showToast('Conversation too short to compact', 'info', 2000);
+    return;
+  }
+  // Keep the first user message (task anchor) + the most recent 6 messages,
+  // and drop everything in between. The orchestrator plan state is preserved.
+  const firstUser = state.conversation.find(m => m.role === 'user');
+  const recent = state.conversation.slice(-6);
+  const keep = new Set();
+  if (firstUser) keep.add(firstUser);
+  for (const m of recent) keep.add(m);
+  state.conversation = state.conversation.filter(m => keep.has(m));
+  // Mark the compaction so the model knows the earlier turns were summarised
+  state.conversation.unshift({
+    role: 'assistant',
+    content: `_Context compacted: ${before} turns → ${state.conversation.length} retained. Older turns were summarised out to conserve the context window. Completed actions and user decisions are preserved in execution memory._`,
+    timestamp: Date.now(),
+    _ephemeral: true,
+  });
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    timeline.innerHTML = '';
+    renderFullTimeline(state.conversation);
+    appendTimelineCard('assistant', `Context compacted — ${before} turns reduced to ${state.conversation.length} retained. Prior execution history and decisions preserved in active memory.`);
+  }
+  showToast(isAutomatic ? `Auto-compacted context (${before} → ${state.conversation.length} turns)` : `Context compacted: ${before} → ${state.conversation.length} turns`, 'success', 2500);
+  updateContextMeter(estimateTokens(state.conversation.map(m => m.content).join('')), getEffectiveNumCtx(), null);
 }
 
 function getModeDisplayName(mode = state.agentMode) {
@@ -562,27 +616,11 @@ export async function switchMode(newMode) {
   updateModeTooltip();
   state.agentMode = newMode;
 
-  const modeProBtn = document.getElementById('btn-mode-pro');
-  const modeDevBtn = document.getElementById('btn-mode-dev');
-  const modeUserBtn = document.getElementById('btn-mode-user');
   const headerPill = document.getElementById('header-mode-pill');
   const headerText = document.getElementById('header-mode-text');
 
-  [modeProBtn, modeDevBtn, modeUserBtn].forEach(b => b?.classList.remove('btn-primary'));
-
-  if (newMode === 'agent_pro') {
-    modeProBtn?.classList.add('btn-primary');
-    headerPill?.setAttribute('class', 'mode-pill agent_pro');
-    if (headerText) headerText.textContent = 'AGENT PRO';
-  } else if (newMode === 'dev') {
-    modeDevBtn?.classList.add('btn-primary');
-    headerPill?.setAttribute('class', 'mode-pill dev');
-    if (headerText) headerText.textContent = 'DEV MODE';
-  } else {
-    modeUserBtn?.classList.add('btn-primary');
-    headerPill?.setAttribute('class', 'mode-pill user');
-    if (headerText) headerText.textContent = 'USER MODE';
-  }
+  if (headerPill) headerPill.setAttribute('class', 'mode-pill ' + newMode);
+  if (headerText) headerText.textContent = getModeDisplayName(newMode).toUpperCase();
 
   if (!isLoopRunning) {
     updateStatusBarAgentStatus(getModeDisplayName(newMode));
@@ -649,6 +687,15 @@ async function handleSend() {
     timestamp: now,
     mid: userMid,
   });
+
+  // Record user instruction/decision in execution memory so the model never re-asks questions
+  activeExecutionMemory.userDecisions.push({
+    text: promptText,
+    timestamp: now
+  });
+  if (activeExecutionMemory.userDecisions.length > 10) {
+    activeExecutionMemory.userDecisions = activeExecutionMemory.userDecisions.slice(-10);
+  }
 
   // Sync to active chat session
   import('./chat-sessions.js').then(m => m.saveActiveSession());
@@ -1157,13 +1204,26 @@ async function resolveFileMentions(promptText) {
 
 function updateContextMeter(promptTokens, numCtx, tokensPerSecond) {
   const el = document.getElementById('sb-ctx-meter');
-  if (!el) return;
   const used = promptTokens || 0;
   const pct = numCtx ? Math.min(100, Math.round((used / numCtx) * 100)) : 0;
   const tps = tokensPerSecond ? ` · ${tokensPerSecond} tok/s` : '';
-  el.textContent = `${used.toLocaleString()}/${numCtx.toLocaleString()} ctx${tps}`;
-  el.style.color = pct > 85 ? 'var(--accent-red)' : (pct > 65 ? 'var(--accent-orange)' : '');
-  el.title = `Context window usage: ${pct}% (prompt tokens / effective context size)`;
+
+  if (el) {
+    el.textContent = `${used.toLocaleString()}/${numCtx.toLocaleString()} ctx${tps}`;
+    el.style.color = pct > 85 ? 'var(--accent-red)' : (pct > 65 ? 'var(--accent-orange)' : '');
+    el.title = `Context window usage: ${pct}% (prompt tokens / effective context size)`;
+  }
+
+  // Inline agent-panel meter — the bar fills proportionally as context grows
+  const meter = document.getElementById('agent-context-meter');
+  const fill = document.getElementById('agent-context-fill');
+  const label = document.getElementById('agent-context-label');
+  if (meter && fill && label) {
+    fill.style.width = pct + '%';
+    fill.style.background = pct > 85 ? 'var(--accent-red)' : (pct > 65 ? 'var(--accent-orange)' : 'var(--accent-cyan)');
+    label.textContent = `${used.toLocaleString()} / ${numCtx.toLocaleString()} ctx`;
+    meter.title = `Context window usage: ${pct}% — click to open the Token Usage Dashboard`;
+  }
 }
 
 // ============================================================================
@@ -1244,11 +1304,23 @@ Target Files: ${(activeTask.files || []).join(', ') || 'Auto-detect'}
 Acceptance Criteria: ${activeTask.criteria}
 IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", status="in_progress") when starting, and update_task_status(task_id="${activeTask.id}", status="completed", evidence="...") ONLY when verified with validate_changes or diagnostics output.` : '';
 
+  // Active Execution Memory & Decisions (survives context window compaction)
+  const completedActionsBlock = activeExecutionMemory.completedActions.length > 0
+    ? `\n\n## COMPLETED ACTIONS (VERIFIED IN WORKSPACE — DO NOT REPEAT):\n` +
+      activeExecutionMemory.completedActions.slice(-10).map(a => `• ${a}`).join('\n')
+    : '';
+
+  const userDecisionsBlock = activeExecutionMemory.userDecisions.length > 0
+    ? `\n\n## USER DECISIONS & ANSWERS (NEVER RE-ASK):\n` +
+      activeExecutionMemory.userDecisions.slice(-8).map(d => `• User Answer/Decision: "${d.text}"`).join('\n') +
+      `\nCRITICAL: The user has already provided these answers. NEVER re-ask questions or ask for confirmations they already answered.`
+    : '';
+
   // System prompt — deliberately concise. Full tool schemas are transmitted
   // natively via function calling; duplicating them here wastes local-model
   // context on every request.
   const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
-Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${skillsDigest}${promptPackText}${taskPromptSection}
+Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${skillsDigest}${promptPackText}${taskPromptSection}
 
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 
@@ -1262,11 +1334,18 @@ STRATEGY:
 7. Keep calling tools until the task is fully complete. Do not stop midway or ask the user to re-issue work you can do with your tools.
    For LARGE projects: break the work into sequential phases (setup → structure → core files → styling → validation) and complete EVERY phase. Never stop after just scaffolding — write the actual content of every file needed.
 8. Workspace confinement: all paths strictly relative to the workspace root; never access parent directories or delete the workspace root.
-9. Mode immutability: you cannot switch agent modes — the user controls modes.`;
+9. Mode immutability: you cannot switch agent modes — the user controls modes.
+10. Ground-truth memory: Never hallucinate or repeat completed actions. Check the COMPLETED ACTIONS section before acting. Never re-ask questions the user has already answered in USER DECISIONS & ANSWERS.`;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
     updateStatusBarAgentStatus(`Agent running… step ${iteration}/${maxIterations}`);
+
+    // Auto-compact if approaching context limit (especially for 8k/16k models)
+    const currentTokens = estimateTokens(state.conversation.map(m => m.content || '').join(''));
+    if (currentTokens > numCtx * 0.70 && state.conversation.length >= 6) {
+      compactAgentContext(true);
+    }
 
     // Token-budgeted window; ephemeral nudges excluded, tool pairs kept intact
     const contextWindow = buildContextWindow(numCtx);
@@ -2079,6 +2158,26 @@ async function processToolCallWithPolicy(toolCall) {
     });
 
     updateToolBoxStatus(toolBoxId, 'Success', 'success');
+
+    // Record verified completed actions in activeExecutionMemory to eliminate hallucinations
+    let actionSummary = null;
+    if ((name === 'write_file' || name === 'patch_file') && args.path) {
+      actionSummary = `Wrote/modified file: ${args.path}${args.description ? ` (${args.description})` : ''}`;
+    } else if (name === 'run_command' && args.command) {
+      actionSummary = `Executed terminal command: "${args.command}" -> ${output?.exit_code === 0 ? 'Success' : 'Done'}`;
+    } else if (name === 'create_directory' && args.path) {
+      actionSummary = `Created directory: ${args.path}`;
+    } else if (name === 'delete_file' && args.path) {
+      actionSummary = `Deleted file: ${args.path}`;
+    } else if (name === 'validate_changes') {
+      actionSummary = `Ran validation suite: ${output?.success ? 'All Passed' : 'Issues reported'}`;
+    }
+    if (actionSummary) {
+      activeExecutionMemory.completedActions.push(actionSummary);
+      if (activeExecutionMemory.completedActions.length > 12) {
+        activeExecutionMemory.completedActions = activeExecutionMemory.completedActions.slice(-12);
+      }
+    }
 
     // Track modified files in active plan
     if ((name === 'write_file' || name === 'patch_file') && args.path) {

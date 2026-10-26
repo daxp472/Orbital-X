@@ -229,3 +229,34 @@ export async function pickFolder() {
   return null;
 }
 
+// Native Dialog picker for saving files
+export async function pickSaveFile(defaultName = 'chat.md', filterName = 'Markdown', filterExtensions = ['md']) {
+  try {
+    const res = await invoke('pick_save_file', {
+      default_name: defaultName,
+      filter_name: filterName,
+      filter_extensions: filterExtensions
+    });
+    if (res !== undefined) {
+      return res; // either path string or null if cancelled
+    }
+  } catch (e) {
+    console.warn("pick_save_file IPC failed, attempting client plugin dialog fallback:", e);
+  }
+
+  try {
+    const dialog = await import('@tauri-apps/plugin-dialog');
+    if (dialog && dialog.save) {
+      const res = await dialog.save({
+        defaultPath: defaultName,
+        filters: [{ name: filterName, extensions: filterExtensions }]
+      });
+      return res || null;
+    }
+  } catch (e) {
+    console.warn("Tauri dialog plugin save not available:", e);
+  }
+
+  return null;
+}
+

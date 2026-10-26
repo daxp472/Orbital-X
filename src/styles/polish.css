@@ -615,6 +615,46 @@ body.theme-light .settings-sidebar,
   flex-shrink: 0;
 }
 .terminal-split-resizer:hover { background: var(--accent-blue); }
+
+/* Inline terminal prompt — sits inside the pane below the output, so the
+   output scrolls above it and the prompt stays pinned to the bottom
+   (Antigravity / VS Code behaviour). */
+.terminal-inline-prompt {
+  flex-shrink: 0;
+  padding: 2px 10px 6px;
+  background: var(--bg-activity);
+  border-top: 1px solid var(--border-subtle);
+  align-items: center;
+}
+.terminal-inline-prompt .terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  outline: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.terminal-inline-prompt .terminal-input:focus {
+  background: rgba(57, 197, 187, 0.08);
+}
+.terminal-inline-run {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.terminal-inline-run:hover {
+  background: rgba(57, 197, 187, 0.14);
+  color: var(--accent-cyan);
+}
 .term-link {
   color: var(--accent-cyan);
   text-decoration: underline;
@@ -1397,10 +1437,12 @@ body.theme-light .settings-sidebar,
   flex-shrink: 0;
   padding: 0;
   transition: all 0.15s;
+.terminal-share-btn svg {
+  color: var(--text-muted);
+  transition: color 0.15s ease;
 }
-.terminal-share-btn::before {
-  content: '🤖';
-  font-size: 13px;
+.terminal-share-btn:hover svg {
+  color: var(--accent-cyan);
 }
 .terminal-share-btn:hover {
   border-color: var(--accent-cyan);
