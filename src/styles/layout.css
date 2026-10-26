@@ -490,11 +490,15 @@ body {
 }
 
 .bottom-panel.collapsed {
-  height: 35px;
+  height: 35px !important;
 }
 
 .bottom-panel.collapsed .panel-body {
-  display: none;
+  display: none !important;
+}
+
+.bottom-panel:not(.collapsed) {
+  min-height: 160px;
 }
 
 .panel-header {
