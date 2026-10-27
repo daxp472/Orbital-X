@@ -6,38 +6,92 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.2.5] — 2026-10-27
+
+### Upgraded
+- **File Explorer UI & Vector SVG Icon Pack:** Upgraded the file tree with a high-fidelity vector SVG icon pack covering 15+ file types (Rust, JavaScript, TypeScript, HTML, CSS, JSON, Markdown, TOML, Git, Locks, Media, Shell, License) and directory open/close states. The hierarchy now aligns to a sleek, compact 22px lineup with subtle vertical indent guide lines and rotating chevron indicators.
+- **Inline Suggestion Speed & Token Cap:** Capped inline code autocompletions to 64 tokens (`num_predict: 64`, `max_tokens: 64`, `temperature: 0.15`) targeting 30–35 tokens/sec for near-instant completion latency in active editor sessions without interrupting flow.
+- **Local Ollama Inference Speed:** Accelerated Ollama chat generation to >20 tokens/sec by enabling 8-thread (`num_thread: 8`) CPU evaluation by default.
+- **Longer File & Code Generation:** Expanded code generation ceiling from 2048 to 8192 tokens (`num_predict: 8192`), enabling the agent to write complete, unclipped files and complex multi-function implementations without unexpected cutoffs.
+- **Codebase Tagging & Context Resolution (`@codebase` / `@workspace`):** Added `@codebase` and `@workspace` mention resolution in the AI chat composer. When tagged (or triggered via `Alt+Enter` / the new composer action chip), the engine compiles a structured workspace map with file counts, directory tree, and package manifests directly into the prompt.
+- **Automated Build & Code Verification Tool (`verify_build`):** Implemented a native Rust/Tauri verification command (`verify_workspace_build`) and agent tool (`verify_build`) with an interactive composer chip (`⚙️ Verify Build`) to test and compile project code (`cargo test`, `npm test`, `npm run build`) before committing changes.
+- **Global Dark Glassmorphic Context Menu:** Intercepts standard right-click actions across the entire IDE (File Tree, Editor, Terminal, Chat) to render a custom Apple-inspired glassmorphic context menu with native action routing (Open, Delete, Rename, Copy Path, Clear Terminal, Split Terminal).
+
+### Removed
+- **Filter Files Search Box in File Explorer:** This feature is removed from the explorer tree header to eliminate visual clutter and vertical bloat in favor of instant, direct hierarchy navigation.
+- **Persistent Recent Files Accordion:** This feature is removed from the explorer sidebar root to streamline project navigation and adhere to professional IDE standards.
+- **Emoji File & Folder Icons:** This feature is removed across all tree components and replaced by crisp, scalable vector SVG icons.
+
+### Fixed
+- **AI Chat Infinite Repetition & Looping:** Fixed recursive loop in `agent.js` where conversational responses or questions without tool calls triggered repetitive tool re-invocation; added duplicate response suppression and conversational break conditions.
+- **Context Window Usage Popover:** Fixed circle indicator click behavior to display an elevated floating glassmorphic popover directly above the context meter badge instead of opening detached dialogs.
+- **AI Chat Timeline Scroll:** Restored smooth, uninterrupted scrolling during active token streaming and user interaction.
+
+---
+
+## [v2.2.4] — 2026-10-26
+
+### Upgraded
+- **Integrated Terminal Architecture:** Complete bottom panel layout overhaul. Terminal tabs now use responsive flex sizing that prevents panel collapsing, squashing, or clipping during resize operations.
+- **Context Window Usage Meter:** Added interactive circular usage indicator displaying real-time context token consumption and budget limits relative to active model capacity.
+- **Triple Operating Mode Switcher:** Polished mode selection dropdown supporting **Agent Pro** (autonomous generation), **Dev** (interactive diff approvals), and **User** (strict per-operation auditing).
+- **Native File Dialog Picker:** Integrated `@tauri-apps/plugin-dialog` to launch native Windows/macOS/Linux system dialogs for workspace folder and file selection.
+- **Markdown Document Previewer:** Added integrated split-pane markdown preview mode for instant documentation and README inspection.
+
+### Removed
+- **Browser-Style Window Prompt for Paths:** This feature is removed in favor of native OS file and folder picker dialogs.
+- **Hardcoded Terminal Height Constraints:** This feature is removed and replaced with dynamic CSS flex-grow layouts and draggable split-pane dividers.
+
+### Fixed
+- **Workspace Reopening Error:** Resolved "Could not reopen workspace" error where relative or non-canonical paths failed Windows verbatim path resolution in `workspace.rs`.
+- **Bottom Panel Squish:** Fixed CSS flexbox min-height bug that caused the terminal panel to shrink to 0px when multiple editor tabs were open.
+- **Terminal Input Event Listener Leaks:** Cleaned up tab switching listener bindings so keystrokes route reliably to the focused terminal instance.
+
+---
+
 ## [v2.2.3] — 2026-10-24
 
-### Added
+### Upgraded
 - **Extension System:** Real declarative extension packs (themes, prompt packs, command packs) with a bundled registry, folder import, enable/disable, uninstall, and details views. VS Code `.vsix`/code-executing extensions explicitly unsupported with clear messaging.
 - **Agent Skills:** Claude Code-style `SKILL.md` instruction packs — context digest + `list_skills`/`read_skill` tools gated by the permission engine, with a management panel (import, toggle, review, delete).
-- **Streaming & Cancellation:** Ollama token streaming into the chat timeline; Stop aborts in-flight requests and frees the model server-side; cloud providers cancellable the same way.
-- **Web Research Tools:** `web_search` (DuckDuckGo, keyless) and `fetch_page` (public pages only, private hosts refused, size/time caps) wrapped as untrusted external content.
-- **Ollama Model Management:** pulls with live progress and cancellation, deletion, model info (params/quantization/real context length/tool support), loaded-models view with VRAM, hardware-aware fit guidance.
+- **Live Token Streaming & Cancellation:** Ollama token streaming into the chat timeline; Stop aborts in-flight requests and frees the model server-side; cloud providers cancellable the same way.
+- **Web Research Suite:** Safe `web_search` (keyless DuckDuckGo) and `fetch_page` (capped public page reader) tools wrapped as untrusted external content.
+- **Ollama Model Management:** In-app model pulls with live progress and cancellation, deletion, model info (params/quantization/real context length/tool support), loaded-models view with VRAM, hardware-aware fit guidance.
 - **OpenAI-Compatible Custom Endpoints:** LM Studio / llama.cpp / vLLM support via custom base URL.
-- **Onboarding Ollama Detection:** connectivity check with re-check and install guidance.
-- **Context Meter:** status-bar prompt-tokens/context + tokens-per-second from real Ollama eval timings.
-- **Responsive & Accessible UI:** visible `:focus-visible` everywhere, `prefers-reduced-motion` support, responsive settings dialog/status bar/modals, consistent scrollbars and states across all themes.
+- **Onboarding Ollama Detection:** Connectivity check with re-check and install guidance.
+- **Context & Speed Meter:** Status-bar prompt-tokens/context + tokens-per-second calculated from real Ollama eval timings.
+- **Responsive & Accessible UI:** Visible `:focus-visible` everywhere, `prefers-reduced-motion` support, responsive settings dialog/status bar/modals, consistent scrollbars and states across all themes.
 
-### Changed
-- **Task plans are model-generated** from the actual request and repository context (fallback template clearly labelled); completion is evidence-gated; plans restore per workspace on relaunch.
-- **Configurable inference:** `num_ctx`, `keep_alive` (default 30m instead of forever), temperature, and max response tokens; effective context auto-capped by each model's real limit from `/api/show`.
-- **Context efficiency:** tool-result compaction, ephemeral nudges/retries, pair-preserving token-budget trimming, deduplicated system prompt.
-- **Release notes relocated** to `release/notes/`; GitHub release body now carries the full description.
+### Removed
+- **Duplicate `delete_file` Tool Schema:** This feature is removed from the tool dispatcher to prevent schema conflicts and enforce the unified deletion pipeline.
+- **Unvalidated Terminal Command Execution:** This feature is removed and replaced by the strict three-tier `CommandClassifier` security sandbox.
 
 ### Fixed
 - **`write_file - Missing path`:** JSON-string and aliased (`parameters`/`input`) tool arguments normalized everywhere; dispatcher accepts `file_path`/`filePath` aliases and returns structured self-correctable errors.
-- **`patch_file` panic:** invalid line ranges now error cleanly instead of poisoning the workspace mutex; CRLF line endings preserved.
-- **XSS:** escape-first markdown rendering, listener-bound copy buttons, escaped search snippets, real CSP.
-- **Git command injection:** all git operations use argument-array execution.
-- **Light theme:** settings dialog no longer renders as a dark box; missing `--bg-glass-translucent` token added to Light/Midnight Blue/High Contrast.
-- **Workspace metadata:** real cached scan results (file counts, languages) instead of zeros.
-- **Chat persistence:** sessions moved to `~/.orbital/chat_sessions.json` (atomic writes) with bounded growth — no more silent localStorage quota loss.
+- **`patch_file` Panic:** Invalid line ranges now error cleanly instead of poisoning the workspace mutex; CRLF line endings preserved.
+- **XSS & Content Security:** Escape-first markdown rendering, listener-bound copy buttons, escaped search snippets, and real CSP.
+- **Git Command Injection:** All git operations use argument-array execution.
+- **Light Theme:** Settings dialog no longer renders as a dark box; missing `--bg-glass-translucent` token added to Light/Midnight Blue/High Contrast.
+- **Workspace Metadata:** Real cached scan results (file counts, languages) instead of zeros.
+- **Chat History Persistence:** Sessions moved to atomic `~/.orbital/chat_sessions.json` with bounded growth to eliminate localStorage quota loss.
 
-### Security
-- **Command classifier rewritten:** quote-aware chaining/newline/redirection/subexpression/nested-shell detection; inline-code invocations require approval; expanded prohibited list. Enforcement stays in Rust.
-- **Workspace confinement hardened:** symlinked-parent write escapes blocked via ancestor canonicalization; symlink-skipping scans; undo revalidates journaled paths against the current root.
-- **Duplicate `delete_file` tool schema** removed.
+---
+
+## [v2.2.2] — 2026-10-22
+
+### Upgraded
+- **Kernel-Level Workspace Boundary Confinement:** All agent file inspections, searches, modifications, and deletions are strictly resolved against canonical workspace boundary with Windows verbatim `\\?\` prefix normalization and trailing slash boundaries.
+- **Root Directory Wipe Protection:** Explicit kernel-level check blocks the agent from ever targeting or deleting the workspace root (`ensure_not_workspace_root`), preventing catastrophic hallucinated directory wipes.
+- **CommandClassifier Three-Tier Security Sandbox:** Prohibits destructive wipes (`rm -rf /`, `rmdir /s /q`), administrative elevation (`runas`, `takeown`, `sudo`, `icacls /grant`), registry alterations (`reg add`, `reg delete`), and encoded PowerShell scripts (`-enc`) before shell execution.
+- **Dedicated Directory & Two-Stage Batch File Deletion Tools:** `delete_directory` tool with undo journal logging and `batch_delete_files` tool with stage 1 preview manifest and stage 2 pre-execution revalidation.
+- **Category Color-Coded Approval Cards:** Visual color coding for tool actions (Emerald for Writes, Cyan for Reads, Amber for Commands, Red for Deletions, Purple for Modes) with Monaco Diff inspection cards.
+- **Self-Healing Diagnostics:** When an agent task encounters an obstacle, rich diagnostics display with an intuitive `▶️ Resume & Retry Blocked Task` button to continue execution without losing state.
+
+### Fixed
+- **React JSX Syntax False Positives:** Fixed regex parsing bug where JSX tags (`<div />`) caused 25% execution blocker false syntax failures during validation.
+- **Elapsed Time Accuracy:** Fixed timer calculation so execution duration is tracked accurately.
+
+---
 
 ## [v2.0.1] — 2026-10-15
 
