@@ -295,6 +295,15 @@ class TerminalSession {
     return this.shell.split(/[\\/]/).pop() || 'shell';
   }
 
+  // VS Code / Antigravity show the *folder* name as the terminal tab title,
+  // not the shell name — e.g. "Test" instead of "2: Command Prompt".
+  tabTitle() {
+    const cwd = (this.cwd || state.workspace.rootPath || '').replace(/[\\/]+$/, '');
+    const parts = cwd.split(/[\\/]/).filter(Boolean);
+    const folder = parts[parts.length - 1] || '';
+    return folder || this.profileName();
+  }
+
   async startBackendShell() {
     try {
       const res = await invoke('create_interactive_terminal', {
@@ -718,7 +727,7 @@ function clearActiveTerminal() {
 
 // --- rendering ---------------------------------------------------------------
 
-function renderPanes() {
+export function renderPanes() {
   renderPaneTabs('A');
   renderPaneTabs('B');
   renderBufferFor(activeInPane('A'), 'A');
@@ -747,7 +756,7 @@ function renderPaneTabs(pane) {
     item.className = `terminal-tab ${isActive ? 'active' : ''}`;
     item.innerHTML = `
       <span class="terminal-shell-dot" style="background:${shellDot(term.shell)};" title="${term.name}"></span>
-      <span class="terminal-tab-label">${term.id}: ${term.name}</span>
+      <span class="terminal-tab-label" title="${term.name} · ${term.cwd || ''}">${term.id}: ${term.tabTitle()}</span>
       <span class="terminal-tab-close" title="Close terminal">✕</span>
     `;
     item.addEventListener('click', (e) => {
@@ -902,16 +911,16 @@ function updatePromptDisplay() {
     if (!promptLabel) continue;
     const active = activeInPane(pane);
     if (!active) { promptLabel.textContent = '>'; continue; }
-    const cwd = active.cwd || state.workspace.rootPath || '';
-    const short = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).slice(-2).join('\\');
+    const cwd = (active.cwd || state.workspace.rootPath || '').replace(/[\\/]+$/, '');
     const isCmd = /cmd\.exe|cmd$/i.test(active.shell || '');
     const isBash = /bash|sh/i.test(active.shell || '');
+    // Full working-directory path in the prompt — exactly like VS Code / Antigravity
     if (isCmd) {
-      promptLabel.textContent = short ? `${short}>` : 'CMD>';
+      promptLabel.textContent = cwd ? `${cwd}>` : 'CMD>';
     } else if (isBash) {
-      promptLabel.textContent = short ? `${short}$` : '$';
+      promptLabel.textContent = cwd ? `${cwd}$` : '$';
     } else {
-      promptLabel.textContent = short ? `PS ${short}>` : 'PS>';
+      promptLabel.textContent = cwd ? `PS ${cwd}>` : 'PS>';
     }
   }
 }
