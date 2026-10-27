@@ -471,51 +471,93 @@
   border-radius: var(--radius-xs);
 }
 
-/* File Tree */
+/* File Tree - Compact Antigravity / VS Code layout */
 .tree-node {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
-  padding: 4px var(--space-8);
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
+  gap: 6px;
+  height: 22px;
+  line-height: 22px;
+  padding: 0 6px;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  color: #cbd5e1;
   cursor: pointer;
-  border-radius: var(--radius-xs);
+  border-radius: 4px;
   position: relative;
-  transition: all var(--trans-fast);
+  user-select: none;
+  transition: background 0.08s ease, color 0.08s ease;
+  white-space: nowrap;
 }
 
 .tree-node:hover {
-  background-color: var(--bg-hover);
-  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
 }
 
 .tree-node.selected {
-  background-color: var(--bg-active);
-  color: var(--text-primary);
+  background-color: rgba(56, 189, 248, 0.16);
+  color: #ffffff;
   font-weight: 500;
 }
 
+.tree-subtree {
+  position: relative;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  margin-left: 10px;
+}
+
 .tree-icon {
-  font-size: 13px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   width: 16px;
   height: 16px;
+  flex-shrink: 0;
+}
+
+.tree-icon .tree-svg-icon {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .tree-arrow {
-  width: 12px;
-  height: 12px;
-  display: flex;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
-  transition: transform var(--trans-fast);
+  color: var(--text-muted, #94a3b8);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.tree-arrow.expanded {
+.tree-arrow svg {
+  width: 11px;
+  height: 11px;
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.tree-arrow.expanded svg {
   transform: rotate(90deg);
+}
+
+.tree-arrow.leaf {
+  width: 14px;
+  visibility: hidden;
+}
+
+.tree-label {
+  font-size: 12px;
+  color: #cbd5e1;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.tree-node:hover .tree-label {
+  color: #ffffff;
 }
 
 /* Empty State */
@@ -2001,48 +2043,89 @@ input:checked + .settings-toggle-slider {
   background-color: var(--accent-cyan);
 }
 
-/* File Tree Right-Click Context Menu */
+/* Unified Apple / Antigravity Dark Glassmorphic Context Menu */
+.orbital-context-menu,
 .tree-context-menu {
   position: fixed;
-  background-color: var(--bg-surface, #252526);
-  border: 1px solid var(--border-color, #454545);
-  border-radius: var(--radius-sm, 4px);
-  padding: 4px 0;
-  min-width: 170px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-  z-index: 9999;
-  font-family: inherit;
+  z-index: 100000;
+  background: rgba(20, 22, 28, 0.94);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 5px;
+  min-width: 195px;
+  color: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
   font-size: 12px;
-  color: var(--text-primary);
+  user-select: none;
   display: flex;
   flex-direction: column;
-  user-select: none;
+  animation: orbitalMenuFadeIn 0.1s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+@keyframes orbitalMenuFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.orbital-context-menu-item,
 .tree-context-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  justify-content: space-between;
+  padding: 5px 10px;
+  border-radius: 5px;
   cursor: pointer;
-  color: var(--text-primary);
-  transition: background var(--trans-fast, 0.1s);
+  transition: background 0.08s ease, color 0.08s ease;
+  color: #e2e8f0;
 }
 
+.orbital-context-menu-item:hover,
 .tree-context-menu-item:hover {
-  background-color: var(--bg-hover, #04395e);
+  background: rgba(56, 189, 248, 0.18);
   color: #ffffff;
 }
 
+.orbital-context-menu-item.danger:hover,
 .tree-context-menu-item.danger:hover {
-  background-color: var(--accent-red, #f85149);
-  color: #ffffff;
+  background: rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
 }
 
+.orbital-context-menu-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.orbital-context-menu-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orbital-context-menu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: #94a3b8;
+}
+
+.orbital-context-menu-shortcut {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-left: 18px;
+  font-family: var(--font-mono, monospace);
+}
+
+.orbital-context-menu-separator,
 .tree-context-menu-separator {
   height: 1px;
-  background-color: var(--border-subtle, #333333);
-  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 6px;
 }
 
 /* Tab Unsaved Dot Indicator */

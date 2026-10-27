@@ -254,6 +254,22 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "verify_build",
+                "description": "Test and verify that the built part/code compiles and builds correctly without errors. Runs cargo check, npm run build, tsc, or auto-detected build system. Returns compiler output, exit code, errors, and warnings.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Optional build command override (e.g. 'npm run build', 'cargo check'). Leave empty for automatic detection."
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "git_status",
                 "description": "Get the current git repository status: current branch, staged/unstaged changes, untracked files. Use to understand what has changed before committing.",
                 "parameters": {

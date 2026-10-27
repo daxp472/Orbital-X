@@ -341,18 +341,24 @@ body {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text-primary);
-  text-transform: uppercase;
   cursor: pointer;
-  background: var(--bg-sidebar);
-  border-top: 1px solid var(--border-subtle);
-  letter-spacing: 0.4px;
+  background: transparent;
+  user-select: none;
+  letter-spacing: 0.2px;
 }
 
 .sidebar-section-header:hover {
   color: var(--text-primary-bright);
+}
+
+.sidebar-section-header .tree-root-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted, #94a3b8);
+  transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ==========================================================================

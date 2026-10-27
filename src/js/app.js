@@ -19,6 +19,7 @@ import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
 import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
+import { initUnifiedContextMenu } from './services/context-menu.js';
 
 window.showToast = showToast;
 
@@ -102,6 +103,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initGlobalShortcuts();
   initWindowControls();
   initShortcutsHelpOverlay();
+  initUnifiedContextMenu();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
