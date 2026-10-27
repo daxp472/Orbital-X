@@ -62,41 +62,101 @@ export function getTypedFileIcon(filename) {
 }
 import { showToast } from '../services/notifications.js';
 
-export function getFileIcon(filename, isDir, isExpanded) {
+export function getFileSvgIcon(filename, isDir, isExpanded) {
   if (isDir) {
-    return isExpanded ? '📂' : '📁';
+    const lower = (filename || '').toLowerCase();
+    if (lower === '.github') {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" class="tree-svg-icon" style="color: #94a3b8;"><path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>`;
+    }
+    if (lower === '.agents' || lower === '.claude' || lower === '.orbital') {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#c084fc" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="tree-svg-icon"><circle cx="8" cy="8" r="5"/><path d="M8 5v6M5 8h6"/></svg>`;
+    }
+    if (lower === 'src' || lower === 'scripts') {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12a.5.5 0 0 0 .353.147H13A1.5 1.5 0 0 1 14.5 4.7v7.8a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5V3z" fill="#0284c7" opacity="0.85"/><path d="M5.5 8.5L4 10l1.5 1.5M10.5 8.5L12 10l-1.5 1.5" stroke="#fff" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    if (lower === 'node_modules') {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" class="tree-svg-icon"><path d="M8 1.5L2.5 4.5v7L8 14.5l5.5-3v-7L8 1.5z"/><path d="M2.5 4.5L8 7.5l5.5-3M8 7.5v7"/></svg>`;
+    }
+    if (lower === 'target' || lower === 'dist' || lower === 'release' || lower === 'build') {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12a.5.5 0 0 0 .353.147H13A1.5 1.5 0 0 1 14.5 4.7v7.8a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5V3z" fill="#ec4899" opacity="0.85"/><circle cx="8" cy="8.5" r="2.5" stroke="#fff" stroke-width="1"/></svg>`;
+    }
+    if (isExpanded) {
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon folder-svg"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12a.5.5 0 0 0 .353.147H13A1.5 1.5 0 0 1 14.5 4.7v1.8H2V3.5a.5.5 0 0 1 .5-.5z" fill="#94a3b8"/><path d="M1.5 6.5h13a.5.5 0 0 1 .49.6l-1.3 6.5a1 1 0 0 1-.98.8H3.29a1 1 0 0 1-.98-.8l-1.3-6.5a.5.5 0 0 1 .49-.6z" fill="#cbd5e1" stroke="#64748b" stroke-width="0.6"/></svg>`;
+    }
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon folder-svg"><path d="M1.5 3A1.5 1.5 0 0 1 3 1.5h2.879a1.5 1.5 0 0 1 1.06.44l1.122 1.12a.5.5 0 0 0 .353.147H13A1.5 1.5 0 0 1 14.5 4.7v7.8a1.5 1.5 0 0 1-1.5 1.5H3A1.5 1.5 0 0 1 1.5 12.5V3z" fill="#8094ad" stroke="#64748b" stroke-width="0.5"/><path d="M2.5 4.8h11v7.2a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V4.8z" fill="#94a3b8" opacity="0.3"/></svg>`;
   }
 
-  const ext = filename.split('.').pop().toLowerCase();
+  const ext = (filename || '').split('.').pop().toLowerCase();
+  const lower = (filename || '').toLowerCase();
+
+  if (lower.startsWith('license')) {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><circle cx="8" cy="8" r="6" stroke="#eab308" stroke-width="1.2"/><path d="M8 5v4M8 11h.01" stroke="#eab308" stroke-width="1.4" stroke-linecap="round"/></svg>`;
+  }
+  if (lower === '.gitignore' || lower === '.gitmodules' || lower === '.gitattributes') {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="8" y="1" width="8" height="8" rx="1.5" transform="rotate(45 8 1)" fill="#ef4444"/><circle cx="8" cy="6.6" r="1.3" fill="#fff"/><circle cx="5.6" cy="9" r="1.3" fill="#fff"/><circle cx="10.4" cy="9" r="1.3" fill="#fff"/></svg>`;
+  }
+  if (lower.endsWith('.lock') || lower === 'cargo.lock' || lower === 'package-lock.json') {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="3.5" y="6.5" width="9" height="7.5" rx="1.5" fill="#64748b"/><path d="M5.5 6.5V4.5a2.5 2.5 0 0 1 5 0v2" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="10" r="1.2" fill="#fff"/></svg>`;
+  }
+
   switch (ext) {
+    case 'rs':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><circle cx="8" cy="8" r="6" stroke="#ea580c" stroke-width="1.4"/><circle cx="8" cy="8" r="2.2" fill="#ea580c"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="#ea580c" stroke-width="1.3" stroke-linecap="round"/></svg>`;
     case 'js':
     case 'mjs':
     case 'cjs':
-      return '🟨';
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#eab308"/><text x="4" y="11.5" font-family="-apple-system, system-ui, sans-serif" font-size="8.5" font-weight="900" fill="#000">JS</text></svg>`;
     case 'ts':
+    case 'mts':
+    case 'cts':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="#3b82f6"/><text x="4" y="11.5" font-family="-apple-system, system-ui, sans-serif" font-size="8.5" font-weight="900" fill="#fff">TS</text></svg>`;
     case 'tsx':
-      return '🔷';
-    case 'rs':
-      return '🟠';
-    case 'py':
-      return '🐍';
+    case 'jsx':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><ellipse cx="8" cy="8" rx="6.5" ry="2.5" stroke="#06b6d4" stroke-width="1.2" transform="rotate(30 8 8)"/><ellipse cx="8" cy="8" rx="6.5" ry="2.5" stroke="#06b6d4" stroke-width="1.2" transform="rotate(90 8 8)"/><ellipse cx="8" cy="8" rx="6.5" ry="2.5" stroke="#06b6d4" stroke-width="1.2" transform="rotate(150 8 8)"/><circle cx="8" cy="8" r="1.3" fill="#06b6d4"/></svg>`;
     case 'html':
     case 'htm':
-      return '🌐';
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M2.5 1.5h11l-1 11.5L8 14.5l-4.5-1.5-1-11.5z" fill="#f97316" opacity="0.2" stroke="#f97316" stroke-width="1.2"/><path d="M5.5 6L4 8l1.5 2M10.5 6l1.5 2-1.5 2M9 5l-2 6" stroke="#f97316" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     case 'css':
     case 'scss':
+    case 'sass':
     case 'less':
-      return '🎨';
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M2.5 1.5h11l-1 11.5L8 14.5l-4.5-1.5-1-11.5z" fill="#8b5cf6" opacity="0.2" stroke="#8b5cf6" stroke-width="1.2"/><text x="4.5" y="11" font-family="monospace" font-size="8" font-weight="900" fill="#a78bfa">#</text></svg>`;
     case 'json':
-      return '📋';
+    case 'jsonc':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><text x="2" y="12" font-family="monospace" font-size="11" font-weight="800" fill="#eab308">{ }</text></svg>`;
     case 'md':
     case 'markdown':
-      return '📝';
-    case 'toml': return '⚙️';
-    case 'lock': return '🔒';
-    case 'gitignore': return '👁️';
-    default: return '📄';
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="1.5" y="3" width="13" height="10" rx="1.5" stroke="#38bdf8" stroke-width="1.2"/><path d="M4 10V6l2 2 2-2v4M12 8.5l-1.5 1.5L9 8.5M10.5 6v4" stroke="#38bdf8" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case 'toml':
+    case 'yaml':
+    case 'yml':
+    case 'conf':
+    case 'config':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#a855f7" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" class="tree-svg-icon"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M3.75 3.75l1.06 1.06M11.19 11.19l1.06 1.06M3.75 12.25l1.06-1.06M11.19 4.81l1.06-1.06"/></svg>`;
+    case 'py':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M8 1.5a3.5 3.5 0 0 0-3.5 3.5v1.5H8V8H2.5A2.5 2.5 0 0 0 0 10.5" stroke="#3b82f6" stroke-width="1.2"/><path d="M8 14.5a3.5 3.5 0 0 0 3.5-3.5V9.5H8V8h5.5A2.5 2.5 0 0 0 16 5.5" stroke="#eab308" stroke-width="1.2"/></svg>`;
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'svg':
+    case 'webp':
+    case 'ico':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="2" y="2.5" width="12" height="11" rx="2" stroke="#c084fc" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.2" fill="#c084fc"/><path d="M2.5 11.5l3.5-3.5 2.5 2.5 3-3 2 2" stroke="#c084fc" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+    case 'cmd':
+    case 'bat':
+    case 'ps1':
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="2" y="2.5" width="12" height="11" rx="2" stroke="#22c55e" stroke-width="1.2"/><path d="M4.5 5.5l2.5 2.5-2.5 2.5M8 10.5h3.5" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    default:
+      return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><path d="M3.5 2.5A1 1 0 0 1 4.5 1.5h5.586a1 1 0 0 1 .707.293l2.414 2.414a1 1 0 0 1 .293.707V13.5a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-11z" stroke="#94a3b8" stroke-width="1.2"/><polyline points="10 1.5 10 4.5 13 4.5" stroke="#94a3b8" stroke-width="1.2"/></svg>`;
   }
+}
+
+export function getFileIcon(filename, isDir, isExpanded) {
+  return getFileSvgIcon(filename, isDir, isExpanded);
 }
 
 export async function loadWorkspace(rootPath, cachedMeta = null) {
@@ -157,18 +217,20 @@ function renderTree(treeNode, container) {
 function buildNodeElement(node, parentElem, indentLevel) {
   const nodeRow = document.createElement('div');
   nodeRow.className = 'tree-node';
-  nodeRow.style.paddingLeft = `${indentLevel * 14 + 10}px`;
+  nodeRow.style.paddingLeft = `${indentLevel * 14 + 8}px`;
 
   let isExpanded = false;
 
   const arrow = document.createElement('span');
   arrow.className = `tree-arrow ${node.is_directory ? '' : 'leaf'}`;
-  arrow.textContent = node.is_directory ? '▶' : '';
+  arrow.innerHTML = node.is_directory
+    ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tree-chevron-svg"><polyline points="6 4 10 8 6 12"></polyline></svg>'
+    : '';
   nodeRow.appendChild(arrow);
 
   const icon = document.createElement('span');
   icon.className = 'tree-icon';
-  icon.textContent = getFileIcon(node.name, node.is_directory, isExpanded);
+  icon.innerHTML = getFileSvgIcon(node.name, node.is_directory, isExpanded);
   nodeRow.appendChild(icon);
 
   nodeRow.dataset.isDir = node.is_directory ? 'true' : 'false';
@@ -187,13 +249,13 @@ function buildNodeElement(node, parentElem, indentLevel) {
   let childContainer = null;
   if (node.is_directory && node.children && node.children.length > 0) {
     childContainer = document.createElement('div');
+    childContainer.className = 'tree-subtree';
     childContainer.style.display = 'none';
     node.children.forEach(c => buildNodeElement(c, childContainer, indentLevel + 1));
     parentElem.appendChild(childContainer);
   }
 
   nodeRow.dataset.path = node.path;
-  // L1: ctrl/shift multi-select bookkeeping happens in the click handler below (appended)
   nodeRow.classList.add('tree-node-row');
 
   // A5: single click = preview tab; double click = permanent tab
@@ -210,7 +272,7 @@ function buildNodeElement(node, parentElem, indentLevel) {
         isExpanded = !isExpanded;
         childContainer.style.display = isExpanded ? 'block' : 'none';
         arrow.classList.toggle('expanded', isExpanded);
-        icon.textContent = getFileIcon(node.name, true, isExpanded);
+        icon.innerHTML = getFileSvgIcon(node.name, true, isExpanded);
       }
       return;
     }
@@ -720,7 +782,7 @@ function explorerHost() {
   return document.getElementById('view-explorer');
 }
 
-/** Renders Recents + Favorites + filter above the tree (L2/L3/L1). */
+/** Renders optional filter bar above tree when active (L2/L3/L1). */
 export function renderExplorerTopSections() {
   const host = explorerHost();
   if (!host) return;
@@ -732,66 +794,28 @@ export function renderExplorerTopSections() {
     if (treeContainer) host.insertBefore(top, treeContainer);
     else host.appendChild(top);
   }
+
+  // Clean, uncluttered tree: keep top section hidden unless an active filter is engaged
+  if (!treeFilter) {
+    top.innerHTML = '';
+    top.style.display = 'none';
+    return;
+  }
+
+  top.style.display = 'block';
   top.innerHTML = '';
 
-  // Filter input (L1)
   const filter = document.createElement('input');
   filter.type = 'text';
   filter.className = 'input-text';
   filter.placeholder = 'Filter files…';
   filter.value = treeFilter;
-  filter.style.cssText = 'width: calc(100% - 16px); margin: 6px 8px 4px; font-size: 11px;';
+  filter.style.cssText = 'width: calc(100% - 16px); margin: 4px 8px; font-size: 11px;';
   filter.addEventListener('input', () => {
     treeFilter = filter.value.trim().toLowerCase();
     applyTreeFilter();
   });
   top.appendChild(filter);
-
-  const section = (title, items, onOpen, onClear, isFav) => {
-    if (items.length === 0) return;
-    const wrap = document.createElement('details');
-    wrap.style.cssText = 'margin: 2px 8px 6px; font-size: 11px;';
-    const summary = document.createElement('summary');
-    summary.style.cssText = 'font-weight: 600; color: var(--text-secondary); cursor: pointer; user-select: none; padding: 2px 0;';
-    summary.textContent = `${title} (${items.length})`;
-    wrap.appendChild(summary);
-    for (const item of items) {
-      const row = document.createElement('div');
-      row.style.cssText = 'display: flex; align-items: center; gap: 6px; padding: 2px 4px; border-radius: 4px; cursor: pointer; color: var(--text-primary);';
-      const typed = getTypedFileIcon(item.name || item.path.split('/').pop());
-      row.innerHTML = `
-        <span style="color:${typed.c}; font-family: var(--font-mono); font-size: 9px; font-weight: 700; width: 24px; flex-shrink: 0;">${typed.t}</span>
-        <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtmlAttr(item.path)}">${escapeHtmlAttr(item.name || item.path.split('/').pop())}</span>
-        ${isFav ? '<button class="git-icon-btn danger" title="Remove from Favorites" style="width: 16px; height: 16px; font-size: 10px;">★</button>' : ''}`;
-      row.addEventListener('click', async (e) => {
-        if (e.target.closest('.git-icon-btn')) {
-          favorites = favorites.filter(f => f.path !== item.path);
-          await saveFavorites();
-          renderExplorerTopSections();
-          return;
-        }
-        try {
-          const fileData = await invoke('read_file', { path: item.path });
-          if (fileData.is_binary) return;
-          pushRecentFile(item.path, item.name || item.path.split('/').pop());
-          openFileInTab(fileData);
-        } catch (err) { showToast(`Could not open: ${err}`, 'error', 2600); }
-      });
-      wrap.appendChild(row);
-    }
-    if (onClear) {
-      const clear = document.createElement('button');
-      clear.className = 'btn btn-secondary btn-sm';
-      clear.textContent = 'Clear Recents';
-      clear.style.cssText = 'margin: 2px 0 4px; padding: 1px 8px; font-size: 9.5px;';
-      clear.addEventListener('click', () => { recentFiles = []; try { localStorage.setItem('orbital_recent_files', '[]'); } catch (e) {} renderExplorerTopSections(); });
-      wrap.appendChild(clear);
-    }
-    top.appendChild(wrap);
-  };
-
-  section('⭐ Favorites', favorites.map(f => ({ path: f.path, name: f.name })), null, null, true);
-  section('🕘 Recent', recentFiles.map(r => ({ path: r.path, name: r.name })), null, true, false);
 }
 
 function escapeHtmlAttr(s) {

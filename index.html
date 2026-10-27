@@ -306,7 +306,9 @@
 
           <!-- Root Project Folder Header -->
           <div class="sidebar-section-header" id="sidebar-root-header">
-            <span style="font-size: 10px;">∨</span>
+            <svg class="tree-root-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+              <polyline points="4 6 8 10 12 6"></polyline>
+            </svg>
             <span id="sidebar-root-name">ORBITAL X</span>
           </div>
 
@@ -670,6 +672,12 @@
         <div class="agent-composer">
           <!-- Developer Action Chips -->
           <div class="composer-chips-bar" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none;">
+            <button class="action-chip" id="chip-tag-codebase" title="Tag entire codebase context and send (Alt+Enter)">
+              <span style="color: var(--accent-cyan);">🌐</span> @codebase
+            </button>
+            <button class="action-chip" id="chip-verify-build" title="Test and verify built code/project compilation">
+              <span style="color: var(--accent-green);">⚙️</span> Verify Build
+            </button>
             <button class="action-chip" id="chip-plan" title="Generate structured implementation plan (/plan)">
               <span style="color: var(--accent-purple);">📋</span> Plan
             </button>

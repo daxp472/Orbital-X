@@ -199,6 +199,46 @@ async fn test_provider_connection(
 }
 
 #[tauri::command]
+async fn verify_workspace_build(
+    command_override: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let (cmd, cwd) = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        let root = ws.get_root().ok_or("No workspace open")?;
+        let cwd_str = root.to_string_lossy().to_string();
+
+        let chosen = if let Some(oc) = command_override {
+            oc
+        } else if root.join("Cargo.toml").exists() {
+            "cargo check --message-format=short 2>&1".to_string()
+        } else if root.join("package.json").exists() {
+            let pkg_str = std::fs::read_to_string(root.join("package.json")).unwrap_or_default();
+            if pkg_str.contains("\"build\"") {
+                "npm run build 2>&1".to_string()
+            } else if root.join("tsconfig.json").exists() {
+                "npx tsc --noEmit 2>&1".to_string()
+            } else {
+                "node --check index.js 2>&1".to_string()
+            }
+        } else if root.join("pyproject.toml").exists() || root.join("setup.py").exists() {
+            "python -m py_compile **/*.py 2>&1".to_string()
+        } else {
+            "echo [Build Verify] No recognized build system found in workspace.".to_string()
+        };
+        (chosen, cwd_str)
+    };
+
+    let res = TerminalService::run_command(&cmd, &cwd, 90).await?;
+    Ok(serde_json::json!({
+        "command": cmd,
+        "success": res.success,
+        "output": format!("{}{}", res.stdout, res.stderr),
+        "exit_code": res.exit_code
+    }))
+}
+
+#[tauri::command]
 fn evaluate_tool_policy(
     tool_name: String,
     target: String,
@@ -607,6 +647,10 @@ async fn execute_tool(
                 "output": format!("{}{}", res.stdout, res.stderr),
                 "exit_code": res.exit_code
             }))
+        }
+        "verify_build" | "validate_project_build" => {
+            let override_cmd = arguments.get("command").and_then(|c| c.as_str()).map(|s| s.to_string());
+            verify_workspace_build(override_cmd, state).await
         }
         "read_multiple_files" => {
             let paths_raw = arguments.get("paths").and_then(|p| p.as_array()).ok_or("Missing paths array")?;
@@ -1703,7 +1747,8 @@ pub fn run() {
             read_skill,
             install_skill_from_folder,
             delete_skill,
-            set_skill_enabled
+            set_skill_enabled,
+            verify_workspace_build
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

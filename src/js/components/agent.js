@@ -104,6 +104,21 @@ export function initAgent() {
     handleSend();
   });
 
+  document.getElementById('chip-verify-build')?.addEventListener('click', () => {
+    inputElem.value = "Validate project build and verify code correctness.";
+    updateTokenEstimate(inputElem.value);
+    handleSend();
+  });
+
+  document.getElementById('chip-tag-codebase')?.addEventListener('click', () => {
+    const cur = inputElem.value.trim();
+    if (!cur.includes('@codebase') && !cur.includes('@workspace')) {
+      inputElem.value = cur ? `@codebase ${cur}` : '@codebase Review codebase architecture and project status';
+    }
+    updateTokenEstimate(inputElem.value);
+    handleSend();
+  });
+
   document.getElementById('chip-review')?.addEventListener('click', () => {
     document.getElementById('btn-review-changes')?.click();
   });
@@ -214,6 +229,16 @@ function initChatDropZone() {
     inputElem.addEventListener('keydown', (e) => {
       // H3: when a slash/@ dropdown is open, it owns the keyboard
       if (composerDropdownKeydown(e, inputElem)) return;
+      // Task 5: Tag entire codebase on Ctrl+Alt+Enter (or Alt+Enter) and send
+      if (e.altKey && e.key === 'Enter') {
+        e.preventDefault();
+        const cur = inputElem.value.trim();
+        if (!cur.includes('@codebase') && !cur.includes('@workspace')) {
+          inputElem.value = cur ? `@codebase ${cur}` : '@codebase Review codebase architecture and project status';
+        }
+        handleSend();
+        return;
+      }
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -1165,7 +1190,8 @@ export async function dispatchAgentTurn(messages, { onToken, onStatus, modelOver
     numCtx: provider === 'ollama' ? numCtx : undefined,
     keepAlive: provider === 'ollama' ? (s.keepAlive || '30m') : undefined,
     temperature: Number.isFinite(tempRaw) ? tempRaw : undefined,
-    numPredict: Number.isFinite(npRaw) ? npRaw : undefined,
+    // Task 1: Enable agent to write long files without premature token cutoffs
+    numPredict: Number.isFinite(npRaw) ? npRaw : 8192,
   };
 
   const turnId = 'turn_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
@@ -1199,46 +1225,96 @@ export async function dispatchAgentTurn(messages, { onToken, onStatus, modelOver
 }
 
 // ============================================================================
-// @file mention resolution — attach real file content to the prompt
+// @file & @codebase mention resolution — attach real context to the prompt
 // ============================================================================
 
 const MENTION_LINE_CAP = 200;
 
 async function resolveFileMentions(promptText) {
-  const mentions = [...new Set((promptText.match(/@([^\s@:,.(){}\[\]'"`]+)/g) || [])
-    .map(m => m.slice(1))
-    .filter(t => t.length > 2 && t.includes('.') && !t.startsWith('http')))];
-  if (mentions.length === 0) return promptText;
+  let enriched = promptText;
 
-  const attachments = [];
-  for (const token of mentions.slice(0, 5)) {
+  // Task 5: Support tagging entire codebase with @codebase or @workspace
+  if (/@(codebase|workspace)\b/i.test(enriched)) {
     try {
-      let fileData = null;
-      try {
-        fileData = await invoke('read_file', { path: token });
-      } catch (e) {
-        // Not a direct path — try a filename search fallback
-        const matches = await invoke('search_workspace', { query: token, maxResults: 1 });
-        if (matches && matches[0] && matches[0].file) {
-          fileData = await invoke('read_file', { path: matches[0].file });
+      const rootMeta = await invoke('get_workspace_meta').catch(() => null);
+      const tree = await invoke('get_file_tree', { max_depth: 3 }).catch(() => null);
+
+      const fileList = [];
+      function flattenTree(node, depth = 0) {
+        if (!node || depth > 3) return;
+        const prefix = '  '.repeat(depth);
+        if (node.is_directory) {
+          fileList.push(`${prefix}📁 ${node.name}/`);
+          if (node.children) {
+            node.children.slice(0, 30).forEach(c => flattenTree(c, depth + 1));
+          }
+        } else {
+          fileList.push(`${prefix}📄 ${node.name}`);
         }
       }
-      if (fileData && !fileData.is_binary && fileData.content) {
-        const lines = fileData.content.split('\n');
-        const truncated = lines.length > MENTION_LINE_CAP;
-        const body = lines.slice(0, MENTION_LINE_CAP).join('\n');
-        attachments.push(
-          `### File: ${fileData.relative_path || token}${truncated ? ` (first ${MENTION_LINE_CAP} of ${lines.length} lines)` : ''}\n${body}`
-        );
+      if (tree) flattenTree(tree);
+
+      let manifestSnippet = '';
+      try {
+        const pkg = await invoke('read_file', { path: 'package.json' });
+        if (pkg && pkg.content) {
+          const parsed = JSON.parse(pkg.content);
+          manifestSnippet = `\n[Dependencies: ${Object.keys(parsed.dependencies || {}).join(', ') || 'none'}] [Scripts: ${Object.keys(parsed.scripts || {}).join(', ')}]`;
+        }
+      } catch (e) {
+        try {
+          const cargo = await invoke('read_file', { path: 'Cargo.toml' });
+          if (cargo && cargo.content) {
+            manifestSnippet = `\n[Cargo package config detected]`;
+          }
+        } catch (_) {}
       }
+
+      const codebaseDigest = `\n\n--- @codebase Workspace Context ---\n` +
+        `Workspace: ${rootMeta?.name || 'Workspace'}\n` +
+        `Root: ${rootMeta?.root_path || state.workspace.rootPath || ''}\n` +
+        `Structure:\n${fileList.slice(0, 70).join('\n')}\n${manifestSnippet}\n-----------------------------------\n`;
+
+      enriched += codebaseDigest;
     } catch (e) {
-      // Unresolvable mentions are left as plain text — the agent can still
-      // find the file itself with its tools.
+      console.warn('Failed to resolve @codebase context:', e);
     }
   }
 
-  if (attachments.length === 0) return promptText;
-  return promptText + '\n\n--- Attached context (from @mentions) ---\n' + attachments.join('\n\n');
+  // Individual file mentions
+  const mentions = [...new Set((promptText.match(/@([^\s@:,.(){}\[\]'"`]+)/g) || [])
+    .map(m => m.slice(1))
+    .filter(t => t.length > 2 && t.includes('.') && !t.startsWith('http') && !['codebase', 'workspace'].includes(t.toLowerCase())))];
+
+  if (mentions.length > 0) {
+    const attachments = [];
+    for (const token of mentions.slice(0, 5)) {
+      try {
+        let fileData = null;
+        try {
+          fileData = await invoke('read_file', { path: token });
+        } catch (e) {
+          const matches = await invoke('search_workspace', { query: token, maxResults: 1 });
+          if (matches && matches[0] && matches[0].file) {
+            fileData = await invoke('read_file', { path: matches[0].file });
+          }
+        }
+        if (fileData && !fileData.is_binary && fileData.content) {
+          const lines = fileData.content.split('\n');
+          const truncated = lines.length > MENTION_LINE_CAP;
+          const body = lines.slice(0, MENTION_LINE_CAP).join('\n');
+          attachments.push(
+            `### File: ${fileData.relative_path || token}${truncated ? ` (first ${MENTION_LINE_CAP} of ${lines.length} lines)` : ''}\n${body}`
+          );
+        }
+      } catch (e) {}
+    }
+    if (attachments.length > 0) {
+      enriched += '\n\n--- Attached context (from @mentions) ---\n' + attachments.join('\n\n');
+    }
+  }
+
+  return enriched;
 }
 
 // ============================================================================
@@ -1511,8 +1587,6 @@ STRATEGY:
         if (emptyResponseCount >= 3) {
           break; // genuinely stuck — stop cleanly without a visible card
         }
-        // Silent retry — remove the empty streaming card so the user never
-        // sees a blank response box
         liveCard?.card?.remove();
         state.conversation.push({
           role: 'user',
@@ -1524,30 +1598,61 @@ STRATEGY:
       }
       emptyResponseCount = 0;
 
-      // Stall detection: model keeps narrating without calling tools.
-      // Only stop on VERY explicit completion signals or after many stalls —
-      // local models often narrate progress between tool batches mid-task.
-      noToolStallCount++;
+      // Duplicate response detection: if the model repeated the same answer, break immediately
+      const prevAssistantMsgs = state.conversation
+        .filter(m => m.role === 'assistant' && m.mid !== assistantMid && m.content)
+        .slice(-4);
+      const isDuplicate = prevAssistantMsgs.some(m => {
+        const prev = (m.content || '').trim();
+        if (!prev || !finalText) return false;
+        if (prev === finalText) return true;
+        if (prev.length > 50 && finalText.length > 50 && (prev.includes(finalText.slice(0, 80)) || finalText.includes(prev.slice(0, 80)))) {
+          return true;
+        }
+        return false;
+      });
+
+      if (isDuplicate) {
+        console.warn('[Agent Loop] Duplicate response detected — breaking loop cleanly to prevent repetition.');
+        liveCard?.card?.remove();
+        state.conversation.pop();
+        break;
+      }
+
+      // Check if model is asking a question or awaiting user direction
+      const isAskingUser =
+        /\?[\s*`"'\)]*$/.test(finalText.trim()) ||
+        /(would you like|do you want|shall i|should i|please let me know|please confirm|can i proceed|reply with|how would you like|what would you prefer|let me know)/i.test(finalText);
+
+      const hasPriorToolsInSession = Object.keys(sessionToolTally).length > 0;
       const hasStrongDoneSignal =
         /\b(task complete|all done|completed successfully|nothing more to do|the (task|project|portfolio|app|application|website) is (now )?(complete|done|finished|ready))\b/i.test(finalText) ||
         /^\s*(done|finished|complete)\s*[.!]?\s*$/im.test(finalText);
-      const hasRecentToolActivity = sessionStats.turns > 0 &&
-        Object.keys(sessionToolTally).length > 0 && noToolStallCount <= 4;
 
-      if (hasStrongDoneSignal || noToolStallCount >= 5) {
+      // If the model asked a question OR this was a purely conversational answer with no tools called,
+      // end the agent turn immediately and wait for the user. Never force-nudge a conversation into tools!
+      if (isAskingUser || !hasPriorToolsInSession || hasStrongDoneSignal) {
         if (!hasSavedMemoryThisTurn && finalText && initialUserPrompt) {
           checkAndAutoExtractMemory(initialUserPrompt, finalText);
         }
-        // FIX 4: save a task-completion memory so the next session knows
-        // what was accomplished, even after a full context reset
-        if (Object.keys(sessionToolTally).length > 0) {
+        if (hasPriorToolsInSession) {
           saveTaskCompletionMemory(initialUserPrompt, sessionToolTally);
         }
         break;
       }
 
-      // Silent nudge — the user never sees "continuing automatically";
-      // it only goes into the model context as an ephemeral instruction
+      noToolStallCount++;
+      if (noToolStallCount >= 2) {
+        if (!hasSavedMemoryThisTurn && finalText && initialUserPrompt) {
+          checkAndAutoExtractMemory(initialUserPrompt, finalText);
+        }
+        if (hasPriorToolsInSession) {
+          saveTaskCompletionMemory(initialUserPrompt, sessionToolTally);
+        }
+        break;
+      }
+
+      // Single fallback nudge ONLY when an active multi-tool execution stalled mid-flow without a question
       state.conversation.push({
         role: 'user',
         content: 'Continue. Call the next required tool to make progress on the task. Do not explain — just act.',

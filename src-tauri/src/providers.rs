@@ -349,8 +349,15 @@ Continue the code at the cursor. Return only the raw completion text.",
                         { "role": "user", "content": user_prompt }
                     ],
                     "stream": false,
-                    "keep_alive": "10m",
-                    "options": { "num_predict": 96, "temperature": 0.2, "stop": ["```"] }
+                    "keep_alive": "15m",
+                    "options": {
+                        "num_predict": 64,
+                        "num_ctx": 2048,
+                        "temperature": 0.15,
+                        "top_p": 0.9,
+                        "num_thread": 8,
+                        "stop": ["```", "\n\n\n"]
+                    }
                 });
                 let resp = client
                     .post(format!("{}/api/chat", url.trim_end_matches('/')))
@@ -377,8 +384,8 @@ Continue the code at the cursor. Return only the raw completion text.",
                         { "role": "system", "content": system_prompt },
                         { "role": "user", "content": user_prompt }
                     ],
-                    "max_tokens": 96,
-                    "temperature": 0.2
+                    "max_tokens": 64,
+                    "temperature": 0.15
                 });
                 let resp = client
                     .post(&endpoint)
@@ -613,7 +620,7 @@ Continue the code at the cursor. Return only the raw completion text.",
 
                 let mut payload = serde_json::json!({
                     "model": target_model,
-                    "max_tokens": options.num_predict.unwrap_or(4096),
+                    "max_tokens": options.num_predict.unwrap_or(8192),
                     "messages": anthropic_msgs
                 });
                 if let Some(t) = options.temperature {
@@ -847,9 +854,12 @@ pub fn build_ollama_payload(
     if let Some(tp) = options.top_p {
         gen_options["top_p"] = serde_json::json!(tp);
     }
-    if let Some(np) = options.num_predict {
-        gen_options["num_predict"] = serde_json::json!(np);
-    }
+    // Task 1: Ensure agent can write long, full files without cutoff (default 8192)
+    let np = options.num_predict.unwrap_or(8192);
+    gen_options["num_predict"] = serde_json::json!(np);
+
+    // Task 4: Keep generation speed high (>20 tok/sec) with dedicated threads
+    gen_options["num_thread"] = serde_json::json!(8);
 
     let mut payload = serde_json::json!({
         "model": if model.is_empty() { "llama3" } else { model },
