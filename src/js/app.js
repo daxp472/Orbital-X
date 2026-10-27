@@ -2,7 +2,7 @@ import { state, loadPersistedState, persistState, setActiveModel } from './state
 import { initMonaco, saveActiveFile, renderTabs } from './editor/monaco.js';
 import { loadWorkspace, refreshFileTree, initFileTreeHeaderActions } from './components/file-tree.js';
 import { initAgent, switchMode } from './components/agent.js';
-import { initTerminal, getActiveSession, executeTerminalCommand } from './components/terminal.js';
+import { initTerminal, getActiveSession, executeTerminalCommand, renderPanes } from './components/terminal.js';
 import { initMemory, refreshMemories } from './components/memory.js';
 import { initSettings, cycleTheme, applyTheme } from './components/settings.js';
 import { initOnboarding } from './onboarding/wizard.js';
@@ -138,42 +138,96 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-open-settings')?.click();
   });
 
-  // 5. Check for current open workspace
+  // 5. Check for current open workspace — if the backend has none, try to
+  //    auto-restore the most recent folder so the app opens where the user
+  //    left it (Antigravity / VS Code behaviour).
   try {
     const meta = await invoke('get_workspace_meta');
     if (meta && meta.root_path) {
       await enterWorkspace(meta.root_path);
     } else {
-      openWelcomeScreen();
+      await tryRestoreLastWorkspace();
     }
   } catch (e) {
     console.log("No initial workspace loaded:", e);
-    openWelcomeScreen();
+    await tryRestoreLastWorkspace();
   }
 
   // Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
+  // Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
   // M1: recent workspaces bookkeeping + M2 trust gate
   async function enterWorkspace(rootPath) {
-    const meta = await invoke('set_workspace', { path: rootPath });
-    if (meta && meta.root_path) {
+    if (!rootPath) return;
+    try {
+      const meta = await invoke('set_workspace', { path: rootPath });
+      if (!meta || !meta.root_path) {
+        throw new Error('Workspace initialization returned empty metadata');
+      }
+
+      // Update state store
+      state.workspace.rootPath = meta.root_path;
+      state.workspace.name = meta.name;
+
+      // Update UI headers
+      const headerTitle = document.getElementById('header-workspace-name');
+      if (headerTitle) headerTitle.textContent = meta.name;
+      const sbWorkspace = document.getElementById('sb-workspace-text');
+      if (sbWorkspace) sbWorkspace.textContent = meta.name;
+
+      // Clean open editor tabs from any prior workspace
+      state.editor.tabs = [];
+      state.editor.activeTabId = null;
+      renderTabs();
+      const emptyState = document.getElementById('editor-empty-state');
+      if (emptyState) emptyState.style.display = 'flex';
+      const breadcrumbElem = document.getElementById('editor-breadcrumb');
+      if (breadcrumbElem) breadcrumbElem.textContent = '';
+
+      // Remember in recent workspaces
       rememberRecentWorkspace(meta.root_path, meta.name);
+
+      // Trust gate
       const trusted = isWorkspaceTrusted(meta.root_path);
       if (trusted === null) {
         await promptWorkspaceTrust(meta.root_path);
       }
       updateTrustIndicator();
-      await loadWorkspace(meta.root_path);
-      refreshMemories();
+
+      // Update terminal session CWD to match new workspace
+      const activeTerm = getActiveSession();
+      if (activeTerm) {
+        activeTerm.cwd = meta.root_path;
+        for (const pane of ['A', 'B']) {
+          const pl = document.getElementById(`terminal-prompt-label-${pane}`);
+          if (pl) pl.textContent = `PS ${meta.root_path}>`;
+        }
+        renderPanes();
+        executeTerminalCommand(`cd "${meta.root_path}"`).catch(() => {});
+      }
+
+      // Load file tree passing cached meta (avoids duplicate set_workspace IPC)
+      await loadWorkspace(meta.root_path, meta);
+
+      // Background refreshes - catch each so failure never breaks workspace transition
+      refreshMemories().catch(e => console.warn('Memory refresh failed:', e));
+      refreshGitStatus().catch(e => console.warn('Git status refresh failed:', e));
       tryRestorePlan();
       tryRestoreEditorSession();
-      import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); });
-      startWorkspaceIndexing();
-      document.getElementById('modal-welcome').style.display = 'none';
+      import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); }).catch(() => {});
+      startWorkspaceIndexing().catch(e => console.warn('Workspace indexing failed:', e));
+
+      // Close welcome modal
+      const modal = document.getElementById('modal-welcome');
+      if (modal) modal.style.display = 'none';
+
+      return meta;
+    } catch (err) {
+      console.error('enterWorkspace failed:', err);
+      throw err;
     }
   }
 
   const handleOpenFolder = async () => {
-    // 1. Check for unsaved changes in open tabs
     const unsavedTabs = state.editor.tabs.filter(t => t.isDirty);
     if (unsavedTabs.length > 0) {
       const confirmOpen = await showConfirmDialog('Unsaved Files', `You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`, 'Open Workspace');
@@ -183,37 +237,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const selected = await pickFolder();
       if (selected) {
-        // 2. Clean tab state
-        state.editor.tabs = [];
-        state.editor.activeTabId = null;
-        renderTabs();
-        const emptyState = document.getElementById('editor-empty-state');
-        if (emptyState) emptyState.style.display = 'flex';
-        const breadcrumbElem = document.getElementById('editor-breadcrumb');
-        if (breadcrumbElem) breadcrumbElem.textContent = '';
-
-        // 3. Load workspace and update file tree
         await enterWorkspace(selected);
-
-        // 4. Update terminal session CWD to match new workspace
-        const activeTerm = getActiveSession();
-        if (activeTerm) {
-          activeTerm.cwd = selected;
-          const promptLabel = document.getElementById('terminal-prompt-label');
-          if (promptLabel) promptLabel.textContent = `PS ${selected}>`;
-          await executeTerminalCommand(`cd "${selected}"`);
-        }
-
-        // 5. Reload memory and source control
-        refreshMemories();
-        refreshGitStatus();
-        tryRestorePlan();
-        tryRestoreEditorSession();
-        import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); });
       }
     } catch (err) {
-      console.error("Workspace transition error:", err);
-      alert("Failed to open workspace folder: " + err);
+      console.error("Open Folder failed:", err);
+      showToast(`Could not open folder: ${err}`, 'error', 3500);
     }
   };
 
@@ -225,12 +253,34 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Theme toggle button in titlebar
   document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
 
-  // Mode pill in header: click to cycle modes
-  document.getElementById('header-mode-pill')?.addEventListener('click', () => {
-    const modes = ['dev', 'agent_pro', 'user'];
-    const next = modes[(modes.indexOf(state.agentMode) + 1) % modes.length];
-    switchMode(next);
-  });
+  // Mode pill in header: click to open Apple-style Mode Switcher Dropdown
+  const headerModePill = document.getElementById('header-mode-pill');
+  const modeDropdown = document.getElementById('mode-switcher-dropdown');
+  if (headerModePill && modeDropdown) {
+    headerModePill.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = modeDropdown.style.display !== 'none';
+      modeDropdown.style.display = isVisible ? 'none' : 'flex';
+      modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.mode === state.agentMode);
+      });
+    });
+
+    modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const chosen = opt.dataset.mode;
+        if (chosen) switchMode(chosen);
+        modeDropdown.style.display = 'none';
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!modeDropdown.contains(e.target) && !headerModePill.contains(e.target)) {
+        modeDropdown.style.display = 'none';
+      }
+    });
+  }
 
   console.log("Orbital X initialization complete.");
 });
@@ -702,6 +752,22 @@ function rememberRecentWorkspace(path, name) {
   } catch (e) { /* quota */ }
 }
 
+async function tryRestoreLastWorkspace() {
+  // Auto-restore the most recent workspace on startup so the app opens
+  // where the user left it — exactly like Antigravity / VS Code.
+  const recents = getRecentWorkspaces();
+  if (recents.length === 0) { openWelcomeScreen(); return; }
+  const last = recents[0];
+  try {
+    await enterWorkspace(last.path);
+    showToast(`Restored workspace: ${last.name || last.path}`, 'success', 2500);
+  } catch (e) {
+    showToast(`Could not restore "${last.name || last.path}": ${e}`, 'error', 3500);
+    // Fall back to the welcome screen so the user isn't stuck
+    openWelcomeScreen();
+  }
+}
+
 function openWelcomeScreen() {
   const modal = document.getElementById('modal-welcome');
   if (!modal) return;
@@ -719,11 +785,12 @@ function openWelcomeScreen() {
       row.innerHTML = `<strong style="font-size: 11.5px;">${escapeHtml(r.name || 'workspace')}</strong>
         <span style="font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${escapeHtml(r.path)}</span>`;
       row.addEventListener('click', async () => {
-        modal.style.display = 'none';
         try {
           await enterWorkspace(r.path);
+          showToast(`Opened workspace: ${r.name || r.path}`, 'success', 2200);
         } catch (e) {
-          showToast(`Could not reopen workspace: ${e}`, 'error', 3500);
+          modal.style.display = 'flex';
+          showToast(`Could not reopen workspace: ${e}`, 'error', 4000);
         }
       });
       host.appendChild(row);

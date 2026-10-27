@@ -105,13 +105,22 @@ impl WorkspaceService {
     }
 
     pub fn set_root(&mut self, path_str: &str) -> Result<WorkspaceMeta, String> {
-        let p = PathBuf::from(path_str);
-        let canonical = p.canonicalize().map_err(|e| format!("Invalid path: {}", e))?;
-        if !canonical.is_dir() {
-            return Err("Target path is not a directory".into());
+        let trimmed = path_str.trim().trim_matches('"');
+        let norm_str = trimmed.replace('/', "\\");
+        let p = PathBuf::from(&norm_str);
+
+        let clean_canonical = if let Ok(canonical) = p.canonicalize() {
+            strip_verbatim_prefix(&canonical)
+        } else if p.is_dir() {
+            strip_verbatim_prefix(&p)
+        } else {
+            return Err(format!("Invalid path '{}': folder does not exist or is inaccessible", path_str));
+        };
+
+        if !clean_canonical.is_dir() {
+            return Err(format!("Target path '{}' is not a directory", path_str));
         }
 
-        let clean_canonical = strip_verbatim_prefix(&canonical);
         let name = clean_canonical
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
@@ -1508,5 +1517,14 @@ mod tests {
         {
             std::os::unix::fs::symlink(target, link).is_ok()
         }
+    }
+    #[test]
+    fn test_reopen_workspace_normalization() {
+        let tmp = std::env::temp_dir().join(format!("orbital_norm_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&tmp);
+        let mut ws = WorkspaceService::new();
+        let path_slash = tmp.to_string_lossy().replace('\\', "/");
+        assert!(ws.set_root(&path_slash).is_ok());
+        let _ = fs::remove_dir_all(&tmp);
     }
 }

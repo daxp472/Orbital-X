@@ -604,11 +604,39 @@ body {
 
 .agent-timeline {
   flex: 1;
+  min-height: 0;
+  height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scroll-behavior: smooth;
+}
+
+.agent-timeline::-webkit-scrollbar {
+  width: 6px;
+}
+
+.agent-timeline::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-timeline::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+}
+
+.agent-timeline::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+#agent-checkpoints-view {
+  min-height: 0;
+  height: 0;
+  flex: 1;
+  overflow-y: auto;
 }
 
 /* Review Changes Toolbar */
@@ -643,45 +671,25 @@ body {
   color: #ffffff;
 }
 
-/* Agent Context Meter — inline bar in the agent panel header that fills as
-   the conversation grows. Clicking it opens the Token Usage Dashboard. */
-.agent-context-meter {
+/* Tiny context ring — sits next to the Send button in the composer, fills
+   clockwise as context grows. Clicking it opens the Token Usage Dashboard. */
+.composer-context-ring {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background var(--trans-fast), border-color var(--trans-fast);
+  justify-content: center;
 }
-.agent-context-meter:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-focus);
+.composer-context-ring:hover svg circle:last-child {
+  filter: drop-shadow(0 0 4px var(--accent-cyan));
 }
-.agent-context-track {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 3px;
-  overflow: hidden;
-  min-width: 60px;
-}
-.agent-context-fill {
-  height: 100%;
-  width: 0%;
-  background: var(--accent-cyan);
-  border-radius: 3px;
-  transition: width 0.3s ease, background 0.2s ease;
-}
-.agent-context-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  min-width: 78px;
-  text-align: right;
+.composer-context-ring #composer-context-pct {
+  font-size: 7px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 /* Agent Composer Box (Apple-Style Floating Glass Input) */
@@ -758,9 +766,243 @@ body {
 }
 
 .composer-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* Apple-style floating popover above the context circle */
+.composer-context-popover {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 28px;
+  width: 220px;
+  background: rgba(18, 20, 29, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+
+.composer-context-popover::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  right: 18px;
+  width: 10px;
+  height: 10px;
+  background: rgba(18, 20, 29, 0.96);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  transform: rotate(45deg);
+}
+
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.context-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.context-popover-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.context-popover-badge {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  background: rgba(57, 197, 187, 0.14);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.context-popover-track {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.context-popover-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 3px;
+  transition: width 0.3s ease, background 0.2s ease;
+}
+
+.context-popover-stats {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.context-popover-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.context-popover-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+}
+
+.context-popover-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.context-popover-btn.danger {
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.context-popover-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ffffff;
+}
+
+.context-popover-footer {
+  text-align: center;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.context-popover-link {
+  font-size: 10px;
+  color: var(--accent-cyan);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity var(--trans-fast);
+}
+
+.context-popover-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* Mode Switcher Popover Dropdown */
+.mode-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 290px;
+  background: rgba(18, 20, 29, 0.96);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+
+.mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--trans-fast);
+  border: 1px solid transparent;
+}
+
+.mode-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mode-option.active {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.mode-option-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+.mode-option-dot.agent_pro {
+  background: var(--accent-purple);
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.6);
+}
+.mode-option-dot.dev {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(57, 197, 187, 0.6);
+}
+.mode-option-dot.user {
+  background: var(--accent-green);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.mode-option-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-option-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.mode-option-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+.mode-check {
+  font-size: 11px;
+  color: var(--accent-cyan);
+  display: none;
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+.mode-option.active .mode-check {
+  display: block;
 }
 
 .send-circle-btn {

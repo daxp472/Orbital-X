@@ -99,25 +99,27 @@ export function getFileIcon(filename, isDir, isExpanded) {
   }
 }
 
-export async function loadWorkspace(rootPath) {
+export async function loadWorkspace(rootPath, cachedMeta = null) {
   await loadFavorites();
   renderExplorerTopSections();
-  // (original body continues below)
   try {
-    const meta = await invoke('set_workspace', { path: rootPath });
-    state.workspace.rootPath = meta.root_path;
-    state.workspace.name = meta.name;
+    const meta = cachedMeta || await invoke('set_workspace', { path: rootPath });
+    if (meta) {
+      state.workspace.rootPath = meta.root_path;
+      state.workspace.name = meta.name;
 
-    // Update UI headers
-    const headerTitle = document.getElementById('header-workspace-name');
-    if (headerTitle) headerTitle.textContent = meta.name;
+      // Update UI headers
+      const headerTitle = document.getElementById('header-workspace-name');
+      if (headerTitle) headerTitle.textContent = meta.name;
 
-    const sbWorkspace = document.getElementById('sb-workspace-text');
-    if (sbWorkspace) sbWorkspace.textContent = meta.name;
+      const sbWorkspace = document.getElementById('sb-workspace-text');
+      if (sbWorkspace) sbWorkspace.textContent = meta.name;
+    }
 
     await refreshFileTree();
   } catch (e) {
-    alert("Could not open workspace: " + e);
+    console.error("Could not open workspace:", e);
+    throw e;
   }
 }
 

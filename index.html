@@ -70,10 +70,40 @@
       </div>
 
       <div class="titlebar-right">
-        <!-- Quick Mode Pill in Header -->
-        <div class="mode-pill dev" id="header-mode-pill" title="Click to cycle Agent Operating Mode">
-          <span class="mode-dot"></span>
-          <span id="header-mode-text">DEV MODE</span>
+        <!-- Quick Mode Pill in Header with Interactive Switcher -->
+        <div style="position: relative;">
+          <div class="mode-pill dev" id="header-mode-pill" title="Click to choose Agent Operating Mode">
+            <span class="mode-dot"></span>
+            <span id="header-mode-text">DEV MODE</span>
+            <span style="font-size: 8px; opacity: 0.7; margin-left: 2px;">▼</span>
+          </div>
+          <!-- Mode Switcher Dropdown (Agent Pro, Developer, User) -->
+          <div class="mode-switcher-dropdown" id="mode-switcher-dropdown" style="display: none;">
+            <div class="mode-option" data-mode="agent_pro">
+              <div class="mode-option-dot agent_pro"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">Agent Pro Mode</div>
+                <div class="mode-option-desc">Autonomous — executes code, edits files & builds automatically</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+            <div class="mode-option active" data-mode="dev">
+              <div class="mode-option-dot dev"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">Developer Mode</div>
+                <div class="mode-option-desc">Balanced — routine inspections run smoothly; file edits & commands require approval</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+            <div class="mode-option" data-mode="user">
+              <div class="mode-option-dot user"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">User Mode</div>
+                <div class="mode-option-desc">Restricted — every tool call & command requires explicit confirmation</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+          </div>
         </div>
 
         <!-- Panel Layout Toggle Buttons (Matching Screenshot) -->
@@ -569,21 +599,6 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
-            <button class="icon-btn" id="btn-export-chat" title="Export chat as Markdown">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-            </button>
-            <button class="icon-btn" id="btn-import-chat" title="Import chat from Markdown">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-            </button>
-              <!-- More actions / Chat History -->
               <button class="icon-btn" id="btn-chat-history" title="Recent Chats & History">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="12" cy="12" r="2"></circle>
@@ -611,50 +626,34 @@
             </div>
           </div>
 
-          <!-- Agent Context Meter — grows as context fills; click to inspect -->
-          <div class="agent-context-meter" id="agent-context-meter" title="Context window usage — click to inspect">
-            <div class="agent-context-track" id="agent-context-track">
-              <div class="agent-context-fill" id="agent-context-fill"></div>
+          <!-- Review Changes Bar (From Screenshot) -->
+          <div style="padding: 8px 12px 0 12px;">
+            <div class="review-changes-bar">
+              <span>0 Files With Changes</span>
+              <button class="review-btn" id="btn-review-changes">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+                Review Changes
+              </button>
             </div>
-            <span class="agent-context-label" id="agent-context-label">— / — ctx</span>
           </div>
-        </div>
 
-        <!-- Review Changes Bar (From Screenshot) -->
-        <div style="padding: 8px 12px 0 12px;">
-          <div class="review-changes-bar">
-            <span>0 Files With Changes</span>
-            <button class="review-btn" id="btn-review-changes">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="16 18 22 12 16 6"></polyline>
-                <polyline points="8 6 2 12 8 18"></polyline>
-              </svg>
-              Review Changes
+          <div id="agent-panel-tabs" style="display: flex; gap: 4px; padding: 0 10px 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 6px; align-items: center;">
+            <button class="btn btn-sm btn-secondary active" data-atab="chat" style="font-size: 11px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span>Chat</span>
+            </button>
+            <button class="btn btn-sm btn-secondary" data-atab="checkpoints" style="font-size: 11px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span>Checkpoints</span>
             </button>
           </div>
         </div>
 
-        <div id="agent-panel-tabs" style="display: flex; gap: 4px; padding: 0 10px 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 6px; align-items: center;">
-          <button class="btn btn-sm btn-secondary" data-atab="chat" style="font-size: 11px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-            <span>Chat</span>
-          </button>
-          <button class="btn btn-sm btn-secondary" data-atab="checkpoints" style="font-size: 11px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 5px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Checkpoints</span>
-          </button>
-          <span style="flex: 1;"></span>
-          <button class="btn btn-sm btn-secondary" id="btn-compact-context" title="Summarise older turns to free context" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 5px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
-            <span>Compact</span>
-          </button>
-          <button class="btn btn-sm btn-danger" id="btn-clear-agent-context" title="Clear the conversation" style="font-size: 11px; padding: 3px 8px; display: inline-flex; align-items: center; gap: 5px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            <span>Clear</span>
-          </button>
-        </div>
-            <div id="agent-checkpoints-view" style="display: none; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; padding: 0 10px;"></div>
-            <div class="agent-timeline" id="agent-timeline">
+        <div id="agent-checkpoints-view" style="display: none; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; padding: 10px;"></div>
+        <div class="agent-timeline" id="agent-timeline">
           <div class="timeline-card assistant-msg">
             <div class="timeline-card-header">
               <span>Orbital Agent</span>
@@ -700,6 +699,39 @@
 
               <!-- Context @ and Send button on bottom right -->
               <div class="composer-actions">
+                <!-- Tiny Context Ring Popover (Floats directly above the circle) -->
+                <div class="composer-context-popover" id="composer-context-popover" style="display: none;">
+                  <div class="context-popover-header">
+                    <span class="context-popover-title">Context Window</span>
+                    <span class="context-popover-badge" id="context-popover-pct">0%</span>
+                  </div>
+                  <div class="context-popover-track">
+                    <div class="context-popover-fill" id="context-popover-fill" style="width: 0%;"></div>
+                  </div>
+                  <div class="context-popover-stats" id="context-popover-stats">0 / 16,384 tokens</div>
+                  <div class="context-popover-actions">
+                    <button class="context-popover-btn" id="popover-btn-compact" title="Summarise older turns to free context">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 14 10 14 10 20"></polyline>
+                        <polyline points="20 10 14 10 14 4"></polyline>
+                        <line x1="14" y1="10" x2="21" y2="3"></line>
+                        <line x1="3" y1="21" x2="10" y2="14"></line>
+                      </svg>
+                      <span>Compact</span>
+                    </button>
+                    <button class="context-popover-btn danger" id="popover-btn-clear" title="Clear conversation history">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      <span>Clear</span>
+                    </button>
+                  </div>
+                  <div class="context-popover-footer">
+                    <a href="#" id="popover-btn-dashboard" class="context-popover-link">Token Dashboard ↗</a>
+                  </div>
+                </div>
+
                 <button class="icon-btn" id="btn-composer-attach" title="Attach context (file, selection, terminal, diff…)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
@@ -711,6 +743,16 @@
                     <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"></path>
                   </svg>
                 </button>
+                <!-- Tiny context ring — sits next to Send, fills as context grows -->
+                <div class="composer-context-ring" id="composer-context-ring" title="Context window usage — click to inspect">
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <circle cx="9" cy="9" r="6.5" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.5"/>
+                    <circle id="composer-context-ring-arc" cx="9" cy="9" r="6.5" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5"
+                      stroke-linecap="round" stroke-dasharray="40.84 40.84" stroke-dashoffset="40.84"
+                      style="transform: rotate(-90deg); transform-origin: 9px 9px; transition: stroke-dashoffset 0.4s ease, stroke 0.2s ease;" />
+                  </svg>
+                  <span id="composer-context-pct" style="position: absolute; font-size: 7px; font-weight: 700; color: var(--text-primary);">0%</span>
+                </div>
                 <button class="send-circle-btn" id="btn-agent-send" title="Send (Enter)">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <line x1="12" y1="19" x2="12" y2="5"></line>
@@ -1255,7 +1297,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.2.3 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.2.6 · The AI-native IDE for everyone</div>
           </div>
         </div>
         <button class="btn btn-primary" id="welcome-open-folder-btn" style="padding: 9px;">📂 Open Folder</button>
@@ -1274,16 +1316,14 @@
         </div>
       </div>
       <div style="flex: 1; padding: 22px 24px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); overflow-y: auto;">
-        <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px;">✨ What's New in v2.2.3</div>
+        <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px;">✨ What's New in v2.2.6</div>
         <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.65; display: flex; flex-direction: column; gap: 8px;">
-          <div><strong style="color: var(--text-primary);">Streaming agent</strong> — responses render live; Stop actually stops the model.</div>
-          <div><strong style="color: var(--text-primary);">Extensions & Skills</strong> — theme/prompt/command packs and SKILL.md instruction packs.</div>
-          <div><strong style="color: var(--text-primary);">Pro Git panel</strong> — staging, branches, history, graph, conflicts, blame, stash.</div>
-          <div><strong style="color: var(--text-primary);">Split editor & pro tabs</strong> — drag, pin, preview, sessions that survive restarts.</div>
-          <div><strong style="color: var(--text-primary);">Inline AI completions</strong> — ghost text from your local model (enable in Settings).</div>
-          <div><strong style="color: var(--text-primary);">Command palette</strong> — Ctrl+Shift+P / F1 reaches every command.</div>
-          <div><strong style="color: var(--text-primary);">Pro terminal</strong> — profiles, split panes, full ANSI, search, history, links.</div>
-          <div><strong style="color: var(--text-primary);">Hardened security</strong> — strict command classification and workspace confinement.</div>
+          <div><strong style="color: var(--text-primary);">AI Chat Pro & Smooth Scrolling</strong> — frictionless conversation timeline with infinite smooth scrolling.</div>
+          <div><strong style="color: var(--text-primary);">Mode Switcher</strong> — switch between Agent Pro Mode, Developer Mode, and User Mode on the fly.</div>
+          <div><strong style="color: var(--text-primary);">Floating Context Popover</strong> — click the context meter ring to inspect tokens, compact context, or clear instantly.</div>
+          <div><strong style="color: var(--text-primary);">Robust Recent Workspaces</strong> — instant reopening of projects with automatic path normalization.</div>
+          <div><strong style="color: var(--text-primary);">Antigravity Terminal</strong> — folder-aware prompt paths, split pane tabs, and direct CMD/PowerShell integration.</div>
+          <div><strong style="color: var(--text-primary);">Liquid Apple-grade Design</strong> — streamlined glassmorphic controls, refined popovers, and zero visual clutter.</div>
         </div>
       </div>
     </div>

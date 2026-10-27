@@ -36,15 +36,42 @@ export function initAgent() {
     timestampIntervalId = setInterval(updateAllTimelineTimestamps, 60000);
   }
 
-  // Mode cycling is handled by the header mode pill (Alt+M) — the segmented
-  // selector was removed in favour of the inline context meter bar.
+  // Mode cycling is handled by the header mode pill (Alt+M).
 
-  // Agent Context Meter — click to open the token-usage dashboard
-  const ctxMeter = document.getElementById('agent-context-meter');
-  if (ctxMeter) {
-    ctxMeter.addEventListener('click', () => {
+  // Tiny context ring next to Send — click to toggle the Apple-style Context Popover
+  const ctxRing = document.getElementById('composer-context-ring');
+  const ctxPopover = document.getElementById('composer-context-popover');
+  if (ctxRing && ctxPopover) {
+    ctxRing.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = ctxPopover.style.display !== 'none';
+      ctxPopover.style.display = isVisible ? 'none' : 'flex';
+    });
+
+    document.getElementById('popover-btn-compact')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ctxPopover.style.display = 'none';
+      compactAgentContext();
+    });
+
+    document.getElementById('popover-btn-clear')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ctxPopover.style.display = 'none';
+      clearAgentContext();
+    });
+
+    document.getElementById('popover-btn-dashboard')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      ctxPopover.style.display = 'none';
       const dashboard = document.getElementById('modal-usage-dashboard');
       if (dashboard) dashboard.style.display = 'flex';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!ctxPopover.contains(e.target) && !ctxRing.contains(e.target)) {
+        ctxPopover.style.display = 'none';
+      }
     });
   }
 
@@ -621,6 +648,22 @@ export async function switchMode(newMode) {
 
   if (headerPill) headerPill.setAttribute('class', 'mode-pill ' + newMode);
   if (headerText) headerText.textContent = getModeDisplayName(newMode).toUpperCase();
+
+  // Sync active option in the Mode Switcher dropdown
+  document.querySelectorAll('#mode-switcher-dropdown .mode-option').forEach(opt => {
+    opt.classList.toggle('active', opt.dataset.mode === newMode);
+  });
+
+  // Update greeting ready card in timeline if present
+  const readyCardBody = document.querySelector('#agent-timeline .timeline-card.assistant-msg .timeline-card-body');
+  if (readyCardBody && readyCardBody.textContent.includes('Orbital X is connected and ready')) {
+    const desc = newMode === 'agent_pro'
+      ? 'Autonomous execution runs without approval cards; destructive actions still prompt.'
+      : (newMode === 'user'
+        ? 'Safest mode — every tool call, file edit, and command will prompt you for approval.'
+        : 'Routine inspections run smoothly; file edits and commands will prompt you with an Approval Card.');
+    readyCardBody.innerHTML = `Orbital X is connected and ready. You are in <strong>${getModeDisplayName(newMode)} Mode</strong>. ${desc}`;
+  }
 
   if (!isLoopRunning) {
     updateStatusBarAgentStatus(getModeDisplayName(newMode));
@@ -1214,15 +1257,29 @@ function updateContextMeter(promptTokens, numCtx, tokensPerSecond) {
     el.title = `Context window usage: ${pct}% (prompt tokens / effective context size)`;
   }
 
-  // Inline agent-panel meter — the bar fills proportionally as context grows
-  const meter = document.getElementById('agent-context-meter');
-  const fill = document.getElementById('agent-context-fill');
-  const label = document.getElementById('agent-context-label');
-  if (meter && fill && label) {
-    fill.style.width = pct + '%';
-    fill.style.background = pct > 85 ? 'var(--accent-red)' : (pct > 65 ? 'var(--accent-orange)' : 'var(--accent-cyan)');
-    label.textContent = `${used.toLocaleString()} / ${numCtx.toLocaleString()} ctx`;
-    meter.title = `Context window usage: ${pct}% — click to open the Token Usage Dashboard`;
+  // Tiny circular context ring next to the Send button
+  const ring = document.getElementById('composer-context-ring-arc');
+  const pctLabel = document.getElementById('composer-context-pct');
+  const ringColor = pct > 85 ? 'var(--accent-red)' : (pct > 65 ? 'var(--accent-orange)' : 'var(--accent-cyan)');
+  if (ring && pctLabel) {
+    const circ = 2 * Math.PI * 6.5;          // r=6.5 → circumference ≈ 40.84
+    const offset = circ - (pct / 100) * circ;
+    ring.style.strokeDashoffset = offset;
+    ring.style.stroke = ringColor;
+    pctLabel.textContent = pct + '%';
+  }
+
+  // Floating Context Popover details
+  const popPct = document.getElementById('context-popover-pct');
+  const popFill = document.getElementById('context-popover-fill');
+  const popStats = document.getElementById('context-popover-stats');
+  if (popPct) popPct.textContent = pct + '%';
+  if (popFill) {
+    popFill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    popFill.style.background = ringColor;
+  }
+  if (popStats) {
+    popStats.textContent = `${used.toLocaleString()} / ${numCtx.toLocaleString()} tokens`;
   }
 }
 
@@ -2628,7 +2685,10 @@ function beginStreamingCard() {
         raf = null;
         if (bodyEl) {
           bodyEl.textContent = acc;
-          card.scrollIntoView({ block: 'end' });
+          const isNearBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 160;
+          if (isNearBottom) {
+            timeline.scrollTop = timeline.scrollHeight;
+          }
         }
       });
     },
