@@ -7,9 +7,9 @@ import path from 'node:path';
 
 const REPO_OWNER = 'daxp472';
 const REPO_NAME = 'Orbital-X';
-const TAG_NAME = 'v2.2.5';
-const RELEASE_TITLE = 'Orbital X v2.2.5 — Explorer UI & SVG Icons, Speed & Repetition Fixes';
-const NOTES_PATH = path.resolve('release/notes/RELEASE_NOTES_v2.2.5.md');
+const TAG_NAME = 'v2.2.6';
+const RELEASE_TITLE = 'Orbital X v2.2.6 — Source Control, Run & Debug Engine, Shortcuts Overhaul & Top-Bar Controls';
+const NOTES_PATH = path.resolve('release/notes/RELEASE_NOTES_v2.2.6.md');
 
 // Retrieve token from Git Credential Manager or env
 import { spawnSync } from 'node:child_process';
@@ -102,8 +102,8 @@ async function main() {
 
   // 2. Upload Assets
   const assetsToUpload = [
-    { filePath: 'release/Orbital.X_2.2.5_x64-setup.exe', name: 'Orbital.X_2.2.5_x64-setup.exe' },
-    { filePath: 'release/Orbital X_2.2.5_x64-setup.exe', name: 'Orbital X_2.2.5_x64-setup.exe' },
+    { filePath: 'release/Orbital.X_2.2.6_x64-setup.exe', name: 'Orbital.X_2.2.6_x64-setup.exe' },
+    { filePath: 'release/Orbital X_2.2.6_x64-setup.exe', name: 'Orbital X_2.2.6_x64-setup.exe' },
     { filePath: 'release/orbital-x.exe', name: 'orbital-x.exe' }
   ];
 
@@ -158,7 +158,7 @@ async function main() {
   }
 
   console.log(`\n======================================================`);
-  console.log(`All assets uploaded! Release v2.2.5 is published.`);
+  console.log(`All assets uploaded! Release ${TAG_NAME} is published.`);
   console.log(`View online at: https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/${TAG_NAME}`);
   console.log(`======================================================`);
 }

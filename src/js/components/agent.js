@@ -3565,3 +3565,14 @@ function shortenPath(p, max) {
   const s = String(p || '');
   return s.length <= max ? s : '…' + s.slice(-(max - 1));
 }
+
+export async function exportChatToMarkdown() {
+  const { exportActiveSessionMarkdown } = await import('./chat-sessions.js');
+  return exportActiveSessionMarkdown();
+}
+
+export async function importChatFromMarkdown() {
+  const { importSessionFromMarkdown } = await import('./chat-sessions.js');
+  return importSessionFromMarkdown();
+}
+

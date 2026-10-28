@@ -6,6 +6,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.2.6] — 2026-10-28
+
+### Upgraded
+- **Source Control UI & UX Overhaul:** Upgraded the Git panel with crisp vector SVG file and action icons. Added direct per-row Stage (`+`), Discard (`↺`), and Diff (`📄`) actions, section-level bulk controls (Stage All, Discard All, Unstage All), and a conventional commit composer with character counter and `<kbd>Ctrl+Enter</kbd>` keyboard badge. Modernized the Branch Header with quick sync action buttons (Fetch, Pull, Push, Stash).
+- **Run & Debug Codebase Engine:** Added a dedicated Run and Debug runner (`debug.js`) that auto-detects `package.json` scripts, `Cargo.toml` targets, and active open files (JavaScript, TypeScript, Python, Rust, Shell, HTML). Added a Quick Command Runner with 1-click execution chips (`npm run dev`, `npm test`, `npm run build`, `cargo test`) running straight into the integrated terminal sandbox.
+- **Apple-Inspired Keyboard Shortcuts UI:** Rebuilt the Settings Keyboard Shortcuts tab with categorised cards (AI Agent, Editor, View & Terminal, File, Git, Tools), tactile `<kbd class="apple-keycap">` typography, real-time live search filtering, conflict detection, and interactive key recording.
+- **Custom Modern IDE Title Bar:** Restructured IDE top bar to align the Orbital X brand logo and inline application menus on the left, centered breadcrumb workspace title badge, and native Windows window control buttons (`—`, `▢`, `✕` with red hover state) on the far right edge.
+- **Export & Import Chat History:** Restored native chat history export and import buttons in the AI agent header and recent chats popover, allowing users to save and load timestamped Markdown (`.md`) conversation logs.
+
+### Removed
+- **Project Overview Subview:** This feature is removed from the Activity Rail and sidebar to eliminate visual clutter and align the IDE experience with core developer workflows.
+
+---
+
 ## [v2.2.5] — 2026-10-27
 
 ### Upgraded

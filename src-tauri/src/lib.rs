@@ -1560,7 +1560,7 @@ fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.2.5")
+        .user_agent("OrbitalX-IDE/2.2.6")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client

@@ -1,13 +1,14 @@
 {
   "name": "orbital-x",
   "private": true,
-  "version": "2.2.5",
+  "version": "2.2.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:tauri": "node scripts/dev-runner.js",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --check src/js/app.js",
     "tauri": "tauri"
   },
   "dependencies": {

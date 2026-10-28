@@ -479,7 +479,10 @@ function setupShortcutsTab() {
       });
       navItem.classList.add('active');
       const targetPane = document.getElementById('spane-shortcuts');
-      if (targetPane) targetPane.style.display = 'flex';
+      if (targetPane) {
+        targetPane.style.display = 'flex';
+        buildEditableShortcutsTable();
+      }
     });
   }
 
@@ -1420,72 +1423,142 @@ function enhanceImportExport() {
 // G4 — editable keybindings table
 // ---------------------------------------------------------------------------
 
+let shortcutsFilterQuery = '';
+
+function renderKeycapCombo(combo) {
+  if (!combo) return '<span style="color:var(--text-muted); font-size:10px;">None</span>';
+  const parts = combo.split('+');
+  return `<span class="kb-combo-wrap">${parts.map(p => `<kbd class="apple-keycap">${escapeHtml(p)}</kbd>`).join('<span class="kb-plus">+</span>')}</span>`;
+}
+
 function buildEditableShortcutsTable() {
   const host = document.getElementById('spane-shortcuts');
   if (!host) return;
   const wrapper = host.querySelector('.settings-shortcuts-wrapper') || host;
-  wrapper.innerHTML = '';
-
-  const table = document.createElement('table');
-  table.className = 'settings-shortcuts-table';
-  table.style.cssText = 'width: 100%; font-size: 11px; border-collapse: collapse;';
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th style="text-align:left; padding: 4px 6px;">Action</th>
-        <th style="text-align:left; padding: 4px 6px;">Shortcut</th>
-        <th style="text-align:right; padding: 4px 6px;">Scope</th>
-      </tr>
-    </thead>
-    <tbody id="keybindings-tbody"></tbody>
+  wrapper.innerHTML = `
+    <!-- Shortcuts Search Bar -->
+    <div style="margin-bottom: 12px; position: relative;">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input type="text" id="shortcuts-search-input" class="input-text" placeholder="Search shortcuts by command or key (e.g. Save, Ctrl+P, Agent)..." value="${escapeHtml(shortcutsFilterQuery)}" style="width: 100%; padding-left: 32px; font-size: 11.5px; height: 32px; border-radius: 6px;" />
+    </div>
+    <div id="shortcuts-cards-container"></div>
+    <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 10px; line-height: 1.5;">
+      💡 <strong>Custom Keybindings:</strong> Click <em>Edit</em> on any shortcut, then press your desired key combination. Conflicts are automatically detected. Custom shortcuts are preserved across sessions.
+    </div>
   `;
-  wrapper.appendChild(table);
 
-  renderKeybindingRows();
+  const searchInput = wrapper.querySelector('#shortcuts-search-input');
+  searchInput?.addEventListener('input', () => {
+    shortcutsFilterQuery = searchInput.value;
+    renderKeybindingCards();
+  });
 
-  const hint = document.createElement('div');
-  hint.style.cssText = 'font-size: 10px; color: var(--text-muted); margin-top: 8px;';
-  hint.textContent = 'Click Edit, then press the key combination. Conflicts are rejected. Editor-scoped bindings rebind immediately; app bindings apply on the next keypress.';
-  wrapper.appendChild(hint);
+  renderKeybindingCards();
 }
 
-function renderKeybindingRows() {
-  const tbody = document.getElementById('keybindings-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+const CATEGORY_META = {
+  Agent: { title: 'AI Agent & Assistant', icon: '🤖' },
+  Editor: { title: 'Editor & Navigation', icon: '📝' },
+  View: { title: 'Views, Panels & Terminals', icon: '📐' },
+  File: { title: 'File & Workspace', icon: '📁' },
+  Git: { title: 'Source Control & Git', icon: '⑂' },
+  Tools: { title: 'Tools & General', icon: '⚙️' },
+};
 
-  for (const b of getAllBindings()) {
-    const tr = document.createElement('tr');
-    tr.style.cssText = 'border-top: 1px solid var(--border-subtle);';
-    tr.innerHTML = `
-      <td style="padding: 4px 6px;">
-        ${b.title}${b.isCustom ? ' <span style="color: var(--accent-cyan); font-size: 9px;">custom</span>' : ''}
-      </td>
-      <td style="padding: 4px 6px;" class="kb-combo-cell">
-        <kbd class="kb-combo">${escapeHtml(b.combo)}</kbd>
-      </td>
-      <td style="padding: 4px 6px; text-align: right; white-space: nowrap;">
-        <span style="color: var(--text-muted); font-size: 10px;">${b.scope === 'editor' ? 'Editor' : 'App'}</span>
-        <button class="btn btn-secondary btn-sm kb-edit" style="padding: 1px 7px; font-size: 10px;">Edit</button>
-        ${b.isCustom ? '<button class="btn btn-secondary btn-sm kb-reset" style="padding: 1px 7px; font-size: 10px;">Reset</button>' : ''}
-      </td>
-    `;
-    tr.querySelector('.kb-edit')?.addEventListener('click', () => startRecording(tr, b.id));
-    tr.querySelector('.kb-reset')?.addEventListener('click', async () => {
-      resetBinding(b.id);
-      await import('../editor/monaco.js').then(m => m.rebindEditorCommands());
-      renderKeybindingRows();
-      showToast(`Reset “${b.title}” to ${b.combo}`, 'success', 2000);
+function renderKeybindingCards() {
+  const container = document.getElementById('shortcuts-cards-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const q = shortcutsFilterQuery.trim().toLowerCase();
+  const all = getAllBindings();
+
+  // Group by category
+  const groups = {};
+  for (const b of all) {
+    const grp = b.group || 'Tools';
+    if (!groups[grp]) groups[grp] = [];
+    groups[grp].push(b);
+  }
+
+  let totalVisible = 0;
+
+  for (const [grpKey, bindings] of Object.entries(groups)) {
+    const visible = bindings.filter(b => {
+      if (!q) return true;
+      return (b.title || '').toLowerCase().includes(q) ||
+             (b.combo || '').toLowerCase().includes(q) ||
+             (b.scope || '').toLowerCase().includes(q) ||
+             grpKey.toLowerCase().includes(q);
     });
-    tbody.appendChild(tr);
+
+    if (visible.length === 0) continue;
+    totalVisible += visible.length;
+
+    const meta = CATEGORY_META[grpKey] || { title: grpKey, icon: '•' };
+    const card = document.createElement('div');
+    card.className = 'shortcuts-category-card';
+
+    card.innerHTML = `
+      <div class="shortcuts-category-header">
+        <span>${meta.icon} ${escapeHtml(meta.title)}</span>
+        <span style="font-size: 10px; color: var(--text-muted);">${visible.length} shortcut${visible.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="shortcuts-card-body"></div>
+    `;
+
+    const body = card.querySelector('.shortcuts-card-body');
+    for (const b of visible) {
+      const row = document.createElement('div');
+      row.className = 'shortcuts-row';
+      row.dataset.bindingId = b.id;
+      row.innerHTML = `
+        <div style="flex: 1; min-width: 0; padding-right: 12px;">
+          <div style="font-size: 11.5px; font-weight: 500; color: var(--text-primary-bright); display: flex; align-items: center; gap: 6px;">
+            <span>${escapeHtml(b.title)}</span>
+            ${b.isCustom ? `<span style="font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(57, 197, 187, 0.15); color: var(--accent-cyan); font-weight: 600;">Custom</span>` : ''}
+          </div>
+          <div style="font-size: 10px; color: var(--text-muted); margin-top: 1px;">
+            Scope: <span class="kb-scope-pill">${b.scope === 'editor' ? 'Editor' : 'Global App'}</span>
+          </div>
+        </div>
+        <div class="kb-combo-cell" style="margin-right: 12px;">
+          ${renderKeycapCombo(b.combo)}
+        </div>
+        <div style="display: flex; gap: 4px; flex-shrink: 0;">
+          <button class="btn btn-secondary btn-sm kb-edit" style="padding: 2px 8px; font-size: 10.5px;">Edit</button>
+          ${b.isCustom ? `<button class="btn btn-secondary btn-sm kb-reset" style="padding: 2px 8px; font-size: 10.5px;">Reset</button>` : ''}
+        </div>
+      `;
+
+      row.querySelector('.kb-edit')?.addEventListener('click', () => startRecording(row, b.id));
+      row.querySelector('.kb-reset')?.addEventListener('click', async () => {
+        resetBinding(b.id);
+        await import('../editor/monaco.js').then(m => m.rebindEditorCommands());
+        renderKeybindingCards();
+        showToast(`Reset "${b.title}" to ${b.combo}`, 'success', 2000);
+      });
+
+      body.appendChild(row);
+    }
+
+    container.appendChild(card);
+  }
+
+  if (totalVisible === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 12px; background: var(--bg-surface); border: 1px dashed var(--border-subtle); border-radius: 8px;">
+        No shortcuts match "${escapeHtml(q)}".
+      </div>
+    `;
   }
 }
 
-function startRecording(tr, bindingId) {
-  const cell = tr.querySelector('.kb-combo-cell');
-  const original = cell.innerHTML;
-  cell.innerHTML = `<span class="kb-recording">Press keys… (Esc to cancel)</span>`;
-  tr.querySelectorAll('button').forEach(b => (b.disabled = true));
+function startRecording(row, bindingId) {
+  const cell = row.querySelector('.kb-combo-cell');
+  if (!cell) return;
+  cell.innerHTML = `<span class="kb-recording" style="font-size: 10.5px; color: var(--accent-cyan); font-weight: 600; padding: 2px 6px; border: 1px dashed var(--accent-cyan); border-radius: 4px;">Press shortcut keys… (Esc cancels)</span>`;
+  row.querySelectorAll('button').forEach(b => (b.disabled = true));
 
   const onKey = async (e) => {
     e.preventDefault();
@@ -1495,17 +1568,18 @@ function startRecording(tr, bindingId) {
       return;
     }
     const combo = comboFromEvent(e);
-    if (!combo) return; // still pressing modifiers
+    if (!combo) return; // still pressing modifier keys (Ctrl, Alt, Shift)
 
     const conflict = findConflict(bindingId, combo);
     if (conflict) {
-      cell.innerHTML = `<span class="kb-recording" style="color: var(--accent-red);">“${combo}” conflicts with “${conflict}” — try again (Esc to cancel)</span>`;
+      cell.innerHTML = `<span class="kb-recording" style="font-size: 10.5px; color: var(--accent-red); font-weight: 600; padding: 2px 6px;">"${combo}" already in use! Try another (Esc cancels)</span>`;
+      showToast(`Conflict: "${combo}" is already assigned`, 'error', 2500);
       return;
     }
     const ok = setBinding(bindingId, combo);
     if (ok) {
       await import('../editor/monaco.js').then(m => m.rebindEditorCommands());
-      renderKeybindingRows();
+      renderKeybindingCards();
       showToast(`Shortcut set: ${combo}`, 'success', 1800);
     }
     cleanup();
@@ -1513,7 +1587,7 @@ function startRecording(tr, bindingId) {
 
   function cleanup() {
     window.removeEventListener('keydown', onKey, true);
-    renderKeybindingRows(); // restores buttons + combo display
+    renderKeybindingCards();
   }
   window.addEventListener('keydown', onKey, true);
 }
