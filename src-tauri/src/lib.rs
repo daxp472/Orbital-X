@@ -415,20 +415,36 @@ fn clear_token_usage() -> Result<(), String> {
 
 #[tauri::command]
 async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let folder = app.dialog().file().blocking_pick_folder();
-    match folder {
-        Some(path) => {
-            let path_str = path.to_string();
-            let p = std::path::Path::new(&path_str);
-            if p.exists() && p.is_dir() {
-                Ok(Some(path_str))
-            } else {
-                Err("Selected path does not exist or is not a directory".into())
+    // Run dialog picker on a dedicated blocking OS thread with its own COM apartment
+    // to prevent any async event loop blocking or COM initialization failures on Windows.
+    let result = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+        // First try native rfd dialog (direct OS Win32/COM dialog, most reliable)
+        if let Some(path_buf) = rfd::FileDialog::new().set_title("Select Workspace Folder").pick_folder() {
+            let clean = workspace::strip_verbatim_prefix(&path_buf);
+            let path_str = clean.to_string_lossy().to_string();
+            if clean.is_dir() {
+                return Ok(Some(path_str));
             }
         }
-        None => Ok(None),
-    }
+
+        // Secondary fallback to tauri_plugin_dialog with proper into_path() conversion
+        use tauri_plugin_dialog::DialogExt;
+        if let Some(file_path) = app.dialog().file().blocking_pick_folder() {
+            if let Ok(path_buf) = file_path.into_path() {
+                let clean = workspace::strip_verbatim_prefix(&path_buf);
+                let path_str = clean.to_string_lossy().to_string();
+                if clean.is_dir() {
+                    return Ok(Some(path_str));
+                }
+            }
+        }
+
+        Ok(None)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -438,29 +454,44 @@ async fn pick_save_file(
     filter_name: Option<String>,
     filter_extensions: Option<Vec<String>>,
 ) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let mut dialog = app.dialog().file();
-    if let Some(name) = default_name {
-        dialog = dialog.set_file_name(&name);
-    }
-    if let (Some(fname), Some(exts)) = (filter_name, filter_extensions) {
-        let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
-        dialog = dialog.add_filter(fname, &ext_refs);
-    }
-    let chosen = dialog.blocking_save_file();
-    match chosen {
-        Some(path) => {
-            let path_str = path.to_string();
-            let p = std::path::Path::new(&path_str);
-            if let Some(parent) = p.parent() {
-                if !parent.exists() {
-                    return Err("Selected directory does not exist".into());
-                }
-            }
-            Ok(Some(path_str))
+    let result = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
+        // First try native rfd dialog
+        let mut dialog = rfd::FileDialog::new();
+        if let Some(name) = &default_name {
+            dialog = dialog.set_file_name(name);
         }
-        None => Ok(None),
-    }
+        if let (Some(fname), Some(exts)) = (&filter_name, &filter_extensions) {
+            let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+            dialog = dialog.add_filter(fname, &ext_refs);
+        }
+        if let Some(path_buf) = dialog.save_file() {
+            let clean = workspace::strip_verbatim_prefix(&path_buf);
+            return Ok(Some(clean.to_string_lossy().to_string()));
+        }
+
+        // Secondary fallback to tauri_plugin_dialog
+        use tauri_plugin_dialog::DialogExt;
+        let mut tdialog = app.dialog().file();
+        if let Some(name) = default_name {
+            tdialog = tdialog.set_file_name(&name);
+        }
+        if let (Some(fname), Some(exts)) = (filter_name, filter_extensions) {
+            let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+            tdialog = tdialog.add_filter(fname, &ext_refs);
+        }
+        if let Some(chosen) = tdialog.blocking_save_file() {
+            if let Ok(p_buf) = chosen.into_path() {
+                let clean = workspace::strip_verbatim_prefix(&p_buf);
+                return Ok(Some(clean.to_string_lossy().to_string()));
+            }
+        }
+
+        Ok(None)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    Ok(result)
 }
 
 #[tauri::command]

@@ -34,11 +34,19 @@
   </div>
 
   <div id="app">
-    <!-- Top Titlebar (Matching Antigravity / Cursor / VS Code from screenshot) -->
+    <!-- Top Titlebar -->
     <header class="titlebar">
       <div class="titlebar-left">
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.5 (Click for About)">
+        <!-- Traffic Light Window Controls -->
+        <div class="window-controls traffic-lights">
+          <span class="window-control close" id="win-close" title="Close"></span>
+          <span class="window-control minimize" id="win-minimize" title="Minimize"></span>
+          <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
+        </div>
+
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.6 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
+          <span class="titlebar-brand-name">Orbital X</span>
         </div>
 
         <nav class="titlebar-menus">
@@ -62,7 +70,43 @@
       </div>
 
       <div class="titlebar-right">
-        <!-- Panel Layout Toggle Buttons (Matching Screenshot) -->
+        <!-- Quick Mode Pill in Header with Interactive Switcher -->
+        <div style="position: relative;">
+          <div class="mode-pill dev" id="header-mode-pill" title="Click to choose Agent Operating Mode">
+            <span class="mode-dot"></span>
+            <span id="header-mode-text">DEV MODE</span>
+            <span style="font-size: 8px; opacity: 0.7; margin-left: 2px;">▼</span>
+          </div>
+          <!-- Mode Switcher Dropdown (Agent Pro, Developer, User) -->
+          <div class="mode-switcher-dropdown" id="mode-switcher-dropdown" style="display: none;">
+            <div class="mode-option" data-mode="agent_pro">
+              <div class="mode-option-dot agent_pro"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">Agent Pro Mode</div>
+                <div class="mode-option-desc">Autonomous — executes code, edits files & builds automatically</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+            <div class="mode-option active" data-mode="dev">
+              <div class="mode-option-dot dev"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">Developer Mode</div>
+                <div class="mode-option-desc">Balanced — routine inspections run smoothly; file edits & commands require approval</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+            <div class="mode-option" data-mode="user">
+              <div class="mode-option-dot user"></div>
+              <div class="mode-option-info">
+                <div class="mode-option-title">User Mode</div>
+                <div class="mode-option-desc">Restricted — every tool call & command requires explicit confirmation</div>
+              </div>
+              <span class="mode-check">✓</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Layout Toggle Buttons -->
         <!-- Toggle Left Sidebar -->
         <button class="layout-toggle-btn active" id="btn-toggle-sidebar" title="Toggle Primary Side Bar (Ctrl+B)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
@@ -122,55 +166,6 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
-
-        <!-- Quick Mode Pill in Header with Interactive Switcher -->
-        <div style="position: relative;">
-          <div class="mode-pill dev" id="header-mode-pill" title="Click to choose Agent Operating Mode">
-            <span class="mode-dot"></span>
-            <span id="header-mode-text">DEV MODE</span>
-            <span style="font-size: 8px; opacity: 0.7; margin-left: 2px;">▼</span>
-          </div>
-          <!-- Mode Switcher Dropdown (Agent Pro, Developer, User) -->
-          <div class="mode-switcher-dropdown" id="mode-switcher-dropdown" style="display: none;">
-            <div class="mode-option" data-mode="agent_pro">
-              <div class="mode-option-dot agent_pro"></div>
-              <div class="mode-option-info">
-                <div class="mode-option-title">Agent Pro Mode</div>
-                <div class="mode-option-desc">Autonomous — executes code, edits files & builds automatically</div>
-              </div>
-              <span class="mode-check">✓</span>
-            </div>
-            <div class="mode-option active" data-mode="dev">
-              <div class="mode-option-dot dev"></div>
-              <div class="mode-option-info">
-                <div class="mode-option-title">Developer Mode</div>
-                <div class="mode-option-desc">Balanced — routine inspections run smoothly; file edits & commands require approval</div>
-              </div>
-              <span class="mode-check">✓</span>
-            </div>
-            <div class="mode-option" data-mode="user">
-              <div class="mode-option-dot user"></div>
-              <div class="mode-option-info">
-                <div class="mode-option-title">User Mode</div>
-                <div class="mode-option-desc">Restricted — every tool call & command requires explicit confirmation</div>
-              </div>
-              <span class="mode-check">✓</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Windows Native Window Controls (Minimize, Maximize, Close) -->
-        <div class="window-controls-windows">
-          <button class="win-btn win-minimize-btn" id="win-minimize" title="Minimize">
-            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10v1H0z" fill="currentColor"/></svg>
-          </button>
-          <button class="win-btn win-maximize-btn" id="win-maximize" title="Maximize">
-            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1v8h8V1H1zm7 7H2V2h6v6z" fill="currentColor"/></svg>
-          </button>
-          <button class="win-btn win-close-btn" id="win-close" title="Close">
-            <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 0L0 1l4 4-4 4 1 1 4-4 4 4 1-1-4-4 4-4-1-1-4 4-4-4z" fill="currentColor"/></svg>
-          </button>
-        </div>
       </div>
     </header>
 
@@ -292,6 +287,14 @@
                   <line x1="9" y1="14" x2="15" y2="14"></line>
                 </svg>
               </button>
+              <!-- Open Folder Button -->
+              <button class="icon-btn" id="btn-explorer-open-folder" title="Open Workspace Folder (Ctrl+O)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <line x1="12" y1="11" x2="12" y2="17"></line>
+                  <polyline points="9 14 12 11 15 14"></polyline>
+                </svg>
+              </button>
               <!-- Refresh Tree Button -->
               <button class="icon-btn" id="btn-refresh-files" title="Refresh Explorer">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -312,7 +315,7 @@
           </div>
 
           <!-- Root Project Folder Header -->
-          <div class="sidebar-section-header" id="sidebar-root-header">
+          <div class="sidebar-section-header" id="sidebar-root-header" title="Click to open or switch workspace folder" style="cursor: pointer;">
             <svg class="tree-root-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
               <polyline points="4 6 8 10 12 6"></polyline>
             </svg>

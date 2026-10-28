@@ -161,6 +161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // M1: recent workspaces bookkeeping + M2 trust gate
   async function enterWorkspace(rootPath) {
     if (!rootPath) return;
+    if (typeof rootPath === 'object' && rootPath !== null) {
+      rootPath = rootPath.path || rootPath.filePath || rootPath;
+    }
+    if (typeof rootPath !== 'string') return;
+
     try {
       const meta = await invoke('set_workspace', { path: rootPath });
       if (!meta || !meta.root_path) {
@@ -176,6 +181,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (headerTitle) headerTitle.textContent = meta.name;
       const sbWorkspace = document.getElementById('sb-workspace-text');
       if (sbWorkspace) sbWorkspace.textContent = meta.name;
+      const sbRootName = document.getElementById('sidebar-root-name');
+      if (sbRootName) sbRootName.textContent = (meta.name || 'WORKSPACE').toUpperCase();
+      document.title = `${meta.name || 'Workspace'} — Orbital X`;
 
       // Clean open editor tabs from any prior workspace
       state.editor.tabs = [];
@@ -241,6 +249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const selected = await pickFolder();
       if (selected) {
         await enterWorkspace(selected);
+        showToast(`Opened workspace: ${state.workspace.name || selected}`, 'info', 2500);
       }
     } catch (err) {
       console.error("Open Folder failed:", err);
@@ -252,6 +261,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
   document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
 
   // Theme toggle button in titlebar
   document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);

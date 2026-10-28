@@ -103,7 +103,6 @@ async function main() {
   // 2. Upload Assets
   const assetsToUpload = [
     { filePath: 'release/Orbital.X_2.2.6_x64-setup.exe', name: 'Orbital.X_2.2.6_x64-setup.exe' },
-    { filePath: 'release/Orbital X_2.2.6_x64-setup.exe', name: 'Orbital X_2.2.6_x64-setup.exe' },
     { filePath: 'release/orbital-x.exe', name: 'orbital-x.exe' }
   ];
 
@@ -118,7 +117,15 @@ async function main() {
     console.log(`\nPreparing asset: ${asset.name} (${(stat.size / 1024 / 1024).toFixed(2)} MB)...`);
 
     // Check if asset already exists in release
-    const existingAsset = release.assets ? release.assets.find(a => a.name === asset.name) : null;
+    const assetsListRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}/assets`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Orbital-X-Release'
+      }
+    });
+    const currentAssets = await assetsListRes.json();
+    const existingAsset = Array.isArray(currentAssets) ? currentAssets.find(a => a.name === asset.name) : null;
     if (existingAsset) {
       console.log(`Deleting existing asset ${asset.name} (ID: ${existingAsset.id})...`);
       await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingAsset.id}`, {

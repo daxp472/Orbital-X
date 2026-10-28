@@ -33,40 +33,36 @@ body {
 /* ==========================================================================
    Title Bar
    ========================================================================== */
-/* ==========================================================================
-   Title Bar (Matching Antigravity / Cursor / VS Code screenshot)
-   ========================================================================== */
 .titlebar {
-  height: var(--titlebar-height, 32px);
-  background: var(--bg-glass-translucent, rgba(18, 20, 26, 0.95));
+  height: var(--titlebar-height, 36px);
+  background: var(--bg-glass-translucent, rgba(18, 20, 26, 0.85));
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 0 8px;
+  padding: 0 12px 0 10px;
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   z-index: 100;
   color: var(--text-secondary);
   font-size: 12px;
-  -webkit-app-region: drag;
-  user-select: none;
 }
 
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: 2px;
-  -webkit-app-region: no-drag;
+  gap: 4px;
 }
 
 .titlebar-logo {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 3px 6px;
-  margin-right: 4px;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--text-primary-bright);
+  padding: 3px 8px;
+  margin-right: 6px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--trans-fast);
@@ -78,32 +74,45 @@ body {
 }
 
 .titlebar-logo-img {
-  width: 17px;
-  height: 17px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   object-fit: cover;
-  box-shadow: 0 0 8px rgba(57, 197, 187, 0.55);
+  box-shadow: 0 0 10px rgba(57, 197, 187, 0.55);
   transition: transform var(--trans-spring);
 }
 
 .titlebar-logo:hover .titlebar-logo-img {
-  transform: rotate(15deg) scale(1.1);
+  transform: rotate(20deg) scale(1.12);
+}
+
+.titlebar-brand-name {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #ffffff 40%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
+}
+
+.titlebar-logo svg {
+  width: 16px;
+  height: 16px;
 }
 
 .titlebar-menus {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
 
 .menu-item {
-  padding: 3px 7px;
+  padding: 3px 8px;
   color: var(--text-secondary);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
-  font-size: 11.5px;
-  user-select: none;
+  transition: all var(--trans-fast);
+  font-size: 12px;
 }
 
 .menu-item:hover {
@@ -116,74 +125,7 @@ body {
   align-items: center;
   justify-content: center;
   flex: 1;
-  max-width: 550px;
-  pointer-events: auto;
-}
-
-.workspace-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-full);
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--trans-fast);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  -webkit-app-region: no-drag;
-}
-
-.workspace-badge:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border-focus);
-  color: var(--text-primary-bright);
-}
-
-.titlebar-right {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 100%;
-  -webkit-app-region: no-drag;
-}
-
-/* Windows Native Window Controls (Minimize, Maximize, Close) */
-.window-controls-windows {
-  display: flex;
-  align-items: stretch;
-  height: 100%;
-  margin-left: 6px;
-}
-
-.win-btn {
-  width: 44px;
-  height: 100%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: background 0.1s ease, color 0.1s ease;
-  padding: 0;
-  outline: none;
-}
-
-.win-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: var(--text-primary-bright);
-}
-
-.win-close-btn:hover {
-  background: #e81123 !important;
-  color: #ffffff !important;
+  max-width: 500px;
 }
 
 .workspace-badge {

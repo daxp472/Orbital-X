@@ -24,9 +24,10 @@
 - **Tactile Keycaps:** Styled key combinations with Apple Design `<kbd class="apple-keycap">` keycaps with inset shadows, subtle gradients, and monospace typography.
 - **Interactive Rebinding:** Full in-app keypress recording, automatic conflict detection with warning alerts, and instant reset.
 
-### 🪟 Custom Modern IDE Title Bar & Window Controls
-- **Screenshot-Exact Title Bar Layout:** Clean top bar with Orbital X logo and inline application menus (`File`, `Edit`, `Selection`, `View`, `Go`, `Run`, `Terminal`, `Help`) on the left, centered workspace breadcrumb badge, and panel toggles, global search, activity center, theme toggle, and security mode switcher on the right.
-- **Native Windows Control Buttons:** Seamless Windows control buttons (`—` minimize, `▢` maximize, `✕` close with `#e81123` hover state) on the far right edge.
+### 🪟 Clean Top Bar Layout & Workspace Folder Picker Fix
+- **Restored Clean Top Bar:** Restored the clean, non-duplicated top bar layout with native traffic lights on the left, brand logo, menu bar (`File`, `Edit`, `Selection`, `View`, `Go`, `Run`, `Terminal`, `Help`), centered workspace badge, and layout/theme/mode controls on the right, eliminating duplicate window controls.
+- **Robust Native Workspace Folder Dialog:** Replaced fragile blocking async dialog calls with dedicated OS thread worker (`tokio::task::spawn_blocking`) using direct native `rfd::FileDialog` and `into_path()` fallback. Workspace folder selection now works instantly without errors.
+- **Multiple Open Folder Entrypoints:** Open any folder with 1-click via the top bar workspace badge, Explorer header "Open Folder" button (`#btn-explorer-open-folder`), Explorer root folder header, `File` menu, or <kbd>Ctrl+O</kbd>.
 
 ### 💬 Export & Import Chat History
 - **Header Action Buttons:** Added Export and Import SVG buttons in the AI agent dock header and inside the recent chats popover.
