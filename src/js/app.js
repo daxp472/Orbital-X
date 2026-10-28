@@ -18,8 +18,8 @@ import { pickFolder, invoke } from './services/tauri.js';
 import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
 import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
-import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
+import { initDebug } from './components/debug.js';
 
 window.showToast = showToast;
 
@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initOnboarding();
   initModelPicker();
   initSourceControl();
+  initDebug();
   initExtensions();
   initSkills();
   initSearchPanel();
@@ -160,6 +161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // M1: recent workspaces bookkeeping + M2 trust gate
   async function enterWorkspace(rootPath) {
     if (!rootPath) return;
+    if (typeof rootPath === 'object' && rootPath !== null) {
+      rootPath = rootPath.path || rootPath.filePath || rootPath;
+    }
+    if (typeof rootPath !== 'string') return;
+
     try {
       const meta = await invoke('set_workspace', { path: rootPath });
       if (!meta || !meta.root_path) {
@@ -175,6 +181,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (headerTitle) headerTitle.textContent = meta.name;
       const sbWorkspace = document.getElementById('sb-workspace-text');
       if (sbWorkspace) sbWorkspace.textContent = meta.name;
+      const sbRootName = document.getElementById('sidebar-root-name');
+      if (sbRootName) sbRootName.textContent = (meta.name || 'WORKSPACE').toUpperCase();
+      document.title = `${meta.name || 'Workspace'} — Orbital X`;
 
       // Clean open editor tabs from any prior workspace
       state.editor.tabs = [];
@@ -240,6 +249,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       const selected = await pickFolder();
       if (selected) {
         await enterWorkspace(selected);
+        showToast(`Opened workspace: ${state.workspace.name || selected}`, 'info', 2500);
       }
     } catch (err) {
       console.error("Open Folder failed:", err);
@@ -251,6 +261,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
   document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
 
   // Theme toggle button in titlebar
   document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
@@ -311,16 +323,9 @@ async function tryRestoreEditorSession() {
 }
 
 function initActivityRail() {
-  document.getElementById('rail-overview')?.addEventListener('click', () => {
-    // Overview lives in the sidebar like other subviews
-    document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.sidebar-subview').forEach(v => (v.style.display = 'none'));
-    const btn = document.getElementById('rail-overview');
-    btn?.classList.add('active');
-    document.getElementById('sidebar').classList.remove('hidden');
-    const view = document.getElementById('view-overview');
-    if (view) view.style.display = 'flex';
-    renderOverviewPanel();
+  document.getElementById('btn-global-search')?.addEventListener('click', () => {
+    document.getElementById('rail-search')?.click();
+    setTimeout(() => document.getElementById('search-input')?.focus(), 60);
   });
 
   const rails = [
@@ -357,6 +362,9 @@ function initActivityRail() {
           import('./components/extensions.js').then(m => m.renderPanel());
         }
         if (item.id === 'rail-source-control') refreshGitStatus();
+        if (item.id === 'rail-debug') {
+          import('./components/debug.js').then(m => m.refreshDebugTargets());
+        }
       }
     });
   });
@@ -883,95 +891,6 @@ function updateTrustIndicator() {
   } else {
     el.textContent = '';
   }
-}
-
-// ---------------------------------------------------------------
-// M4 — project overview panel
-// ---------------------------------------------------------------
-
-function renderOverviewPanel() {
-  const host = document.getElementById('overview-content');
-  if (!host) return;
-  if (!state.workspace.rootPath) {
-    host.innerHTML = '<div class="pack-empty">Open a workspace to see its overview.</div>';
-    return;
-  }
-  host.innerHTML = '<div class="pack-empty"><span class="spinner"></span> Scanning workspace…</div>';
-  invoke('get_workspace_stats').then((stats) => {
-    if (!stats) return;
-    const fmtBytes = (b) => {
-      if (!Number.isFinite(b) || b <= 0) return '—';
-      const units = ['B', 'KB', 'MB', 'GB'];
-      let v = b, i = 0;
-      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
-      return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
-    };
-    const exts = (stats.by_extension || []).slice(0, 8);
-    const totalBytes = stats.total_bytes || 1;
-    const colors = ['#39c5bb', '#bc8cff', '#2997ff', '#ff9f0a', '#30d158', '#ff453a', '#58a6ff', '#f0883e'];
-    let acc = 0;
-    const ARC_R = 52, CX = 66, CY = 66;
-    const arcs = exts.map((e, i) => {
-      const frac = (e.bytes || 0) / totalBytes;
-      const a0 = acc * 2 * Math.PI - Math.PI / 2;
-      acc += frac;
-      const a1 = acc * 2 * Math.PI - Math.PI / 2;
-      const large = a1 - a0 > Math.PI ? 1 : 0;
-      const x0 = CX + ARC_R * Math.cos(a0), y0 = CY + ARC_R * Math.sin(a0);
-      const x1 = CX + ARC_R * Math.cos(a1), y1 = CY + ARC_R * Math.sin(a1);
-      if (frac <= 0) return '';
-      return `<path d="M ${CX} ${CY} L ${x0.toFixed(1)} ${y0.toFixed(1)} A ${ARC_R} ${ARC_R} 0 ${large} 1 ${x1.toFixed(1)} ${y1.toFixed(1)} Z" fill="${colors[i % colors.length]}" opacity="0.85"><title>${escapeHtml(e.ext)}: ${e.files} files, ${fmtBytes(e.bytes)}</title></path>`;
-    }).join('');
-
-    const rows = exts.map((e, i) => `
-      <div style="display: flex; align-items: center; gap: 6px; font-size: 10.5px;">
-        <span style="width: 9px; height: 9px; border-radius: 2px; background: ${colors[i % colors.length]}; flex-shrink: 0;"></span>
-        <span style="font-family: var(--font-mono); min-width: 52px;">.${escapeHtml(e.ext)}</span>
-        <span style="color: var(--text-muted);">${e.files} files · ${fmtBytes(e.bytes)}</span>
-      </div>`).join('');
-
-    const largest = (stats.largest_files || []).map(f =>
-      `<div class="git-commit-row" style="cursor: pointer;">
-        <span class="git-subject" title="${escapeHtml(f.path)}">${escapeHtml(f.path.split('/').pop())}</span>
-        <span class="git-meta">${fmtBytes(f.bytes)}</span>
-      </div>`).join('');
-
-    host.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 12px;">
-        <div class="pack-card">
-          <div class="pack-title-row"><span class="pack-name">${escapeHtml(state.workspace.name || 'workspace')}</span></div>
-          <div class="pack-meta">${escapeHtml(stats.root || '')}</div>
-          ${stats.git_remote ? `<div class="pack-meta">⑂ ${escapeHtml(stats.git_remote)}</div>` : ''}
-          <div class="pack-meta"><strong>${(stats.total_files || 0).toLocaleString()}</strong> files · <strong>${fmtBytes(stats.total_bytes)}</strong></div>
-        </div>
-        <div class="pack-card">
-          <div class="pack-title-row"><span class="pack-name">Language Breakdown</span></div>
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <svg width="132" height="132" viewBox="0 0 132 132" style="flex-shrink: 0;">${arcs || '<circle cx="66" cy="66" r="52" fill="var(--bg-active)"/>'}</svg>
-            <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">${rows || '<span class="pack-meta">no files</span>'}</div>
-          </div>
-        </div>
-        <div class="pack-card">
-          <div class="pack-title-row"><span class="pack-name">Largest Files</span></div>
-          ${largest || '<div class="pack-meta">None over 200KB.</div>'}
-        </div>
-      </div>
-    `;
-    host.querySelectorAll('.git-commit-row').forEach((row, i) => {
-      row.addEventListener('click', async () => {
-        const f = (stats.largest_files || [])[i];
-        if (!f) return;
-        try {
-          const fileData = await invoke('read_file', { path: f.path });
-          const m = await import('./editor/monaco.js');
-          if (fileData.is_binary) { showToast('Binary file', 'info', 1800); return; }
-          m.openFileInTab(fileData);
-        } catch (e) { showToast(`${e}`, 'error', 2500); }
-      });
-    });
-  }).catch((e) => {
-    host.innerHTML = `<div class="pack-empty" style="color: var(--accent-red);">${escapeHtml(String(e))}</div>`;
-  });
 }
 
 // ---------------------------------------------------------------

@@ -199,23 +199,34 @@ export async function invoke(cmd, args = {}) {
 export async function pickFolder() {
   try {
     const res = await invoke('open_folder_dialog');
-    if (res !== undefined) {
-      return res; // either path string or null if cancelled
+    if (res) {
+      if (typeof res === 'string') return res;
+      if (typeof res === 'object' && (res.path || res.filePath)) return res.path || res.filePath;
+      return res;
+    }
+    if (res === null) {
+      return null;
     }
   } catch (e) {
     console.warn("open_folder_dialog IPC failed, attempting client plugin dialog fallback:", e);
   }
 
   if (window.__TAURI__ && window.__TAURI__.dialog) {
-    const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false });
-    return res || null;
+    try {
+      const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false });
+      if (res) return typeof res === 'string' ? res : (res.path || res.filePath || res);
+      return null;
+    } catch (e) {
+      console.warn("window.__TAURI__.dialog failed:", e);
+    }
   }
 
   try {
     const dialog = await import('@tauri-apps/plugin-dialog');
     if (dialog && dialog.open) {
       const res = await dialog.open({ directory: true, multiple: false });
-      return res || null;
+      if (res) return typeof res === 'string' ? res : (res.path || res.filePath || res);
+      return null;
     }
   } catch (e) {
     console.warn("Tauri dialog plugin not available:", e);

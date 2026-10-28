@@ -25,6 +25,7 @@ import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
 import { showConfirmDialog, showInputDialog } from '../services/dialogs.js';
+import { getFileSvgIcon } from './file-tree.js';
 
 let panelState = {
   tab: 'changes', // 'changes' | 'history' | 'graph'
@@ -68,9 +69,7 @@ const STATUS_META = {
 };
 
 function fileExtIcon(path) {
-  const ext = path.split('.').pop().toLowerCase();
-  const map = { rs: '🦀', js: '🟨', ts: '🔷', json: '🧾', md: '📝', html: '🌐', css: '🎨', py: '🐍', toml: '⚙️', yml: '⚙️', yaml: '⚙️', lock: '🔒' };
-  return map[ext] || '📄';
+  return `<span style="display:inline-flex; align-items:center; vertical-align:middle; width:16px; height:16px;">${getFileSvgIcon(path, false, false)}</span>`;
 }
 
 function fileName(path) { return path.split('/').pop().split('\\').pop(); }
@@ -211,16 +210,28 @@ function renderBranchHeader() {
   header.innerHTML = `
     <div class="git-branch-row">
       <button class="git-branch-btn" id="git-branch-btn" title="Switch or create branch">
-        <span class="git-branch-icon">⑂</span>
+        <svg class="git-branch-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="6" y1="9" x2="6" y2="15"></line><path d="M18 9a9 9 0 0 1-9 9"></path><circle cx="18" cy="9" r="3"></circle></svg>
         <strong>${esc(panelState.branch || '—')}</strong>
         ${abInfo}
       </button>
       <div class="git-sync-actions">
         ${noUpstream ? '<button class="btn btn-secondary btn-sm" id="git-publish" title="Publish branch to origin">Publish</button>' : ''}
-        <button class="btn btn-secondary btn-sm" id="git-fetch" title="git fetch --all">Fetch</button>
-        <button class="btn btn-secondary btn-sm" id="git-pull" title="git pull">Pull</button>
-        <button class="btn btn-secondary btn-sm" id="git-push" title="git push">Push</button>
-        <button class="btn btn-secondary btn-sm" id="git-stash-btn" title="Stash operations">Stash</button>
+        <button class="btn btn-secondary btn-sm git-action-btn" id="git-fetch" title="git fetch --all">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          Fetch
+        </button>
+        <button class="btn btn-secondary btn-sm git-action-btn" id="git-pull" title="git pull">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+          Pull
+        </button>
+        <button class="btn btn-secondary btn-sm git-action-btn" id="git-push" title="git push">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>
+          Push
+        </button>
+        <button class="btn btn-secondary btn-sm git-action-btn" id="git-stash-btn" title="Stash operations">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          Stash
+        </button>
       </div>
     </div>
   `;
@@ -301,7 +312,10 @@ function renderCommitBox() {
       <input type="text" id="git-coauthor" class="input-text" placeholder="Co-author: Name <email>" value="${esc(panelState.coAuthor)}" style="flex:1; font-size:10px; padding:2px 6px;" />
     </div>
     <div style="display:flex; gap:6px;">
-      <button class="btn btn-primary btn-sm" id="git-commit-btn" style="flex:1;">${panelState.amend ? 'Amend Commit' : 'Commit'}</button>
+      <button class="btn btn-primary btn-sm" id="git-commit-btn" style="flex:1; display:flex; align-items:center; justify-content:center; gap:6px;">
+        <span>${panelState.amend ? 'Amend Commit' : 'Commit'}</span>
+        <kbd style="font-size:9px; padding:1px 4px; border-radius:3px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.15); font-family:var(--font-mono);">Ctrl+Enter</kbd>
+      </button>
       <button class="btn btn-secondary btn-sm" id="git-commit-push-btn" style="flex:1;" title="Commit, then push">Commit & Push</button>
     </div>
   `;
@@ -323,7 +337,7 @@ function renderCommitBox() {
   box.querySelector('#git-commit-type')?.addEventListener('change', (e) => { panelState.commitType = e.target.value; });
   box.querySelector('#git-amend')?.addEventListener('change', (e) => {
     panelState.amend = e.target.checked;
-    box.querySelector('#git-commit-btn').textContent = panelState.amend ? 'Amend Commit' : 'Commit';
+    box.querySelector('#git-commit-btn span').textContent = panelState.amend ? 'Amend Commit' : 'Commit';
   });
   box.querySelector('#git-coauthor')?.addEventListener('input', (e) => { panelState.coAuthor = e.target.value; });
   box.querySelector('#git-commit-btn')?.addEventListener('click', () => doCommit(false));
@@ -338,8 +352,38 @@ function renderFileSection(title, files, opts = {}) {
 
   const header = document.createElement('div');
   header.className = 'git-section-header';
-  header.innerHTML = `<span class="git-section-title">${title} <span class="git-count">${files.length}</span></span>`;
+  const headerActions = opts.stagedSection
+    ? `<button class="git-icon-btn" data-hop="unstage-all" title="Unstage All Changes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>`
+    : (!opts.conflictSection
+      ? `<button class="git-icon-btn" data-hop="stage-all" title="Stage All Changes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+         <button class="git-icon-btn danger" data-hop="discard-all" title="Discard All Changes"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg></button>`
+      : '');
+
+  header.innerHTML = `
+    <span class="git-section-title">${title} <span class="git-count">${files.length}</span></span>
+    <span class="git-section-actions">${headerActions}</span>
+  `;
   section.appendChild(header);
+
+  header.querySelectorAll('[data-hop]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const hop = btn.dataset.hop;
+      if (hop === 'unstage-all') {
+        await gitAction(['restore', '--staged', '.'], 'Unstaged all changes');
+      } else if (hop === 'stage-all') {
+        const paths = files.map(f => f.path);
+        await gitAction(['add', '--', ...paths], `Staged ${paths.length} file(s)`);
+      } else if (hop === 'discard-all') {
+        if (!(await showConfirmDialog('Discard Changes', `Discard all changes in ${files.length} file(s)? This cannot be undone.`, 'Discard All', true))) return;
+        const tracked = files.filter(f => f.x !== '?').map(f => f.path);
+        const untracked = files.filter(f => f.x === '?').map(f => f.path);
+        if (tracked.length > 0) await gitAction(['restore', '--', ...tracked]);
+        if (untracked.length > 0) await gitAction(['clean', '-f', '--', ...untracked]);
+        showToast('Discarded all changes', 'info', 2000);
+      }
+    });
+  });
 
   for (const entry of files) {
     const row = document.createElement('div');
@@ -354,9 +398,27 @@ function renderFileSection(title, files, opts = {}) {
       <span class="git-file-dir" title="${esc(entry.path)}">${esc(dirOf(entry.path))}</span>
       <span class="git-status-badge" style="color:${meta.color};" title="${meta.title}">${opts.conflictSection ? 'CONFLICT' : meta.label}</span>
       <span class="git-row-actions">
-        ${opts.stagedSection ? `<button class="git-icon-btn" data-op="unstage" title="Unstage (git restore --staged)">−</button>` : ''}
-        ${opts.discard && !opts.conflictSection ? `<button class="git-icon-btn danger" data-op="discard" title="Discard changes">↺</button>` : ''}
-        ${opts.conflictSection ? `<button class="git-icon-btn" data-op="resolve" title="Resolve conflict">⚖</button>` : ''}
+        <button class="git-icon-btn" data-op="diff" title="Open Diff">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+        </button>
+        ${opts.stagedSection ? `
+          <button class="git-icon-btn" data-op="unstage" title="Unstage (git restore --staged)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        ` : ''}
+        ${!opts.stagedSection && !opts.conflictSection ? `
+          <button class="git-icon-btn danger" data-op="discard" title="Discard changes">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+          </button>
+          <button class="git-icon-btn" data-op="stage" title="Stage file">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        ` : ''}
+        ${opts.conflictSection ? `
+          <button class="git-icon-btn" data-op="resolve" title="Resolve conflict">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"></path><path d="M2 16l3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1z"></path><path d="M7 21h10"></path><path d="M12 3v18"></path><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"></path></svg>
+          </button>
+        ` : ''}
       </span>
     `;
     row.querySelector('.git-file-name')?.addEventListener('click', () => previewDiff(entry));
@@ -364,8 +426,10 @@ function renderFileSection(title, files, opts = {}) {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const op = btn.dataset.op;
-        if (op === 'unstage') unstageFile(entry.path);
+        if (op === 'stage') stageFile(entry.path);
+        else if (op === 'unstage') unstageFile(entry.path);
         else if (op === 'discard') discardFile(entry);
+        else if (op === 'diff') previewDiff(entry);
         else if (op === 'resolve') openConflictResolver(entry);
       });
     });
@@ -378,6 +442,10 @@ function renderFileSection(title, files, opts = {}) {
     section.appendChild(row);
   }
   return section;
+}
+
+async function stageFile(path) {
+  await gitAction(['add', '--', path], `Staged ${fileName(path)}`);
 }
 
 async function unstageFile(path) {

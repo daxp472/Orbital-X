@@ -7,9 +7,9 @@ import path from 'node:path';
 
 const REPO_OWNER = 'daxp472';
 const REPO_NAME = 'Orbital-X';
-const TAG_NAME = 'v2.2.5';
-const RELEASE_TITLE = 'Orbital X v2.2.5 — Explorer UI & SVG Icons, Speed & Repetition Fixes';
-const NOTES_PATH = path.resolve('release/notes/RELEASE_NOTES_v2.2.5.md');
+const TAG_NAME = 'v2.2.6';
+const RELEASE_TITLE = 'Orbital X v2.2.6 — Source Control, Run & Debug Engine, Shortcuts Overhaul & Top-Bar Controls';
+const NOTES_PATH = path.resolve('release/notes/RELEASE_NOTES_v2.2.6.md');
 
 // Retrieve token from Git Credential Manager or env
 import { spawnSync } from 'node:child_process';
@@ -102,8 +102,7 @@ async function main() {
 
   // 2. Upload Assets
   const assetsToUpload = [
-    { filePath: 'release/Orbital.X_2.2.5_x64-setup.exe', name: 'Orbital.X_2.2.5_x64-setup.exe' },
-    { filePath: 'release/Orbital X_2.2.5_x64-setup.exe', name: 'Orbital X_2.2.5_x64-setup.exe' },
+    { filePath: 'release/Orbital.X_2.2.6_x64-setup.exe', name: 'Orbital.X_2.2.6_x64-setup.exe' },
     { filePath: 'release/orbital-x.exe', name: 'orbital-x.exe' }
   ];
 
@@ -118,7 +117,15 @@ async function main() {
     console.log(`\nPreparing asset: ${asset.name} (${(stat.size / 1024 / 1024).toFixed(2)} MB)...`);
 
     // Check if asset already exists in release
-    const existingAsset = release.assets ? release.assets.find(a => a.name === asset.name) : null;
+    const assetsListRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}/assets`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Orbital-X-Release'
+      }
+    });
+    const currentAssets = await assetsListRes.json();
+    const existingAsset = Array.isArray(currentAssets) ? currentAssets.find(a => a.name === asset.name) : null;
     if (existingAsset) {
       console.log(`Deleting existing asset ${asset.name} (ID: ${existingAsset.id})...`);
       await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingAsset.id}`, {
@@ -158,7 +165,7 @@ async function main() {
   }
 
   console.log(`\n======================================================`);
-  console.log(`All assets uploaded! Release v2.2.5 is published.`);
+  console.log(`All assets uploaded! Release ${TAG_NAME} is published.`);
   console.log(`View online at: https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/tag/${TAG_NAME}`);
   console.log(`======================================================`);
 }

@@ -53,6 +53,8 @@ export function initChatSessions() {
   // H4: export / import buttons
   document.getElementById('btn-export-chat')?.addEventListener('click', exportActiveSessionMarkdown);
   document.getElementById('btn-import-chat')?.addEventListener('click', importSessionFromMarkdown);
+  document.getElementById('btn-export-chat-popover')?.addEventListener('click', exportActiveSessionMarkdown);
+  document.getElementById('btn-import-chat-popover')?.addEventListener('click', importSessionFromMarkdown);
 
   // H4: inline rename on double-click of the title
   titleElem?.addEventListener('dblclick', () => {
@@ -102,7 +104,7 @@ function sortSessions() {
   });
 }
 
-async function exportActiveSessionMarkdown() {
+export async function exportActiveSessionMarkdown() {
   const current = getActiveSession();
   if (!current) return;
   const lines = [
@@ -157,7 +159,7 @@ async function exportActiveSessionMarkdown() {
   }
 }
 
-function importSessionFromMarkdown() {
+export function importSessionFromMarkdown() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.md,.markdown,.txt';

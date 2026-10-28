@@ -807,19 +807,40 @@ body.theme-light .settings-sidebar,
   font-size: 10px;
   text-align: right;
 }
+.git-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  font-size: 10.5px;
+  border-radius: var(--radius-xs);
+  transition: all 0.15s ease;
+}
+.git-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
 .git-status-badge { font-weight: 700; font-size: 11px; flex-shrink: 0; }
-.git-row-actions { display: flex; gap: 2px; flex-shrink: 0; }
+.git-row-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0.65;
+  transition: opacity 0.12s ease;
+}
+.git-file-row:hover .git-row-actions { opacity: 1; }
 .git-icon-btn {
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 4px;
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
   cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
 }
-.git-icon-btn:hover { background: var(--bg-active); color: var(--text-primary); }
+.git-icon-btn:hover { background: var(--bg-active); color: var(--text-primary-bright); }
 .git-icon-btn.danger:hover { background: var(--accent-red); color: #fff; }
 .git-bulk-bar {
   display: flex; gap: 6px;

@@ -1,6 +1,6 @@
 [package]
 name = "orbital-x"
-version = "2.2.5"
+version = "2.2.6"
 description = "Orbital X AI-powered Desktop Coding IDE"
 authors = ["Orbital X Team"]
 edition = "2024"
@@ -21,6 +21,7 @@ tauri = { version = "2.12.4", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
+rfd = "0.15"
 tokio = { version = "1", features = ["full"] }
 tokio-util = "0.7"
 futures-util = "0.3"

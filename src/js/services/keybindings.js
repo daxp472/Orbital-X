@@ -48,7 +48,7 @@ try {
 export function getBinding(id) {
   const def = DEFAULT_BINDINGS[id];
   if (!def) return null;
-  return { ...def, combo: custom[id] || def.combo, isCustom: !!custom[id] };
+  return { id, ...def, combo: custom[id] || def.combo, isCustom: !!custom[id] };
 }
 
 export function getAllBindings() {

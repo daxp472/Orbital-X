@@ -275,7 +275,7 @@ mod tests {
     fn test_validate_supported_types() {
         assert!(validate_manifest(&valid_theme()).is_ok());
 
-        let mut prompt_pack = json!({
+        let prompt_pack = json!({
             "id": "test-prompt", "name": "P", "description": "d",
             "type": "prompt-pack",
             "systemPromptAddition": "Always write Rust with clippy-clean code."

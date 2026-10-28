@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.5 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.6 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -106,35 +106,45 @@
           </div>
         </div>
 
-        <!-- Panel Layout Toggle Buttons (Matching Screenshot) -->
+        <!-- Panel Layout Toggle Buttons -->
         <!-- Toggle Left Sidebar -->
         <button class="layout-toggle-btn active" id="btn-toggle-sidebar" title="Toggle Primary Side Bar (Ctrl+B)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
             <path d="M14 2H2C1.45 2 1 2.45 1 3V13C1 13.55 1.45 14 2 14H14C14.55 14 15 13.55 15 13V3C15 2.45 14.55 2 14 2ZM2 13V3H5V13H2ZM14 13H6V3H14V13Z"/>
           </svg>
         </button>
 
         <!-- Toggle Bottom Panel -->
         <button class="layout-toggle-btn active" id="btn-toggle-bottom" title="Toggle Panel (Ctrl+J)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
             <path d="M14 2H2C1.45 2 1 2.45 1 3V13C1 13.55 1.45 14 2 14H14C14.55 14 15 13.55 15 13V3C15 2.45 14.55 2 14 2ZM14 3V10H2V3H14ZM2 13V11H14V13H2Z"/>
           </svg>
         </button>
 
         <!-- Toggle Right AI Panel -->
         <button class="layout-toggle-btn active" id="btn-toggle-agent" title="Toggle Secondary Side Bar (AI Panel)">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
             <path d="M14 2H2C1.45 2 1 2.45 1 3V13C1 13.55 1.45 14 2 14H14C14.55 14 15 13.55 15 13V3C15 2.45 14.55 2 14 2ZM10 13H2V3H10V13ZM14 13H11V3H14V13Z"/>
           </svg>
         </button>
 
-        <!-- Quick Theme Toggle -->
+        <!-- Quick Global Search Icon -->
+        <button class="icon-btn" id="btn-global-search" title="Search in Files (Ctrl+Shift+F)" aria-label="Search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+
+        <!-- Activity Center -->
         <button class="icon-btn" id="btn-activity-center" title="Activity Center" aria-label="Activity Center">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
           </svg>
         </button>
+
+        <!-- Quick Theme Toggle -->
         <button class="icon-btn" id="btn-theme-toggle" title="Cycle Theme: Orbit Dark / Nebula Light / Midnight Blue">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="5"></circle>
@@ -235,14 +245,6 @@
             </svg>
           </div>
 
-          <!-- Token Usage Dashboard Icon -->
-          <div class="rail-btn" id="rail-overview" data-tooltip="Project Overview" title="Project Overview — stats, languages, largest files">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="20" x2="18" y2="10"></line>
-              <line x1="12" y1="20" x2="12" y2="4"></line>
-              <line x1="6" y1="20" x2="6" y2="14"></line>
-            </svg>
-          </div>
           <div class="rail-btn" id="rail-usage" data-tooltip="Token Usage" title="Token Usage & Analytics Dashboard">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
@@ -285,6 +287,14 @@
                   <line x1="9" y1="14" x2="15" y2="14"></line>
                 </svg>
               </button>
+              <!-- Open Folder Button -->
+              <button class="icon-btn" id="btn-explorer-open-folder" title="Open Workspace Folder (Ctrl+O)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                  <line x1="12" y1="11" x2="12" y2="17"></line>
+                  <polyline points="9 14 12 11 15 14"></polyline>
+                </svg>
+              </button>
               <!-- Refresh Tree Button -->
               <button class="icon-btn" id="btn-refresh-files" title="Refresh Explorer">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -305,7 +315,7 @@
           </div>
 
           <!-- Root Project Folder Header -->
-          <div class="sidebar-section-header" id="sidebar-root-header">
+          <div class="sidebar-section-header" id="sidebar-root-header" title="Click to open or switch workspace folder" style="cursor: pointer;">
             <svg class="tree-root-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
               <polyline points="4 6 8 10 12 6"></polyline>
             </svg>
@@ -355,13 +365,6 @@
           </div>
         </div>
 
-        <!-- Project Overview View -->
-        <div id="view-overview" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
-          <div class="sidebar-header"><span>Project Overview</span></div>
-          <div class="sidebar-content" id="overview-content" style="padding: 10px; overflow-y: auto; flex: 1;">
-            <div class="pack-empty">Open a workspace to see its overview.</div>
-          </div>
-        </div>
 
         <!-- Memory View -->
         <div id="view-memory" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
@@ -601,6 +604,23 @@
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
+              <!-- Export Chat -->
+              <button class="icon-btn" id="btn-export-chat" aria-label="Export chat" title="Export Active Chat to Markdown (.md)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </button>
+              <!-- Import Chat -->
+              <button class="icon-btn" id="btn-import-chat" aria-label="Import chat" title="Import Chat Session (.md / .txt)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </button>
+              <!-- Chat History -->
               <button class="icon-btn" id="btn-chat-history" title="Recent Chats & History">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <circle cx="12" cy="12" r="2"></circle>
@@ -619,8 +639,12 @@
 
             <!-- Chat History Popover Dropdown -->
             <div class="chat-history-dropdown" id="chat-history-dropdown">
-              <div class="chat-history-header">
+              <div class="chat-history-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <span>Recent Chats</span>
+                <div style="display:flex; gap:4px;">
+                  <button class="btn btn-secondary btn-sm" id="btn-import-chat-popover" style="font-size:10px; padding:1px 6px;" title="Import Chat File">Import</button>
+                  <button class="btn btn-secondary btn-sm" id="btn-export-chat-popover" style="font-size:10px; padding:1px 6px;" title="Export Active Chat">Export</button>
+                </div>
               </div>
               <div class="chat-history-list" id="chat-history-list">
                 <!-- Dynamically rendered by chat-sessions.js -->
