@@ -338,13 +338,16 @@ export function initFileTreeHeaderActions() {
     if (!relPath || !relPath.trim()) return;
 
     try {
-      await invoke('save_file', {
+      const diff = await invoke('save_file', {
         path: relPath.trim(),
         content: '',
         description: 'Created via Explorer New File'
       });
       await refreshFileTree();
       const fileData = await invoke('read_file', { path: relPath.trim() });
+      if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
+        fileData.cursor_offset = diff.cursor_offset;
+      }
       openFileInTab(fileData);
     } catch (e) {
       alert("Failed to create file: " + e);
@@ -931,9 +934,14 @@ export async function promptNewFile(dirPath) {
   if (!name || !name.trim()) return;
   const path = dirPath ? `${dirPath}/${name.trim()}` : name.trim();
   try {
-    await invoke('save_file', { path, content: '', description: 'New file' });
+    const diff = await invoke('save_file', { path, content: '', description: 'New file' });
     showToast(`Created ${path}`, 'success', 2200);
     refreshTreeAfterMutation();
+    const fileData = await invoke('read_file', { path });
+    if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
+      fileData.cursor_offset = diff.cursor_offset;
+    }
+    openFileInTab(fileData);
   } catch (e) {
     showToast(`Create failed: ${e}`, 'error', 3000);
   }
