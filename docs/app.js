@@ -4,6 +4,7 @@
 // ==========================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
+  initMobileNav();
   initOSDetection();
   initModeSwitcher();
   initCopyButtons();
@@ -14,6 +15,37 @@ document.addEventListener('DOMContentLoaded', () => {
   initFAQAccordion();
   initReportIssuePage();
 });
+
+
+// 0. Mobile Navigation Toggle Drawer
+function initMobileNav() {
+  const toggleBtn = document.getElementById('mobile-nav-toggle');
+  const navLinks = document.querySelector('.nav-links');
+  if (!toggleBtn || !navLinks) return;
+
+  toggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = navLinks.classList.toggle('active');
+    toggleBtn.classList.toggle('active', isOpen);
+    toggleBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!navLinks.contains(e.target) && !toggleBtn.contains(e.target)) {
+      navLinks.classList.remove('active');
+      toggleBtn.classList.remove('active');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+
+  navLinks.querySelectorAll('a').forEach(link => {
+    link.addEventListener('click', () => {
+      navLinks.classList.remove('active');
+      toggleBtn.classList.remove('active');
+      toggleBtn.setAttribute('aria-expanded', 'false');
+    });
+  });
+}
 
 // 1. Detect User OS & update main CTA with verified v2.2.8 release URLs
 function initOSDetection() {
