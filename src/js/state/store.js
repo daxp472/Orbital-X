@@ -182,8 +182,16 @@ export function loadPersistedState() {
 
     const savedKeys = localStorage.getItem('orbital_keys');
     if (savedKeys) {
-      const parsed = JSON.parse(savedKeys);
-      state.ai.keys = { ...state.ai.keys, ...parsed };
+      try {
+        let parsed;
+        try {
+          parsed = JSON.parse(savedKeys);
+        } catch {
+          // Attempt backward compatibility: decode Base64 if plain parse fails
+          parsed = JSON.parse(atob(savedKeys));
+        }
+        state.ai.keys = { ...state.ai.keys, ...parsed };
+      } catch (e) { /* corrupted */ }
     }
 
     const savedAutoSave = localStorage.getItem('orbital_autosave');
@@ -221,7 +229,7 @@ export function persistState() {
     localStorage.setItem('orbital_smart_routing', JSON.stringify(state.ai.smartRouting || {}));
     localStorage.setItem('orbital_debug_mode', state.ai.debugMode ? 'true' : 'false');
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
-    localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
+    localStorage.setItem('orbital_keys', btoa(JSON.stringify(state.ai.keys)));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');
     localStorage.setItem('orbital_autosave_delay', (state.settings.autoSaveDelay || 1000).toString());
     localStorage.setItem('orbital_boilerplate', JSON.stringify(state.settings.boilerplate || { enabled: true, disabledLanguages: [] }));

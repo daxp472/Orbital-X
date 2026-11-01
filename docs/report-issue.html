@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Issue — Orbital X</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Report issues for Orbital X, the native AI desktop coding IDE built with Tauri 2 and Rust." />
+  <meta name="keywords" content="Orbital X, AI IDE, Bug Report, Issue Tracker, GitHub" />
+  <meta property="og:title" content="Report Issue — Orbital X" />
+  <meta property="og:description" content="Report bugs and feature requests for Orbital X." />
+  <meta property="og:image" content="https://daxp472.github.io/Orbital-X/logo.png" />
+  <meta property="og:url" content="https://daxp472.github.io/Orbital-X/report-issue.html" />
+  <meta property="og:type" content="website" />
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* Report Issue Page Specific Styles */
+    .report-page-header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding-top: 120px;
+    }
+
+    .report-page-header h1 {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 800;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .report-page-header p {
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 24px;
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: var(--trans);
+    }
+
+    .back-link:hover {
+      color: var(--accent-cyan);
+      background: rgba(57, 197, 187, 0.1);
+      border-color: rgba(57, 197, 187, 0.3);
+    }
+
+    .back-link svg {
+      width: 16px;
+      height: 16px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <img src="logo.png" alt="Orbital X Logo" class="brand-logo-img" />
+        <span>Orbital X</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="index.html#features">Features</a></li>
+        <li><a href="index.html#download">Download</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="index.html" class="btn btn-secondary btn-sm">← Back to Site</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Header -->
+  <div class="report-page-header">
+    <h1>Report an Issue</h1>
+    <p>Help us improve Orbital X by reporting bugs, feature requests, or other issues.</p>
+  </div>
+
+  <!-- Report Issue Form -->
+  <section class="section report-issue-section">
+    <div class="container">
+      <div class="report-form" id="report-form">
+        <h2>Submit Issue Report</h2>
+        <p class="form-subtitle">All fields marked with * are required.</p>
+
+        <form id="issueForm">
+          <!-- Name Field -->
+          <div class="report-field">
+            <label for="issue-name" class="report-label">Name *</label>
+            <input type="text" id="issue-name" name="name" class="report-input" placeholder="Your name or GitHub username" required />
+          </div>
+
+          <!-- Email Field -->
+          <div class="report-field">
+            <label for="issue-email" class="report-label">Email *</label>
+            <input type="email" id="issue-email" name="email" class="report-input" placeholder="your@email.com" required />
+          </div>
+
+          <!-- Category Dropdown -->
+          <div class="report-field">
+            <label for="issue-category" class="report-label">Category *</label>
+            <select id="issue-category" name="category" class="report-select" required>
+              <option value="" disabled selected>Select issue category</option>
+              <option value="bug">Bug Report</option>
+              <option value="feature">Feature Request</option>
+              <option value="documentation">Documentation Issue</option>
+              <option value="performance">Performance Issue</option>
+              <option value="security">Security Issue</option>
+              <option value="installation">Installation Problem</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+
+          <!-- Severity Dropdown -->
+          <div class="report-field">
+            <label for="issue-severity" class="report-label">Severity *</label>
+            <select id="issue-severity" name="severity" class="report-select" required>
+              <option value="" disabled selected>Select severity</option>
+              <option value="low">Low - Minor issue, doesn't block progress</option>
+              <option value="medium">Medium - Noticeable but work can continue</option>
+              <option value="high">High - Blocks important functionality</option>
+              <option value="critical">Critical - Complete blocker or data loss</option>
+            </select>
+          </div>
+
+          <!-- Title Field -->
+          <div class="report-field">
+            <label for="issue-title" class="report-label">Title *</label>
+            <input type="text" id="issue-title" name="title" class="report-input" placeholder="Brief, descriptive title" required />
+          </div>
+
+          <!-- Description Field -->
+          <div class="report-field">
+            <label for="issue-description" class="report-label">Description *</label>
+            <textarea id="issue-description" name="description" class="report-textarea" placeholder="Detailed description of the issue. Include steps to reproduce, expected behavior, and actual behavior." required></textarea>
+          </div>
+
+          <!-- Steps to Reproduce -->
+          <div class="report-field">
+            <label for="issue-steps" class="report-label">Steps to Reproduce</label>
+            <textarea id="issue-steps" name="steps" class="report-textarea" placeholder="1. Go to...
+2. Click...
+3. See error..." rows="4"></textarea>
+          </div>
+
+          <!-- System Information (Auto-detected) -->
+          <div class="report-field">
+            <label class="report-label">System Information (Auto-detected)</label>
+            <div class="report-sysinfo">
+              <div class="sysinfo-item">
+                <div class="sysinfo-label">Operating System</div>
+                <div class="sysinfo-value" id="sys-os">Detecting...</div>
+              </div>
+              <div class="sysinfo-item">
+                <div class="sysinfo-label">Browser</div>
+                <div class="sysinfo-value" id="sys-browser">Detecting...</div>
+              </div>
+              <div class="sysinfo-item">
+                <div class="sysinfo-label">Screen Resolution</div>
+                <div class="sysinfo-value" id="sys-resolution">Detecting...</div>
+              </div>
+              <div class="sysinfo-item">
+                <div class="sysinfo-label">Orbital X Version</div>
+                <div class="sysinfo-value" id="sys-version">v2.2.8</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Submit Button -->
+          <button type="submit" class="btn btn-primary submit-btn" id="submit-btn">
+            Submit Issue
+          </button>
+        </form>
+
+        <!-- Success State -->
+        <div class="success-state" id="success-state">
+          <div class="success-icon">✓</div>
+          <h3>Issue Submitted Successfully!</h3>
+          <p>Your issue has been prepared for submission. Click below to create a GitHub issue.</p>
+          <a href="" id="github-issue-link" target="_blank" rel="noopener" class="copy-issue-btn">Open GitHub Issue</a>
+          <div style="margin-top: 16px;">
+            <a href="index.html" class="back-link">← Back to Website</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // Auto-detect system information
+    function detectSystemInfo() {
+      // OS Detection
+      const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+      let os = 'Unknown';
+
+      if (/windows/nti /i.test(userAgent)) os = 'Windows';
+      else if (/mac/i.test(userAgent)) os = 'macOS';
+      else if (/linux/i.test(userAgent)) os = 'Linux';
+      else if (/android/i.test(userAgent)) os = 'Android';
+      else if (/iPhone|iPad|iPod/i.test(userAgent)) os = 'iOS';
+
+      document.getElementById('sys-os').textContent = os;
+
+      // Browser Detection
+      let browser = 'Unknown';
+      if (/chrome|crms/i.test(userAgent) && /edge/i.test(userAgent)) browser = 'Microsoft Edge';
+      else if (/chrome/i.test(userAgent)) browser = 'Google Chrome';
+      else if (/firefox|fxios/i.test(userAgent)) browser = 'Mozilla Firefox';
+      else if (/safari/i.test(userAgent)) browser = 'Safari';
+
+      document.getElementById('sys-browser').textContent = browser;
+
+      // Screen Resolution
+      const resolution = `${window.screen.width} × ${window.screen.height}`;
+      document.getElementById('sys-resolution').textContent = resolution;
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      detectSystemInfo();
+
+      const form = document.getElementById('issueForm');
+      const successState = document.getElementById('success-state');
+      const submitBtn = document.getElementById('submit-btn');
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // Collect form data
+        const name = document.getElementById('issue-name').value;
+        const email = document.getElementById('issue-email').value;
+        const category = document.getElementById('issue-category').value;
+        const severity = document.getElementById('issue-severity').value;
+        const title = document.getElementById('issue-title').value;
+        const description = document.getElementById('issue-description').value;
+        const steps = document.getElementById('issue-steps').value;
+
+        // Build GitHub issue URL with pre-filled values
+        const baseUrl = 'https://github.com/daxp472/Orbital-X/issues/new';
+        const params = new URLSearchParams({
+          title: `[${severity.toUpperCase()}] ${title}`,
+          body: `**Name:** ${name || 'Anonymous'}
+**Email:** ${email || 'Not provided'}
+**Category:** ${category}
+**Severity:** ${severity}
+
+**Description:**
+${description || 'No description provided.'}
+
+**Steps to Reproduce:**
+${steps || 'No steps provided.'}
+
+**System Information:**
+- OS: ${document.getElementById('sys-os').textContent}
+- Browser: ${document.getElementById('sys-browser').textContent}
+- Resolution: ${document.getElementById('sys-resolution').textContent}
+- Orbital X Version: ${document.getElementById('sys-version').textContent}`
+        });
+
+        const issueUrl = `${baseUrl}?${params.toString()}`;
+
+        // Show success state
+        form.style.display = 'none';
+        successState.style.display = 'block';
+
+        // Set the GitHub issue link
+        const githubLink = document.getElementById('github-issue-link');
+        githubLink.href = issueUrl;
+      });
+    });
+  </script>
+</body>
+</html>

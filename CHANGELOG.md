@@ -6,6 +6,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.2.8] — 2026-11-01
+
+### Upgraded
+- **Auto-Update System:** Native Tauri updater integration with automatic release checking, progress tracking, download management, and seamless installer execution. Users are notified when updates are available and guided through the download/installation process.
+- **Report Issue Feature:** Added "Report Issue" button in the Help menu, About dialog, and Status Bar. Opens the public docs issue portal with pre-filled system information for streamlined bug reporting.
+- **Documentation Website:** Comprehensive docs site upgrade with deep product documentation, feature guides, installation walkthroughs, FAQ section, and responsive Apple-inspired design with glassmorphic navigation.
+
+### Fixed
+- **Monaco Editor Memory Leak:** Fixed unbounded memory growth when closing tabs by properly disposing of model references via `editorModels.delete(path)` only when no other tab references the same file path in either panel.
+- **Change Journal Memory Accumulation:** Added automatic eviction when change journal exceeds 100 entries, preserving the most recent history for undo/checkpoint functionality.
+- **API Key Storage Security:** Implemented base64 obfuscation for API keys before `localStorage` persistence, with backward compatibility for existing plaintext keys on load.
+
+### Changed
+- Updated all version references to v2.2.8 across `package.json`, `Cargo.toml`, `tauri.conf.json`, `index.html`, and `src/js/app.js`.
+- Added `check_for_updates`, `download_update`, `install_update`, and `open_url` IPC commands to the Rust backend for native update functionality.
+- Updated What's New modal to accurately reflect v2.2.8 release notes.
+
+---
+
 ## [v2.2.7] — 2026-11-01
 
 ### Upgraded & Fixed

@@ -10,9 +10,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initFPSSimulator();
   initHardwareAdvisor();
   initTierFilterTabs();
+  initFadeInAnimations();
+  initFAQAccordion();
+  initReportIssuePage();
 });
 
-// 1. Detect User OS & update main CTA with verified v2.2.6 release URLs
+// 1. Detect User OS & update main CTA with verified v2.2.8 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -22,16 +25,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.6/Orbital.X_2.2.6_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.8/Orbital.X_2.2.8_x64-setup.exe';
   } else if (ua.includes('mac')) {
     ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.6/Orbital.X_2.2.6_aarch64.dmg';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.8/Orbital.X_2.2.8_aarch64.dmg';
   } else if (ua.includes('linux')) {
     ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.6/Orbital.X_2.2.6_amd64.AppImage';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.8/Orbital.X_2.2.8_amd64.AppImage';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.2.6)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.2.6';
+    ctaLabel.textContent = 'Download Orbital X (v2.2.8)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.2.8';
   }
 }
 
@@ -229,4 +232,65 @@ function initTierFilterTabs() {
       });
     });
   });
+}
+
+// 7. Fade In Animations (Intersection Observer)
+function initFadeInAnimations() {
+  // Check for Intersection Observer support
+  if (!('IntersectionObserver' in window)) {
+    // Fallback: show all elements immediately
+    document.querySelectorAll('.fade-in, .fade-in-up').forEach(el => {
+      el.classList.add('visible');
+    });
+    return;
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        // Stop observing once visible
+        observer.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  });
+
+  // Observe all fade-in elements
+  document.querySelectorAll('.fade-in, .fade-in-up').forEach(el => {
+    observer.observe(el);
+  });
+}
+
+// 8. FAQ Accordion (for collapse/expand)
+function initFAQAccordion() {
+  const questions = document.querySelectorAll('.faq-question');
+
+  questions.forEach(question => {
+    question.addEventListener('click', () => {
+      const currentlyActive = document.querySelector('.faq-question.active');
+      if (currentlyActive && currentlyActive !== question) {
+        currentlyActive.classList.remove('active');
+        currentlyActive.nextElementSibling.classList.remove('active');
+      }
+      question.classList.toggle('active');
+      question.nextElementSibling.classList.toggle('active');
+    });
+  });
+}
+
+// 9. Report Issue Page Specific
+function initReportIssuePage() {
+  // This is handled inline in the HTML for the system detection
+  // Additional enhancements can be added here if needed
+  const form = document.getElementById('issueForm');
+  if (form) {
+    // Add visual feedback for form interactions
+    form.addEventListener('input', (e) => {
+      e.target.classList.add('touching');
+      setTimeout(() => e.target.classList.remove('touching'), 1000);
+    });
+  }
 }

@@ -144,6 +144,16 @@ impl WorkspaceService {
         Ok(meta)
     }
 
+    /// Caps the change journal at MAX_JOURNAL_ENTRIES, evicting the oldest
+    /// entries first. Keeps memory bounded across long agent sessions while
+    /// preserving the most recent history for undo / checkpoint restore.
+    fn cap_change_journal(&mut self) {
+        const MAX_JOURNAL_ENTRIES: usize = 100;
+        while self.change_journal.len() > MAX_JOURNAL_ENTRIES {
+            self.change_journal.remove(0);
+        }
+    }
+
     pub fn get_root(&self) -> Option<PathBuf> {
         self.root.clone()
     }
@@ -413,6 +423,7 @@ impl WorkspaceService {
             description: description.to_string(),
         };
         self.change_journal.push(entry);
+        self.cap_change_journal();
 
         fs::write(&full_path, &effective_content).map_err(|e| e.to_string())?;
 
@@ -444,6 +455,7 @@ impl WorkspaceService {
             description: format!("Deleted file: {}", path_str),
         };
         self.change_journal.push(entry);
+        self.cap_change_journal();
         fs::remove_file(&full_path).map_err(|e| e.to_string())?;
         Ok(format!("Deleted {}", path_str))
     }
@@ -483,6 +495,7 @@ impl WorkspaceService {
             description: format!("Deleted directory: {} ({} files, {} bytes)", path_str, file_count, total_bytes),
         };
         self.change_journal.push(entry);
+        self.cap_change_journal();
 
         fs::remove_dir_all(&full_path).map_err(|e| format!("Failed to delete directory: {}", e))?;
 
@@ -579,6 +592,7 @@ impl WorkspaceService {
                         description: format!("Batch deleted file (manifest {}): {}", manifest_id, item.path),
                     };
                     self.change_journal.push(entry);
+                    self.cap_change_journal();
 
                     match fs::remove_file(&full_path) {
                         Ok(_) => {
@@ -716,6 +730,7 @@ impl WorkspaceService {
             description: description.to_string(),
         };
         self.change_journal.push(entry);
+        self.cap_change_journal();
 
         fs::write(&full_path, &final_content).map_err(|e| e.to_string())?;
         Ok(diff)
