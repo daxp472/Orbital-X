@@ -882,6 +882,14 @@ export function openFileInTab(fileData, opts = {}) {
     showLargeFileBanner(panel, isLarge, isHuge, sizeBytes);
     ed.layout();
     if (!opts.silent) ed.focus();
+
+    // Place caret at cursor_offset if provided (e.g. from file boilerplate template {{cursor}})
+    const targetOffset = opts.cursorOffset !== undefined ? opts.cursorOffset : fileData.cursor_offset;
+    if (typeof targetOffset === 'number' && model) {
+      const pos = model.getPositionAt(targetOffset);
+      ed.setPosition(pos);
+      ed.revealPositionInCenter(pos);
+    }
   }
 
   if (dom.emptyState) dom.emptyState.style.display = 'none';
