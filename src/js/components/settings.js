@@ -2,7 +2,7 @@
 // Orbital X — Settings & Preferences Manager (settings.js)
 // ==========================================================================
 
-import { state, persistState, notify, setActiveModel } from '../state/store.js';
+import { state, persistState, notify, setActiveModel, subscribe } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
 
@@ -62,6 +62,15 @@ export function initSettings() {
       import('./agent.js').then(m => m.switchMode(c.mode));
     });
   });
+
+  // Reactive subscription: sync settings security cards when mode changes anywhere
+  subscribe((prop, val) => {
+    if (prop === 'modeChanged') {
+      selectSecurityCard(val);
+    }
+  });
+  // Initial sync with active mode
+  selectSecurityCard(state.agentMode);
 
   // Segmented group for Queued Messages
   document.querySelectorAll('#queued-msg-control .settings-segmented-btn').forEach(btn => {

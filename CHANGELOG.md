@@ -6,6 +6,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.2.7] — 2026-11-01
+
+### Upgraded & Fixed
+- **Native Workspace Folder Picker & COM Apartment Isolation:** Overhauled the Open Workspace system to prevent native dialog freezing, silent aborts, and bouncing back on Windows. Spawned a dedicated OS thread (`orbital-folder-picker`) with fresh Win32 COM apartment initialization, parent window handle attachment (`dialog.set_parent(&win)`), and robust path unpackers for strings, arrays, and object paths.
+- **Zero-Interruption Workspace Trust Gate:** Resolved `rememberWorkspaceTrust` runtime reference errors and eliminated intrusive blocking `confirm()` dialogs when opening directories. Explicitly opened workspaces are automatically marked trusted for seamless navigation.
+- **Interactive Triple-Mode Switcher Synchronization:** Added click interaction to the bottom status bar mode badge and synchronized the Apple-style Mode Switcher dropdown across both titlebar and status bar. Ensured real-time accent color synchronization (`agent_pro`: purple, `dev`: cyan, `user`: green) across UI indicators and stored states.
+- **Top-Bar Customization & Window Controls Cleanliness:** Verified and preserved the clean traffic light layout with brand logo, menu bar, and centered workspace badge without redundant window control overlays.
+- **Production Changelog Subsystem:** Initialized the automated `changelogs/` directory with detailed, standalone audit files (`001.md`) documenting all code changes, modified files, verification results, and zero-downtime production recovery guides.
+
+---
+
 ## [v2.2.6] — 2026-10-28
 
 ### Upgraded

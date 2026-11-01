@@ -197,42 +197,55 @@ export async function invoke(cmd, args = {}) {
 
 // Native Dialog picker for workspace folder
 export async function pickFolder() {
-  try {
-    const res = await invoke('open_folder_dialog');
-    if (res) {
-      if (typeof res === 'string') return res;
-      if (typeof res === 'object' && (res.path || res.filePath)) return res.path || res.filePath;
-      return res;
+  function extractPath(res) {
+    if (!res) return null;
+    if (typeof res === 'string' && res.trim()) return res.trim();
+    if (Array.isArray(res) && res.length > 0) {
+      const first = res[0];
+      return typeof first === 'string' ? first.trim() : (first?.path || first?.filePath || null);
     }
-    if (res === null) {
-      return null;
+    if (typeof res === 'object' && res !== null) {
+      return res.path || res.filePath || res.fsPath || null;
     }
-  } catch (e) {
-    console.warn("open_folder_dialog IPC failed, attempting client plugin dialog fallback:", e);
+    return null;
   }
 
-  if (window.__TAURI__ && window.__TAURI__.dialog) {
+  // 1. Primary: backend Rust command with fresh OS thread + parent window handle
+  try {
+    const res = await invoke('open_folder_dialog');
+    const path = extractPath(res);
+    if (path) return path;
+    if (res === null) return null; // User cancelled
+  } catch (e) {
+    console.warn("open_folder_dialog IPC failed, trying plugin dialog fallback:", e);
+  }
+
+  // 2. Client-side Tauri dialog plugin fallback
+  try {
+    const dialog = await import('@tauri-apps/plugin-dialog');
+    if (dialog && typeof dialog.open === 'function') {
+      const res = await dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
+      const path = extractPath(res);
+      if (path) return path;
+      if (res === null) return null;
+    }
+  } catch (e) {
+    console.warn("@tauri-apps/plugin-dialog fallback failed:", e);
+  }
+
+  // 3. window.__TAURI__.dialog fallback
+  if (window.__TAURI__ && window.__TAURI__.dialog && typeof window.__TAURI__.dialog.open === 'function') {
     try {
-      const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false });
-      if (res) return typeof res === 'string' ? res : (res.path || res.filePath || res);
-      return null;
+      const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
+      const path = extractPath(res);
+      if (path) return path;
+      if (res === null) return null;
     } catch (e) {
       console.warn("window.__TAURI__.dialog failed:", e);
     }
   }
 
-  try {
-    const dialog = await import('@tauri-apps/plugin-dialog');
-    if (dialog && dialog.open) {
-      const res = await dialog.open({ directory: true, multiple: false });
-      if (res) return typeof res === 'string' ? res : (res.path || res.filePath || res);
-      return null;
-    }
-  } catch (e) {
-    console.warn("Tauri dialog plugin not available:", e);
-  }
-
-  // Pure browser preview fallback only (never in Tauri)
+  // 4. Pure browser preview fallback only (never in Tauri)
   if (!window.__TAURI__ && !window.__TAURI_INTERNALS__) {
     return prompt("Enter workspace directory path:", "D:/1work/YT/Orbital X");
   }

@@ -54,6 +54,108 @@ function appendRestoredPlanNotice(plan) {
   timeline.appendChild(notice);
 }
 
+// Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
+// M1: recent workspaces bookkeeping + M2 trust gate
+export async function enterWorkspace(rootPath) {
+  if (!rootPath) return;
+  if (Array.isArray(rootPath)) {
+    rootPath = rootPath[0];
+  }
+  if (typeof rootPath === 'object' && rootPath !== null) {
+    rootPath = rootPath.path || rootPath.filePath || rootPath.fsPath || rootPath;
+  }
+  if (typeof rootPath !== 'string') return;
+  rootPath = rootPath.trim();
+  if (!rootPath) return;
+
+  try {
+    const meta = await invoke('set_workspace', { path: rootPath });
+    if (!meta || !meta.root_path) {
+      throw new Error('Workspace initialization returned empty metadata');
+    }
+
+    // Update state store
+    state.workspace.rootPath = meta.root_path;
+    state.workspace.name = meta.name;
+
+    // Update UI headers
+    const headerTitle = document.getElementById('header-workspace-name');
+    if (headerTitle) headerTitle.textContent = meta.name;
+    const sbWorkspace = document.getElementById('sb-workspace-text');
+    if (sbWorkspace) sbWorkspace.textContent = meta.name;
+    const sbRootName = document.getElementById('sidebar-root-name');
+    if (sbRootName) sbRootName.textContent = (meta.name || 'WORKSPACE').toUpperCase();
+    document.title = `${meta.name || 'Workspace'} — Orbital X`;
+
+    // Clean open editor tabs from any prior workspace
+    state.editor.tabs = [];
+    state.editor.activeTabId = null;
+    renderTabs();
+    const emptyState = document.getElementById('editor-empty-state');
+    if (emptyState) emptyState.style.display = 'flex';
+    const breadcrumbElem = document.getElementById('editor-breadcrumb');
+    if (breadcrumbElem) breadcrumbElem.textContent = '';
+
+    // Remember in recent workspaces
+    rememberRecentWorkspace(meta.root_path, meta.name);
+
+    // Trust gate: explicitly opened workspaces are trusted without blocking alerts
+    rememberWorkspaceTrust(meta.root_path, true);
+    updateTrustIndicator();
+
+    // Update terminal session CWD to match new workspace
+    const activeTerm = getActiveSession();
+    if (activeTerm) {
+      activeTerm.cwd = meta.root_path;
+      for (const pane of ['A', 'B']) {
+        const pl = document.getElementById(`terminal-prompt-label-${pane}`);
+        if (pl) pl.textContent = `PS ${meta.root_path}>`;
+      }
+      renderPanes();
+      executeTerminalCommand(`cd "${meta.root_path}"`).catch(() => {});
+    }
+
+    // Load file tree passing cached meta (avoids duplicate set_workspace IPC)
+    await loadWorkspace(meta.root_path, meta);
+
+    // Background refreshes - catch each so failure never breaks workspace transition
+    refreshMemories().catch(e => console.warn('Memory refresh failed:', e));
+    refreshGitStatus().catch(e => console.warn('Git status refresh failed:', e));
+    tryRestorePlan();
+    tryRestoreEditorSession();
+    import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); }).catch(() => {});
+    startWorkspaceIndexing().catch(e => console.warn('Workspace indexing failed:', e));
+
+    // Close welcome modal
+    const modal = document.getElementById('modal-welcome');
+    if (modal) modal.style.display = 'none';
+
+    return meta;
+  } catch (err) {
+    console.error('enterWorkspace failed:', err);
+    throw err;
+  }
+}
+
+export const handleOpenFolder = async () => {
+  const unsavedTabs = state.editor.tabs.filter(t => t.isDirty);
+  if (unsavedTabs.length > 0) {
+    const confirmOpen = await showConfirmDialog('Unsaved Files', `You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`, 'Open Workspace');
+    if (!confirmOpen) return;
+  }
+
+  try {
+    const selected = await pickFolder();
+    if (selected) {
+      await enterWorkspace(selected);
+      showToast(`Opened workspace: ${state.workspace.name || selected}`, 'info', 2500);
+    }
+  } catch (err) {
+    console.error("Open Folder failed:", err);
+    showToast(`Could not open folder: ${err}`, 'error', 3500);
+  }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("Orbital X Desktop IDE initializing...");
 
@@ -141,7 +243,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-open-settings')?.click();
   });
 
-  // 5. Check for current open workspace — if the backend has none, try to
+  // 5. Workspace Folder & Dialog Triggers (Bound immediately before any async restoration)
+  document.getElementById('btn-open-workspace')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
+
+  // Theme toggle button in titlebar
+  document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
+
+  // Mode pill in header & status bar: click to open Apple-style Mode Switcher Dropdown
+  const headerModePill = document.getElementById('header-mode-pill');
+  const modeDropdown = document.getElementById('mode-switcher-dropdown');
+  const statusModePill = document.getElementById('status-mode');
+  if (headerModePill && modeDropdown) {
+    const toggleModeDropdown = (e) => {
+      e.stopPropagation();
+      const isVisible = modeDropdown.style.display !== 'none';
+      modeDropdown.style.display = isVisible ? 'none' : 'flex';
+      modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.mode === state.agentMode);
+      });
+    };
+
+    headerModePill.addEventListener('click', toggleModeDropdown);
+
+    if (statusModePill) {
+      statusModePill.style.cursor = 'pointer';
+      statusModePill.title = 'Click to choose Agent Operating Mode';
+      statusModePill.addEventListener('click', toggleModeDropdown);
+    }
+
+    modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const chosen = opt.dataset.mode;
+        if (chosen) switchMode(chosen);
+        modeDropdown.style.display = 'none';
+      });
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!modeDropdown.contains(e.target) && !headerModePill.contains(e.target) && (!statusModePill || !statusModePill.contains(e.target))) {
+        modeDropdown.style.display = 'none';
+      }
+    });
+  }
+
+  // 6. Check for current open workspace — if the backend has none, try to
   //    auto-restore the most recent folder so the app opens where the user
   //    left it (Antigravity / VS Code behaviour).
   try {
@@ -154,146 +306,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     console.log("No initial workspace loaded:", e);
     await tryRestoreLastWorkspace();
-  }
-
-  // Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
-  // Quick Open Folder handler (Native Dialog Picker & Clean Workspace Transition)
-  // M1: recent workspaces bookkeeping + M2 trust gate
-  async function enterWorkspace(rootPath) {
-    if (!rootPath) return;
-    if (typeof rootPath === 'object' && rootPath !== null) {
-      rootPath = rootPath.path || rootPath.filePath || rootPath;
-    }
-    if (typeof rootPath !== 'string') return;
-
-    try {
-      const meta = await invoke('set_workspace', { path: rootPath });
-      if (!meta || !meta.root_path) {
-        throw new Error('Workspace initialization returned empty metadata');
-      }
-
-      // Update state store
-      state.workspace.rootPath = meta.root_path;
-      state.workspace.name = meta.name;
-
-      // Update UI headers
-      const headerTitle = document.getElementById('header-workspace-name');
-      if (headerTitle) headerTitle.textContent = meta.name;
-      const sbWorkspace = document.getElementById('sb-workspace-text');
-      if (sbWorkspace) sbWorkspace.textContent = meta.name;
-      const sbRootName = document.getElementById('sidebar-root-name');
-      if (sbRootName) sbRootName.textContent = (meta.name || 'WORKSPACE').toUpperCase();
-      document.title = `${meta.name || 'Workspace'} — Orbital X`;
-
-      // Clean open editor tabs from any prior workspace
-      state.editor.tabs = [];
-      state.editor.activeTabId = null;
-      renderTabs();
-      const emptyState = document.getElementById('editor-empty-state');
-      if (emptyState) emptyState.style.display = 'flex';
-      const breadcrumbElem = document.getElementById('editor-breadcrumb');
-      if (breadcrumbElem) breadcrumbElem.textContent = '';
-
-      // Remember in recent workspaces
-      rememberRecentWorkspace(meta.root_path, meta.name);
-
-      // Trust gate
-      const trusted = isWorkspaceTrusted(meta.root_path);
-      if (trusted === null) {
-        await promptWorkspaceTrust(meta.root_path);
-      }
-      updateTrustIndicator();
-
-      // Update terminal session CWD to match new workspace
-      const activeTerm = getActiveSession();
-      if (activeTerm) {
-        activeTerm.cwd = meta.root_path;
-        for (const pane of ['A', 'B']) {
-          const pl = document.getElementById(`terminal-prompt-label-${pane}`);
-          if (pl) pl.textContent = `PS ${meta.root_path}>`;
-        }
-        renderPanes();
-        executeTerminalCommand(`cd "${meta.root_path}"`).catch(() => {});
-      }
-
-      // Load file tree passing cached meta (avoids duplicate set_workspace IPC)
-      await loadWorkspace(meta.root_path, meta);
-
-      // Background refreshes - catch each so failure never breaks workspace transition
-      refreshMemories().catch(e => console.warn('Memory refresh failed:', e));
-      refreshGitStatus().catch(e => console.warn('Git status refresh failed:', e));
-      tryRestorePlan();
-      tryRestoreEditorSession();
-      import('./components/settings.js').then(m => { if (m.refreshWorkspaceSettings) m.refreshWorkspaceSettings(); }).catch(() => {});
-      startWorkspaceIndexing().catch(e => console.warn('Workspace indexing failed:', e));
-
-      // Close welcome modal
-      const modal = document.getElementById('modal-welcome');
-      if (modal) modal.style.display = 'none';
-
-      return meta;
-    } catch (err) {
-      console.error('enterWorkspace failed:', err);
-      throw err;
-    }
-  }
-
-  const handleOpenFolder = async () => {
-    const unsavedTabs = state.editor.tabs.filter(t => t.isDirty);
-    if (unsavedTabs.length > 0) {
-      const confirmOpen = await showConfirmDialog('Unsaved Files', `You have ${unsavedTabs.length} unsaved file(s). Opening a new workspace will close these tabs. Continue?`, 'Open Workspace');
-      if (!confirmOpen) return;
-    }
-
-    try {
-      const selected = await pickFolder();
-      if (selected) {
-        await enterWorkspace(selected);
-        showToast(`Opened workspace: ${state.workspace.name || selected}`, 'info', 2500);
-      }
-    } catch (err) {
-      console.error("Open Folder failed:", err);
-      showToast(`Could not open folder: ${err}`, 'error', 3500);
-    }
-  };
-
-  document.getElementById('btn-open-workspace')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
-
-  // Theme toggle button in titlebar
-  document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
-
-  // Mode pill in header: click to open Apple-style Mode Switcher Dropdown
-  const headerModePill = document.getElementById('header-mode-pill');
-  const modeDropdown = document.getElementById('mode-switcher-dropdown');
-  if (headerModePill && modeDropdown) {
-    headerModePill.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isVisible = modeDropdown.style.display !== 'none';
-      modeDropdown.style.display = isVisible ? 'none' : 'flex';
-      modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.mode === state.agentMode);
-      });
-    });
-
-    modeDropdown.querySelectorAll('.mode-option').forEach(opt => {
-      opt.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const chosen = opt.dataset.mode;
-        if (chosen) switchMode(chosen);
-        modeDropdown.style.display = 'none';
-      });
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!modeDropdown.contains(e.target) && !headerModePill.contains(e.target)) {
-        modeDropdown.style.display = 'none';
-      }
-    });
   }
 
   console.log("Orbital X initialization complete.");
@@ -808,9 +820,7 @@ function openWelcomeScreen() {
   }
   modal.style.display = 'flex';
 
-  document.getElementById('welcome-open-folder-btn')?.addEventListener('click', () => {
-    document.getElementById('btn-open-workspace')?.click();
-  });
+  document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
   document.getElementById('welcome-new-file-btn')?.addEventListener('click', () => {
     modal.style.display = 'none';
     import('./components/file-tree.js').then(m => { if (m.promptNewFile) m.promptNewFile(null); });
@@ -846,6 +856,15 @@ function openWelcomeScreen() {
 // ---------------------------------------------------------------
 
 const TRUST_KEY = 'orbital_workspace_trust';
+
+export function rememberWorkspaceTrust(rootPath, trusted = true) {
+  if (!rootPath) return;
+  try {
+    const map = JSON.parse(localStorage.getItem(TRUST_KEY) || '{}');
+    map[rootPath] = Boolean(trusted);
+    localStorage.setItem(TRUST_KEY, JSON.stringify(map));
+  } catch (e) { /* quota */ }
+}
 
 function isWorkspaceTrusted(rootPath) {
   // null = unknown (never asked)

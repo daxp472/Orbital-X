@@ -2,7 +2,7 @@
 // Orbital X — Agent Orchestrator & Mode Enforcer (agent.js)
 // ==========================================================================
 
-import { state, notify } from '../state/store.js';
+import { state, notify, persistState } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
@@ -354,6 +354,19 @@ function updateStatusBarAgentStatus(statusText = null) {
   if (sbText) {
     sbText.textContent = statusText || getModeDisplayName();
   }
+  const sbItem = document.getElementById('status-mode');
+  if (sbItem) {
+    const dot = sbItem.querySelector('.mode-dot');
+    if (dot) {
+      if (state.agentMode === 'agent_pro') {
+        dot.style.backgroundColor = 'var(--accent-purple)';
+      } else if (state.agentMode === 'user') {
+        dot.style.backgroundColor = 'var(--accent-green)';
+      } else {
+        dot.style.backgroundColor = 'var(--accent-cyan)';
+      }
+    }
+  }
 }
 
 function updateTokenEstimate(text = '') {
@@ -664,9 +677,14 @@ export async function switchMode(newMode) {
       return;
     }
   }
-  try { localStorage.setItem('orbital_mode_changed_at', new Date().toISOString()); } catch (err) { /* quota */ }
-  updateModeTooltip();
   state.agentMode = newMode;
+  try {
+    localStorage.setItem('orbital_mode', newMode);
+    localStorage.setItem('orbital_mode_changed_at', new Date().toISOString());
+  } catch (err) { /* quota */ }
+  persistState();
+
+  updateModeTooltip();
 
   const headerPill = document.getElementById('header-mode-pill');
   const headerText = document.getElementById('header-mode-text');

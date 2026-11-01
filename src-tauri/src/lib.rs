@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::ipc::Channel;
-use tauri::State;
+use tauri::{Manager, State};
 use terminal::{CommandResult, InteractiveSessionInfo, InteractiveTerminalManager, TerminalService};
 use tokio_util::sync::CancellationToken;
 use usage::{TokenUsageRecord, TokenUsageStats, UsageService};
@@ -415,36 +415,52 @@ fn clear_token_usage() -> Result<(), String> {
 
 #[tauri::command]
 async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
-    // Run dialog picker on a dedicated blocking OS thread with its own COM apartment
-    // to prevent any async event loop blocking or COM initialization failures on Windows.
-    let result = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-        // First try native rfd dialog (direct OS Win32/COM dialog, most reliable)
-        if let Some(path_buf) = rfd::FileDialog::new().set_title("Select Workspace Folder").pick_folder() {
-            let clean = workspace::strip_verbatim_prefix(&path_buf);
-            let path_str = clean.to_string_lossy().to_string();
-            if clean.is_dir() {
-                return Ok(Some(path_str));
-            }
-        }
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let app_handle = app.clone();
 
-        // Secondary fallback to tauri_plugin_dialog with proper into_path() conversion
-        use tauri_plugin_dialog::DialogExt;
-        if let Some(file_path) = app.dialog().file().blocking_pick_folder() {
-            if let Ok(path_buf) = file_path.into_path() {
+    // Spawn a clean dedicated OS thread to guarantee an uninitialized COM apartment
+    // and eliminate any RPC_E_CHANGED_MODE failures on Windows.
+    std::thread::Builder::new()
+        .name("orbital-folder-picker".into())
+        .spawn(move || {
+            // 1. Try native rfd dialog with parent window attached so it always stays in front
+            let mut dialog = rfd::FileDialog::new().set_title("Select Workspace Folder");
+            if let Some(win) = app_handle.get_webview_window("main") {
+                dialog = dialog.set_parent(&win);
+            }
+
+            if let Some(path_buf) = dialog.pick_folder() {
                 let clean = workspace::strip_verbatim_prefix(&path_buf);
                 let path_str = clean.to_string_lossy().to_string();
                 if clean.is_dir() {
-                    return Ok(Some(path_str));
+                    let _ = tx.send(Some(path_str));
+                    return;
                 }
             }
-        }
 
-        Ok(None)
-    })
-    .await
-    .map_err(|e| e.to_string())??;
+            // 2. Secondary fallback: tauri_plugin_dialog with WebviewWindow
+            use tauri_plugin_dialog::DialogExt;
+            if let Some(win) = app_handle.get_webview_window("main") {
+                if let Some(file_path) = win.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
+                    if let Ok(path_buf) = file_path.into_path() {
+                        let clean = workspace::strip_verbatim_prefix(&path_buf);
+                        let path_str = clean.to_string_lossy().to_string();
+                        if clean.is_dir() {
+                            let _ = tx.send(Some(path_str));
+                            return;
+                        }
+                    }
+                }
+            }
 
-    Ok(result)
+            let _ = tx.send(None);
+        })
+        .map_err(|e| format!("Failed to spawn folder picker thread: {}", e))?;
+
+    match rx.await {
+        Ok(res) => Ok(res),
+        Err(_) => Ok(None),
+    }
 }
 
 #[tauri::command]

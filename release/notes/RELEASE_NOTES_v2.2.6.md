@@ -24,10 +24,11 @@
 - **Tactile Keycaps:** Styled key combinations with Apple Design `<kbd class="apple-keycap">` keycaps with inset shadows, subtle gradients, and monospace typography.
 - **Interactive Rebinding:** Full in-app keypress recording, automatic conflict detection with warning alerts, and instant reset.
 
-### 🪟 Clean Top Bar Layout & Workspace Folder Picker Fix
+### 🪟 Clean Top Bar Layout, Folder Picker & Operating Mode Engine Fixes
 - **Restored Clean Top Bar:** Restored the clean, non-duplicated top bar layout with native traffic lights on the left, brand logo, menu bar (`File`, `Edit`, `Selection`, `View`, `Go`, `Run`, `Terminal`, `Help`), centered workspace badge, and layout/theme/mode controls on the right, eliminating duplicate window controls.
-- **Robust Native Workspace Folder Dialog:** Replaced fragile blocking async dialog calls with dedicated OS thread worker (`tokio::task::spawn_blocking`) using direct native `rfd::FileDialog` and `into_path()` fallback. Workspace folder selection now works instantly without errors.
-- **Multiple Open Folder Entrypoints:** Open any folder with 1-click via the top bar workspace badge, Explorer header "Open Folder" button (`#btn-explorer-open-folder`), Explorer root folder header, `File` menu, or <kbd>Ctrl+O</kbd>.
+- **Decoupled DOM Event Listeners & Open Workspace Lifecycle:** Resolved deferred event listener registration that prevented "Open Workspace" from firing on startup or on the welcome screen. Promoted `enterWorkspace` and `handleOpenFolder` to module-level exports so all entrypoints (header badge, welcome screen button, explorer tree button, `File` menu, and <kbd>Ctrl+O</kbd>) work immediately and reliably.
+- **Tauri 2 Client Dialog Integration:** Integrated official `@tauri-apps/plugin-dialog` modal picker parented directly to the webview window with Windows COM safety, backed by Rust `tauri_plugin_dialog::DialogExt` and `rfd` fallbacks.
+- **Operating Mode Switcher & Settings Sync:** Fixed `switchMode` to persist `orbital_mode` to `localStorage` and state store, ensuring mode changes between **Agent Pro Mode**, **Developer Mode**, and **User Mode** persist across app restarts and reactively synchronize with Settings security cards.
 
 ### 💬 Export & Import Chat History
 - **Header Action Buttons:** Added Export and Import SVG buttons in the AI agent dock header and inside the recent chats popover.
