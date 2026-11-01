@@ -5,6 +5,7 @@
 import { state, persistState, notify, setActiveModel, subscribe } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
+import { showConfirmDialog } from '../services/dialogs.js';
 
 export function initSettings() {
   const modal = document.getElementById('modal-settings');

@@ -40,6 +40,8 @@ const editors = { left: null, right: null };
 export const tabDirtyMap = new Map(); // tabId -> boolean
 const editorModels = new Map();       // path -> monaco.editor.ITextModel
 let autoSaveTimer = null;
+let lastFocusedPanel = 'left';
+let isMarkdownPreviewActive = false;
 
 function panelState(panel) {
   if (panel === 'right') {
@@ -87,7 +89,6 @@ export function closeActiveTab() {
   const p = panelState(panel);
   if (p.activeTabId) closeTabInternal(p.activeTabId, panel);
 }
-let lastFocusedPanel = 'left';
 
 function editorFor(panel) {
   return editors[panel];
@@ -1065,7 +1066,6 @@ export function updateBreadcrumb(tab) {
   updateBreadcrumbFor(getActivePanel());
 }
 
-let isMarkdownPreviewActive = false;
 
 function escapeHtml(str) {
   return String(str ?? '')

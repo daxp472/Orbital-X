@@ -21,8 +21,10 @@ import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
 import { initDeveloperMenu } from './components/developer-menu.js';
+import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 
 window.showToast = showToast;
+let ipcCount = 0;
 
 // Re-renders an interrupted plan for the current workspace so progress
 // survives app restarts (plans are persisted per workspace root).
@@ -219,7 +221,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   initActivityRail();
   initStatusBarExtras();
   initResizers();
-  initGlobalShortcuts();
+  try {
+    initGlobalShortcuts();
+  } catch (err) {
+    console.error("initGlobalShortcuts error:", err);
+  }
   initWindowControls();
   initShortcutsHelpOverlay();
   initUnifiedContextMenu();
@@ -268,9 +274,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
   document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
-    invoke('open_in_explorer', {}).catch(e => console.warn(e));
-  });
   document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
     invoke('open_in_explorer', {}).catch(e => console.warn(e));
   });
@@ -526,7 +529,7 @@ function setupResizer(handleId, onDrag) {
 function initGlobalShortcuts() {
   const actions = {
     'app.save': () => saveActiveFile(),
-    'app.openFolder': () => document.getElementById('btn-open-workspace')?.click(),
+    'app.openFolder': () => handleOpenFolder(),
     'app.closeTab': () => import('./editor/monaco.js').then(m => m.closeActiveTab()),
     'app.splitEditor': () => import('./editor/monaco.js').then(m => m.toggleSplitEditor()),
     'app.commandPalette': () => import('./components/command-palette.js').then(m => m.openPalette()),
@@ -562,7 +565,12 @@ function initGlobalShortcuts() {
     'app.shortcuts': () => document.getElementById('menu-help')?.click(),
   };
 
-  const appBindings = getAllBindings().filter(b => b.scope === 'app');
+  let appBindings = [];
+  try {
+    appBindings = (typeof getAllBindings === 'function' ? getAllBindings() : []).filter(b => b.scope === 'app');
+  } catch (err) {
+    console.error('Failed to load keybindings in initGlobalShortcuts:', err);
+  }
 
   window.addEventListener('keydown', (e) => {
     // Guaranteed Ctrl+O handler anywhere in the app
@@ -1523,7 +1531,6 @@ function initProductionHardening() {
   });
 }
 
-let ipcCount = 0;
 
 const CURRENT_VERSION = '2.2.8';
 
