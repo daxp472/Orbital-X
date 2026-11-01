@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::ipc::Channel;
-use tauri::{Manager, State};
+use tauri::{AppHandle, Manager, State};
 use terminal::{CommandResult, InteractiveSessionInfo, InteractiveTerminalManager, TerminalService};
 use tokio_util::sync::CancellationToken;
 use usage::{TokenUsageRecord, TokenUsageStats, UsageService};
@@ -1605,6 +1605,199 @@ fn detect_gpus() -> Vec<GpuInfo> {
     Vec::new()
 }
 
+/// ============================================================================
+/// Auto-Update System (v2.2.8)
+/// ============================================================================
+
+/// Check for available updates from GitHub releases.
+#[tauri::command]
+async fn check_for_updates() -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("OrbitalX-IDE/2.2.8")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client
+        .get("https://api.github.com/repos/daxp472/Orbital-X/releases/latest")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await
+        .map_err(|e| format!("Release check failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("GitHub API returned HTTP {}", resp.status()));
+    }
+
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+
+    let tag = json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default();
+    let download_url = json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default();
+    let body = json.get("body").and_then(|t| t.as_str()).unwrap_or("");
+
+    // Current version from package
+    let current = env!("CARGO_PKG_VERSION");
+
+    let is_newer = tag.strip_prefix('v').map(|t| {
+        let curr: Vec<u32> = current.split('.').filter_map(|p| p.parse().ok()).collect();
+        let latest: Vec<u32> = t.split('.').filter_map(|p| p.parse().ok()).collect();
+        latest.iter().enumerate().any(|(i, &v)| v > curr.get(i).copied().unwrap_or(0))
+    }).unwrap_or(false);
+
+    Ok(serde_json::json!({
+        "available": is_newer,
+        "latest_version": tag,
+        "current_version": current,
+        "download_url": download_url,
+        "changelog": body,
+        "asset_url": json.get("assets")
+            .and_then(|a| a.as_array())
+            .and_then(|assets| assets.first())
+            .and_then(|a| a.get("browser_download_url"))
+            .and_then(|u| u.as_str())
+            .unwrap_or_else(|| {
+                let version = tag.strip_prefix('v').unwrap_or(tag);
+                Box::leak(format!("https://github.com/daxp472/Orbital-X/releases/download/v{}/Orbital.X_{}_x64-setup.exe", version, version).into_boxed_str())
+            })
+    }))
+}
+
+/// Download update installer to a temp file with progress reporting.
+#[tauri::command]
+async fn download_update(
+    url: String,
+    progress_channel: Channel<serde_json::Value>,
+) -> Result<String, String> {
+    use std::io::Write;
+    use futures_util::StreamExt;
+
+    let resp = reqwest::get(&url).await.map_err(|e| format!("Download failed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Download server returned HTTP {}", resp.status()));
+    }
+
+    let content_length = resp.content_length().unwrap_or(0);
+    let temp_dir = std::env::temp_dir();
+    let installer_path = temp_dir.join(format!("orbital-x-update-{}.exe", uuid::Uuid::new_v4()));
+
+    let mut file = std::fs::File::create(&installer_path)
+        .map_err(|e| format!("Could not create temp file: {}", e))?;
+
+    let mut downloaded: u64 = 0;
+    let mut stream = resp.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(bytes) => {
+                downloaded += bytes.len() as u64;
+                file.write_all(&bytes)
+                    .map_err(|e| format!("Write failed: {}", e))?;
+
+                let percent = if content_length > 0 {
+                    (downloaded as f64 / content_length as f64 * 100.0).min(100.0)
+                } else {
+                    0.0
+                };
+
+                let _ = progress_channel.send(serde_json::json!({
+                    "type": "progress",
+                    "downloaded": downloaded,
+                    "total": content_length,
+                    "percent": percent
+                }));
+            }
+            Err(e) => return Err(format!("Download error: {}", e)),
+        }
+    }
+
+    let _ = progress_channel.send(serde_json::json!({
+        "type": "complete",
+        "path": installer_path.to_string_lossy().to_string()
+    }));
+
+    Ok(installer_path.to_string_lossy().to_string())
+}
+
+/// Install the downloaded update and restart the application.
+#[tauri::command]
+fn install_update(installer_path: String, app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+
+    let path = std::path::Path::new(&installer_path);
+    if !path.exists() {
+        return Err("Installer file not found".to_string());
+    }
+
+    // Run installer with elevated privileges (will handle UAC on Windows)
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        let status = Command::new(&path)
+            .arg("/S") // Silent install for NSIS
+            .status()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+
+        if !status.success() {
+            return Err("Installer failed with non-zero exit code".to_string());
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        use std::process::Command;
+        let status = Command::new(&path)
+            .arg("--silent")
+            .status()
+            .map_err(|e| format!("Failed to start installer: {}", e))?;
+
+        if !status.success() {
+            return Err("Installer failed with non-zero exit code".to_string());
+        }
+    }
+
+    // Notify user that update is ready and exit
+    let _ = app.emit("update-ready", serde_json::json!({
+        "message": "Update downloaded. Restart the application to install."
+    }));
+
+    // Exit the current app process so the installer can modify files
+    app.exit(0);
+
+    Ok(())
+}
+
+/// Open a URL in the default browser.
+#[tauri::command]
+fn open_url(_app: AppHandle, url: String) -> Result<(), String> {
+    if url.is_empty() {
+        return Err("URL is empty".to_string());
+    }
+    // Use the webview's built-in external protocol handler
+    #[cfg(windows)]
+    {
+        use std::process::Command;
+        let _ = Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn();
+    }
+    #[cfg(all(not(windows), not(target_os = "macos")))]
+    {
+        use std::process::Command;
+        let _ = Command::new("xdg-open")
+            .arg(&url)
+            .spawn();
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let _ = Command::new("open")
+            .arg(&url)
+            .spawn();
+    }
+    Ok(())
+}
+
 /// K3: native OS notification through the Tauri notification plugin.
 #[tauri::command]
 fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
@@ -1623,7 +1816,7 @@ fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.2.6")
+        .user_agent("OrbitalX-IDE/2.2.8")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -1639,6 +1832,7 @@ async fn check_latest_release() -> Result<serde_json::Value, String> {
         "tag": json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default(),
         "url": json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default(),
         "name": json.get("name").and_then(|t| t.as_str()).unwrap_or_default(),
+        "changelog": json.get("body").and_then(|t| t.as_str()).unwrap_or(""),
     }))
 }
 
@@ -1752,6 +1946,9 @@ pub fn run() {
                 .build(),
         )
         .invoke_handler(tauri::generate_handler![
+            open_url,
+
+            set_workspace,
             set_workspace,
             get_workspace_meta,
             get_file_tree,
@@ -1788,6 +1985,9 @@ pub fn run() {
             list_checkpoints,
             notify_native,
             check_latest_release,
+            check_for_updates,
+            download_update,
+            install_update,
             get_workspace_stats,
             restore_checkpoint,
             get_git_status,

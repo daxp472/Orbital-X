@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.7 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.8 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -854,6 +854,9 @@
         <div class="status-item" id="status-encoding">UTF-8</div>
         <div class="status-item" id="status-language">Markdown</div>
         <div class="status-item" id="sb-settings-link" title="Open Settings">Orbital X - Settings</div>
+        <div class="status-item" id="sb-report-issue" title="Report Issue" style="cursor: pointer; color: var(--accent-cyan); font-weight: 500;">
+          <span>Report Issue</span>
+        </div>
       </div>
     </footer>
   </div>
@@ -1286,6 +1289,11 @@
               </label>
             </div>
           </div>
+
+          <div style="margin-top: 16px; padding: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Updates</div>
+            <button class="btn btn-primary btn-sm" id="btn-check-updates-settings" style="font-size: 13px;">Check for Updates</button>
+          </div>
         </div>
 
         <!-- 6. IMPORT / EXPORT PANE -->
@@ -1329,7 +1337,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.2.7 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.2.8 · The AI-native IDE for everyone</div>
           </div>
         </div>
         <button class="btn btn-primary" id="welcome-open-folder-btn" style="padding: 9px;">📂 Open Folder</button>
@@ -1348,7 +1356,7 @@
         </div>
       </div>
       <div style="flex: 1; padding: 22px 24px; background: var(--bg-surface); border-left: 1px solid var(--border-subtle); overflow-y: auto;">
-        <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px;">✨ What's New in v2.2.7</div>
+        <div style="font-size: 12px; font-weight: 700; margin-bottom: 10px;">✨ What's New in v2.2.8</div>
         <div style="font-size: 11.5px; color: var(--text-secondary); line-height: 1.65; display: flex; flex-direction: column; gap: 8px;">
           <div><strong style="color: var(--text-primary);">AI Chat Pro & Smooth Scrolling</strong> — frictionless conversation timeline with infinite smooth scrolling.</div>
           <div><strong style="color: var(--text-primary);">Mode Switcher</strong> — switch between Agent Pro Mode, Developer Mode, and User Mode on the fly.</div>
@@ -1527,6 +1535,39 @@
         </table>
       </div>
     </div>
+
+  <!-- Modal: Help & Support (Report Issue + Shortcuts) -->
+  <div class="modal-backdrop" id="modal-help" style="display: none;">
+    <div class="modal-container" style="max-width: 560px; max-height: 80vh;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">❓</span>
+          <span style="font-weight: 600; font-size: 14px;">Help & Support</span>
+        </div>
+        <button class="icon-btn" id="btn-close-help" title="Close (Esc)" style="font-size: 16px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; overflow-y: auto;">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div style="text-align: center;">
+            <button class="btn btn-secondary btn-sm" id="btn-help-report-issue" style="font-size: 14px; padding: 8px 16px;">
+              🐛 Report Issue
+            </button>
+          </div>
+          <div style="text-align: center;">
+            <button class="btn btn-primary btn-sm" id="btn-help-shortcuts" style="font-size: 14px; padding: 8px 16px;">
+              ⌨️ Keyboard Shortcuts
+            </button>
+          </div>
+          <div style="text-align: center;">
+            <a href="https://daxp472.github.io/Orbital-X/" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" style="font-size: 12px;">
+              📚 Official Documentation ↗
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: About Orbital X -->
   <div class="modal-backdrop" id="modal-about" style="display: none;">
     <div class="modal-container about-modal-container" style="max-width: 520px;">
@@ -1542,7 +1583,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.2.5 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.2.8 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 
@@ -1568,6 +1609,7 @@
         <div class="about-links-row">
           <a href="https://daxp472.github.io/Orbital-X/" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">Official Website ↗</a>
           <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">GitHub Repo ★</a>
+          <button class="btn btn-secondary btn-sm" id="btn-about-report-issue">Report Issue</button>
           <button class="btn btn-primary btn-sm" id="btn-about-check-updates">Check for Updates</button>
         </div>
 

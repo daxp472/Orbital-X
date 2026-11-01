@@ -1182,6 +1182,7 @@ function closeTabInternal(tabId, panel = 'left', opts = {}) {
   if (index === -1) return;
 
   const tab = p.tabs[index];
+  // TODO(v2.3): Replace with custom glassmorphic modal
   if (tab.isDirty && !opts.force) {
     if (!confirm(`Save changes to ${tab.name} before closing?`)) {
       return;
@@ -1191,6 +1192,18 @@ function closeTabInternal(tabId, panel = 'left', opts = {}) {
 
   p.tabs.splice(index, 1);
   tabDirtyMap.delete(tabId);
+
+  // FIX 1: evict the Monaco model if no other tab (in either panel) still
+  // references this path — prevents an unbounded model leak on tab close.
+  const stillReferenced = [...state.editor.tabs, ...(state.editor.rightTabs || [])]
+    .some(t => t.path === tab.path);
+  if (!stillReferenced) {
+    const model = editorModels.get(tab.path);
+    if (model) {
+      model.dispose();
+      editorModels.delete(tab.path);
+    }
+  }
 
   if (p.activeTabId === tabId) {
     if (p.tabs.length > 0) {

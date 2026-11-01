@@ -323,6 +323,16 @@ function initStatusBarExtras() {
   document.getElementById('sb-indent')?.addEventListener('click', () => {
     import('./components/settings.js').then(m => m.openSettings());
   });
+
+  // Report Issue in status bar
+  document.getElementById('sb-report-issue')?.addEventListener('click', async () => {
+    try {
+      await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
+      invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+    } catch (e) {
+      showReportIssueOfflineModal();
+    }
+  });
 }
 
 async function tryRestoreEditorSession() {
@@ -601,38 +611,90 @@ export function closeShortcutsHelp() {
 }
 
 function initShortcutsHelpOverlay() {
-  const modal = document.getElementById('modal-shortcuts-help');
-  const btnClose = document.getElementById('btn-close-shortcuts-help');
+  const shortcutsModal = document.getElementById('modal-shortcuts-help');
+  const helpModal = document.getElementById('modal-help');
 
-  btnClose?.addEventListener('click', closeShortcutsHelp);
-
-  // Close when clicking outside modal-container (backdrop click)
-  modal?.addEventListener('click', (e) => {
-    if (e.target === modal) {
-      closeShortcutsHelp();
+  // Close shortcuts modal
+  shortcutsModal?.addEventListener('click', (e) => {
+    if (e.target === shortcutsModal) {
+      shortcutsModal.style.display = 'none';
     }
   });
 
-  // Help menu in titlebar opens shortcuts help
-  document.getElementById('menu-help')?.addEventListener('click', openShortcutsHelp);
+  // Close help modal
+  helpModal?.addEventListener('click', (e) => {
+    if (e.target === helpModal) {
+      helpModal.style.display = 'none';
+    }
+  });
 
-  // Global keydown: F1 or Ctrl+Shift+P to open/toggle, Escape to close
+  // Help menu in titlebar opens Help modal with Report Issue and Shortcuts
+  document.getElementById('menu-help')?.addEventListener('click', openHelpModal);
+
+  // Keyboard shortcuts button in Help modal
+  document.getElementById('btn-help-shortcuts')?.addEventListener('click', () => {
+    if (helpModal) helpModal.style.display = 'none';
+    if (shortcutsModal) shortcutsModal.style.display = 'flex';
+  });
+
+  // Report Issue button in Help modal
+  document.getElementById('btn-help-report-issue')?.addEventListener('click', async () => {
+    try {
+      const response = await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
+      await invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+    } catch (e) {
+      showReportIssueOfflineModal();
+    }
+  });
+
+  // Global keydown: F1 or Ctrl+Shift+P to open Help, Escape to close
   window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') {
+      e.preventDefault();
+      openHelpModal();
+      return;
+    }
     if (e.key === 'Escape') {
-      const isVisible = modal && modal.style.display !== 'none';
-      if (isVisible) {
+      const shortcutsVisible = shortcutsModal && shortcutsModal.style.display !== 'none';
+      if (shortcutsVisible) {
         e.preventDefault();
-        closeShortcutsHelp();
+        shortcutsModal.style.display = 'none';
+        return;
+      }
+      const helpVisible = helpModal && helpModal.style.display !== 'none';
+      if (helpVisible) {
+        e.preventDefault();
+        helpModal.style.display = 'none';
+        return;
       }
       const aboutModal = document.getElementById('modal-about');
       if (aboutModal && aboutModal.style.display !== 'none') {
         e.preventDefault();
         aboutModal.style.display = 'none';
       }
+      closeShortcutsHelp();
     }
   });
 
   initAboutModal();
+
+  // Close shortcuts modal via X button
+  document.getElementById('btn-close-shortcuts-help')?.addEventListener('click', () => {
+    if (shortcutsModal) shortcutsModal.style.display = 'none';
+  });
+
+  // Close help modal via X button
+  document.getElementById('btn-close-help')?.addEventListener('click', () => {
+    if (helpModal) helpModal.style.display = 'none';
+  });
+
+  // Check for Updates button in Settings > Terminal
+  document.getElementById('btn-check-updates-settings')?.addEventListener('click', checkForUpdatesManually);
+}
+
+function openHelpModal() {
+  const modal = document.getElementById('modal-help');
+  if (modal) modal.style.display = 'flex';
 }
 
 function initAboutModal() {
@@ -640,6 +702,7 @@ function initAboutModal() {
   const btnAbout = document.getElementById('btn-about-orbital');
   const btnClose = document.getElementById('btn-close-about');
   const btnCheckUpdates = document.getElementById('btn-about-check-updates');
+  const btnReportIssue = document.getElementById('btn-about-report-issue');
 
   const openAbout = () => {
     if (modal) modal.style.display = 'flex';
@@ -656,18 +719,60 @@ function initAboutModal() {
     if (e.target === modal) closeAbout();
   });
 
-  btnCheckUpdates?.addEventListener('click', () => {
-    btnCheckUpdates.textContent = 'Checking...';
-    setTimeout(() => {
-      btnCheckUpdates.textContent = '✓ Up to Date';
-      import('./services/notifications.js').then(m => {
-        m.showToast('Orbital X is up to date (v2.2.5 Latest Release)', 'success');
-      });
-      setTimeout(() => {
-        btnCheckUpdates.textContent = 'Check for Updates';
-      }, 2500);
-    }, 600);
+  btnCheckUpdates?.addEventListener('click', checkForUpdatesManually);
+
+  btnReportIssue?.addEventListener('click', async () => {
+    try {
+      // Check if online before opening URL
+      const response = await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
+      await invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+    } catch (e) {
+      // Offline fallback - show modal with instructions
+      showReportIssueOfflineModal();
+    }
   });
+}
+
+// Show offline fallback modal for Report Issue
+function showReportIssueOfflineModal() {
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.id = 'modal-report-issue-offline';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal-container" style="max-width: 460px; padding: 24px; text-align: center;">
+      <div style="display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 16px;">
+        <span style="font-size: 20px;">🌐</span>
+        <h2 style="margin: 0; font-size: 16px;">Report Issue (Offline Mode)</h2>
+        <button class="icon-btn" id="report-issue-close" style="margin-left: auto;">✕</button>
+      </div>
+      <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6;">
+        Could not open the Report Issue page. You appear to be offline.
+      </div>
+      <div style="font-size: 13px; color: var(--text-secondary); text-align: left; margin-bottom: 16px;">
+        <strong>To report an issue:</strong>
+        <ol style="font-size: 13px; margin: 8px 0 0 0; padding-left: 20px; text-align: left;">
+          <li>Open your browser manually</li>
+          <li>Go to: <a href="https://daxp472.github.io/Orbital-X/report-issue.html" target="_blank" rel="noopener" style="color: var(--accent-cyan); word-break: break-all;">https://daxp472.github.io/Orbital-X/report-issue.html</a></li>
+          <li>Fill out the issue form and submit</li>
+        </ol>
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button class="btn btn-primary btn-sm" id="report-issue-copy-url">Copy URL</button>
+        <button class="btn btn-secondary btn-sm" id="report-issue-close-modal">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.querySelector('#report-issue-close')?.addEventListener('click', () => modal.remove());
+  modal.querySelector('#report-issue-close-modal')?.addEventListener('click', () => modal.remove());
+  modal.querySelector('#report-issue-copy-url')?.addEventListener('click', () => {
+    navigator.clipboard.writeText('https://daxp472.github.io/Orbital-X/report-issue.html');
+    showToast('URL copied to clipboard', 'success', 2000);
+    modal.remove();
+  });
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
 }
 
 // ==========================================================================
@@ -878,6 +983,7 @@ function isWorkspaceTrusted(rootPath) {
 }
 
 async function promptWorkspaceTrust(rootPath) {
+  // TODO(v2.3): Replace with custom glassmorphic modal
   const trust = confirm(
     'Do you trust the authors of this workspace?\n\n' +
     'Trusting allows the agent to execute code and commands in this directory.\n' +
@@ -1249,7 +1355,9 @@ function initProductionHardening() {
 
 let ipcCount = 0;
 
-// P3 — update check
+const CURRENT_VERSION = '2.2.8';
+
+// P3 — update check with modal UI
 function initUpdateCheck() {
   const DISMISS_KEY = 'orbital_update_dismissed_at';
   try {
@@ -1259,28 +1367,147 @@ function initUpdateCheck() {
 
   invoke('check_latest_release').then((res) => {
     const latest = (res?.tag || '').replace(/^v/, '');
-    const current = '2.2.3';
     if (!latest) return;
-    const isNewer = latest.split('.').map(Number).some((n, i) => n > (current.split('.').map(Number)[i] || 0)) &&
-      latest !== current;
+    const isNewer = latest.split('.').map(Number).some((n, i) => n > (latest.split('.').map(Number)[i] || 0)) &&
+      latest !== CURRENT_VERSION;
     if (!isNewer) return;
 
-    const banner = document.createElement('div');
-    banner.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; z-index: 5200; background: color-mix(in srgb, var(--accent-cyan) 18%, var(--bg-card)); border-bottom: 1px solid var(--accent-cyan); color: var(--text-primary); font-size: 12px; padding: 7px 16px; display: flex; align-items: center; gap: 12px;';
-    banner.innerHTML = `
-      <span>✨ Orbital X v${escapeHtml(latest)} is available!</span>
-      <button class="btn btn-primary btn-sm" id="update-download">Download</button>
-      <button class="btn btn-secondary btn-sm" id="update-dismiss">Dismiss</button>
-    `;
-    document.body.appendChild(banner);
-    banner.querySelector('#update-download').addEventListener('click', () => {
-      invoke('run_command', { command: `explorer "${res.url || 'https://github.com/daxp472/Orbital-X/releases/latest'}"`, timeout_seconds: 10 }).catch(() => {});
-    });
-    banner.querySelector('#update-dismiss').addEventListener('click', () => {
-      banner.remove();
-      try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch (e) { /* quota */ }
-    });
+    // Show update modal instead of banner
+    showUpdateModal(latest, res?.download_url || '', res?.changelog || '');
   }).catch(() => { /* offline — silent */ });
+}
+
+// Show update available modal
+function showUpdateModal(latest, downloadUrl, changelog) {
+  // Remove existing modal if any
+  document.getElementById('modal-update-available')?.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.id = 'modal-update-available';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal-container" style="max-width: 500px; padding: 24px;">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        <div style="font-size: 24px;">✨</div>
+        <h2 style="margin: 0; font-size: 18px;">Update Available</h2>
+        <button class="icon-btn" id="update-close" style="margin-left: auto;">✕</button>
+      </div>
+      <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6;">
+        Orbital X v${escapeHtml(latest)} is ready to install!
+        ${changelog ? `<div style="margin-top: 8px; font-size: 13px; color: var(--text-primary);"><strong>Changelog:</strong><br><pre style="font-family: var(--font-mono); font-size: 11px; margin: 4px 0; overflow: hidden; max-height: 150px; overflow-y: auto; white-space: pre-wrap;">${escapeHtml(changelog.substring(0, 500))}${changelog.length > 500 ? '...' : ''}</pre></div>` : ''}
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: flex-end;">
+        <button class="btn btn-secondary btn-sm" id="update-remind">Remind Later</button>
+        <button class="btn btn-primary btn-sm" id="update-download-btn">Download & Install</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => {
+    modal.remove();
+    try { localStorage.setItem('orbital_update_dismissed_at', String(Date.now())); } catch (e) { /* quota */ }
+  };
+  modal.querySelector('#update-close')?.addEventListener('click', close);
+  modal.querySelector('#update-remind')?.addEventListener('click', close);
+  modal.querySelector('#update-download-btn')?.addEventListener('click', async () => {
+    await startDownloadAndInstall(latest, downloadUrl);
+  });
+  modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+}
+
+// Download and install update
+async function startDownloadAndInstall(latest, downloadUrl) {
+  const progressModal = document.getElementById('modal-update-progress');
+  if (progressModal) progressModal.remove();
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-backdrop';
+  modal.id = 'modal-update-progress';
+  modal.style.display = 'flex';
+  modal.innerHTML = `
+    <div class="modal-container" style="max-width: 400px; padding: 24px; text-align: center;">
+      <h2 style="margin: 0 0 16px; font-size: 16px;">Downloading Update v${escapeHtml(latest)}</h2>
+      <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px;">
+        This version of the auto update is downloading...
+      </div>
+      <div style="width: 100%; background: var(--bg-surface); border-radius: var(--radius-sm); height: 6px; margin-bottom: 16px;">
+        <div id="update-progress-bar" style="width: 0%; height: 100%; background: var(--accent-cyan); border-radius: var(--radius-sm); transition: width 0.3s;"></div>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted);" id="update-progress-text">Starting download...</div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  try {
+    // Get the downloaded installer path
+    const result = await invoke('download_update', {
+      download_url: downloadUrl,
+      progress_channel: '' // We'll use progress events
+    });
+
+    // Show restart modal
+    modal.remove();
+    const restartModal = document.createElement('div');
+    restartModal.className = 'modal-backdrop';
+    restartModal.id = 'modal-restart-to-update';
+    restartModal.style.display = 'flex';
+    restartModal.innerHTML = `
+      <div class="modal-container" style="max-width: 420px; padding: 24px; text-align: center;">
+        <h2 style="margin: 0 0 16px; font-size: 16px;">Update Downloaded</h2>
+        <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">
+          The update is downloaded. You can restart the application to install the update.
+        </div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="btn btn-secondary btn-sm" id="restart-later-btn">Restart Later</button>
+          <button class="btn btn-primary btn-sm" id="restart-now-btn">Restart Now</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(restartModal);
+
+    restartModal.querySelector('#restart-later-btn')?.addEventListener('click', () => {
+      restartModal.remove();
+      try { localStorage.setItem('orbital_update_dismissed_at', String(Date.now())); } catch (e) { /* quota */ }
+    });
+    restartModal.querySelector('#restart-now-btn')?.addEventListener('click', async () => {
+      try {
+        await invoke('install_update', { installer_path: result.installer_path });
+      } catch (e) {
+        console.error('Install update failed:', e);
+        showToast('Failed to start update installation', 'error', 3000);
+      }
+      restartModal.remove();
+    });
+    restartModal.addEventListener('click', (e) => { if (e.target === restartModal) restartModal.remove(); });
+
+  } catch (err) {
+    console.error('Download failed:', err);
+    modal.querySelector('#update-progress-text').textContent = `Download failed: ${err}`;
+    modal.querySelector('#update-progress-bar').style.width = '0%';
+  }
+}
+
+// Manual check for updates (called from settings)
+async function checkForUpdatesManually() {
+  try {
+    const res = await invoke('check_latest_release');
+    const latest = (res?.tag || '').replace(/^v/, '');
+    if (!latest) {
+      showToast('Could not check for updates - offline or API error', 'error', 3000);
+      return;
+    }
+    const isNewer = latest.split('.').map(Number).some((n, i) => n > (latest.split('.').map(Number)[i] || 0)) &&
+      latest !== CURRENT_VERSION;
+    if (!isNewer) {
+      showToast('Orbital X is up to date', 'success', 2500);
+      return;
+    }
+    showUpdateModal(latest, res?.download_url || '', res?.changelog || '');
+  } catch (e) {
+    showToast('Could not check for updates: ' + e, 'error', 3000);
+  }
 }
 
 function escapeHtml(s) {
@@ -1307,7 +1534,7 @@ function openWhatsNewModal() {
         <button class="icon-btn" id="whatsnew-close" style="margin-left: auto;">✕</button>
       </div>
       <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; display: flex; flex-direction: column; gap: 10px;">
-        <div><strong style="color: var(--text-primary);">v2.2.3</strong> — Streaming agent + real cancellation, Extensions (theme/prompt/command packs), Skills, split editor with pin/preview tabs, inline AI completions, command palette, pro Git panel (staging, branches, graph, blame, stash), pro terminal (profiles, ANSI, search), strict command & workspace security, web research tools, context meter, and full keyboard access.</div>
+        <div><strong style="color: var(--text-primary);">v2.2.8</strong> — Automatic update checking with download prompt, Report Issue from the About dialog, public docs website, and continued polish across the editor, agent, and terminal panels.</div>
         <div style="color: var(--text-muted); font-size: 11px;">Full notes live in <code>release/notes/</code> in the repository and on the GitHub release page.</div>
       </div>
       <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
@@ -1318,7 +1545,7 @@ function openWhatsNewModal() {
   document.body.appendChild(modal);
   const close = () => {
     modal.remove();
-    try { localStorage.setItem('orbital_seen_version', '2.2.3'); } catch (e) { /* quota */ }
+    try { localStorage.setItem('orbital_seen_version', '2.2.8'); } catch (e) { /* quota */ }
   };
   modal.querySelector('#whatsnew-close').addEventListener('click', close);
   modal.querySelector('#whatsnew-got').addEventListener('click', close);
