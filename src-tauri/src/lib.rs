@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::ipc::Channel;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager, State, Emitter};
 use terminal::{CommandResult, InteractiveSessionInfo, InteractiveTerminalManager, TerminalService};
 use tokio_util::sync::CancellationToken;
 use usage::{TokenUsageRecord, TokenUsageStats, UsageService};
@@ -430,7 +430,7 @@ fn clear_token_usage() -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let app_handle = app.clone();
 
@@ -481,7 +481,7 @@ async fn open_folder_dialog(app: tauri::AppHandle) -> Result<Option<String>, Str
 
 #[tauri::command]
 async fn pick_save_file(
-    app: tauri::AppHandle,
+    app: AppHandle,
     default_name: Option<String>,
     filter_name: Option<String>,
     filter_extensions: Option<Vec<String>>,
@@ -1721,8 +1721,7 @@ async fn download_update(
 
 /// Install the downloaded update and restart the application.
 #[tauri::command]
-fn install_update(installer_path: String, app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::Emitter;
+fn install_update(installer_path: String, app: AppHandle) -> Result<(), String> {
 
     let path = std::path::Path::new(&installer_path);
     if !path.exists() {
@@ -1769,7 +1768,8 @@ fn install_update(installer_path: String, app: tauri::AppHandle) -> Result<(), S
 
 /// Open a URL in the default browser.
 #[tauri::command]
-fn open_url(_app: AppHandle, url: String) -> Result<(), String> {
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    let _ = app; // suppress unused warning
     if url.is_empty() {
         return Err("URL is empty".to_string());
     }
@@ -1800,7 +1800,7 @@ fn open_url(_app: AppHandle, url: String) -> Result<(), String> {
 
 /// K3: native OS notification through the Tauri notification plugin.
 #[tauri::command]
-fn notify_native(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), String> {
     use tauri_plugin_notification::NotificationExt;
     app.notification()
         .builder()
@@ -1948,7 +1948,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             open_url,
 
-            set_workspace,
             set_workspace,
             get_workspace_meta,
             get_file_tree,
