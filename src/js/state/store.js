@@ -107,6 +107,9 @@ export const state = {
     isExecuting: false,
     elapsedSeconds: 0,
   },
+
+  // Developer Mode - controls F12 DevTools access
+  developerMode: false,
 };
 
 // Listeners for reactive updates
@@ -166,6 +169,9 @@ export function loadPersistedState() {
       try { state.ai.smartRouting = { ...state.ai.smartRouting, ...JSON.parse(savedSmartRouting) }; } catch (e) { /* keep defaults */ }
     }
     state.ai.debugMode = localStorage.getItem('orbital_debug_mode') === 'true';
+
+    // Developer mode setting - controlled by dev-menu, not user-facing in traditional settings
+    state.developerMode = localStorage.getItem('orbital_dev_mode_enabled') === 'true';
 
     const savedModelInfo = localStorage.getItem('orbital_model_info');
     if (savedModelInfo) {
@@ -228,6 +234,7 @@ export function persistState() {
     localStorage.setItem('orbital_model_info', JSON.stringify(state.ai.modelInfo || {}));
     localStorage.setItem('orbital_smart_routing', JSON.stringify(state.ai.smartRouting || {}));
     localStorage.setItem('orbital_debug_mode', state.ai.debugMode ? 'true' : 'false');
+    localStorage.setItem('orbital_dev_mode_enabled', state.developerMode ? 'true' : 'false');
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', btoa(JSON.stringify(state.ai.keys)));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');

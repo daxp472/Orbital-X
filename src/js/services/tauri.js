@@ -159,6 +159,7 @@ async function getInvoke() {
       case 'clear_token_usage':
         return true;
       case 'open_folder_dialog':
+        // Return a path string that extractPath can handle
         return 'D:\\1work\\YT\\Orbital X';
       case 'list_memories':
         return [];
@@ -182,6 +183,16 @@ async function getInvoke() {
         return [];
       case 'get_hardware_info':
         return { totalRamBytes: null, gpus: [] };
+      case 'open_dev_tools':
+        // In browser fallback, simulate opening dev tools
+        console.log('[IPC Mock] open_dev_tools - would open DevTools in Tauri');
+        return { success: true, message: 'Dev tools would open in Tauri build' };
+      case 'reload':
+        // In browser fallback, simulate reload
+        console.log('[IPC Mock] reload - would reload in Tauri');
+        return { success: true };
+      case 'open_url':
+        return { success: true };
       default:
         return { success: true };
     }
@@ -210,46 +221,63 @@ export async function pickFolder() {
     return null;
   }
 
-  // 1. Primary: backend Rust command with fresh OS thread + parent window handle
+  // 1. Primary: backend Rust command with fresh dedicated thread
   try {
     const res = await invoke('open_folder_dialog');
     const path = extractPath(res);
-    if (path) return path;
-    if (res === null) return null; // User cancelled
+    if (path) {
+      console.log('[pickFolder] Selected path:', path);
+      return path;
+    }
   } catch (e) {
-    console.warn("open_folder_dialog IPC failed, trying plugin dialog fallback:", e);
+    console.warn("[pickFolder] open_folder_dialog IPC failed:", e);
   }
 
-  // 2. Client-side Tauri dialog plugin fallback
+  // 2. Client-side Tauri dialog plugin fallback (folder API)
   try {
     const dialog = await import('@tauri-apps/plugin-dialog');
+    // Try the folder-specific method first
+    if (dialog && typeof dialog.folder === 'function') {
+      console.log('[pickFolder] Using dialog.folder()');
+      const res = await dialog.folder({ directory: true, title: 'Select Workspace Folder' });
+      const path = extractPath(res);
+      if (path) return path;
+      if (res === null) return null;
+    }
+    // Fallback to open with directory option
     if (dialog && typeof dialog.open === 'function') {
+      console.log('[pickFolder] Using dialog.open() with directory option');
       const res = await dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
       const path = extractPath(res);
       if (path) return path;
       if (res === null) return null;
     }
   } catch (e) {
-    console.warn("@tauri-apps/plugin-dialog fallback failed:", e);
+    console.warn("[pickFolder] @tauri-apps/plugin-dialog fallback failed:", e);
   }
 
   // 3. window.__TAURI__.dialog fallback
-  if (window.__TAURI__ && window.__TAURI__.dialog && typeof window.__TAURI__.dialog.open === 'function') {
-    try {
+  try {
+    if (window.__TAURI__ && window.__TAURI__.dialog && typeof window.__TAURI__.dialog.open === 'function') {
       const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
       const path = extractPath(res);
       if (path) return path;
       if (res === null) return null;
-    } catch (e) {
-      console.warn("window.__TAURI__.dialog failed:", e);
     }
+  } catch (e) {
+    console.warn("[pickFolder] window.__TAURI__.dialog failed:", e);
   }
 
   // 4. Pure browser preview fallback only (never in Tauri)
   if (!window.__TAURI__ && !window.__TAURI_INTERNALS__) {
-    return prompt("Enter workspace directory path:", "D:/1work/YT/Orbital X");
+    const input = prompt("Enter workspace directory path:", "D:/1work/YT/Orbital X");
+    if (input !== null) {
+      return input.trim() || null;
+    }
+    return null;
   }
 
+  console.log('[pickFolder] All methods failed, returning null');
   return null;
 }
 

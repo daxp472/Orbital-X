@@ -439,11 +439,9 @@ async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
     std::thread::Builder::new()
         .name("orbital-folder-picker".into())
         .spawn(move || {
-            // 1. Try native rfd dialog with parent window attached so it always stays in front
-            let mut dialog = rfd::FileDialog::new().set_title("Select Workspace Folder");
-            if let Some(win) = app_handle.get_webview_window("main") {
-                dialog = dialog.set_parent(&win);
-            }
+            // 1. Native rfd folder dialog without parent window handle attachment
+            // to eliminate Win32 COM cross-thread owner window affinity issues.
+            let dialog = rfd::FileDialog::new().set_title("Select Workspace Folder");
 
             if let Some(path_buf) = dialog.pick_folder() {
                 let clean = workspace::strip_verbatim_prefix(&path_buf);
@@ -1798,6 +1796,29 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Open the Tauri DevTools window (only works in development mode).
+/// In production builds, this shows a user-friendly message.
+#[tauri::command]
+fn open_dev_tools(app: AppHandle) -> Result<(), String> {
+    let win = app.get_webview_window("main");
+    if let Some(w) = win {
+        w.open_devtools();
+        Ok(())
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
+/// Reload the current window.
+#[tauri::command]
+fn reload(app: AppHandle) -> Result<(), String> {
+    let win = app.get_webview_window("main");
+    if let Some(w) = win {
+        let _ = w.reload();
+    }
+    Ok(())
+}
+
 /// K3: native OS notification through the Tauri notification plugin.
 #[tauri::command]
 fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), String> {
@@ -1947,6 +1968,8 @@ pub fn run() {
         )
         .invoke_handler(tauri::generate_handler![
             open_url,
+            open_dev_tools,
+            reload,
 
             set_workspace,
             get_workspace_meta,

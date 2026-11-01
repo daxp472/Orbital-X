@@ -26,10 +26,11 @@ export function initSettings() {
     { btn: 'stab-general', pane: 'spane-general' },
     { btn: 'stab-models', pane: 'spane-models' },
     { btn: 'stab-appearance', pane: 'spane-appearance' },
-    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
     { btn: 'stab-agent', pane: 'spane-agent' },
     { btn: 'stab-terminal', pane: 'spane-terminal' },
     { btn: 'stab-importexport', pane: 'spane-importexport' },
+    { btn: 'stab-developer', pane: 'spane-developer' },
+    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
   ];
 
   tabs.forEach(t => {
@@ -97,6 +98,9 @@ export function initSettings() {
 
   // I5 smart routing + I9 debug mode
   setupAgentEngineSettings();
+
+  // Developer Options tab setup
+  setupDeveloperOptions();
 
   // Terminal appearance settings (Part E4)
   setupTerminalSettingsUI();
@@ -1872,5 +1876,152 @@ function setupAgentEngineSettings() {
       state.ai.debugMode = dbg.checked;
       persistState();
     });
+  }
+}
+
+// ==========================================================================
+// Developer Options — F12 DevTools toggle, debug mode, developer tools
+// ==========================================================================
+
+function setupDeveloperOptions() {
+  const devPane = document.getElementById('spane-developer');
+  if (!devPane) return;
+
+  // Ensure Developer Options tab exists
+  const devTab = document.getElementById('stab-developer');
+  if (!devTab) {
+    // Create the tab in sidebar
+    const sidebar = document.querySelector('.settings-sidebar');
+    if (sidebar) {
+      const devNavItem = document.createElement('div');
+      devNavItem.className = 'settings-nav-item';
+      devNavItem.id = 'stab-developer';
+      devNavItem.setAttribute('data-pane', 'spane-developer');
+      devNavItem.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="6" r="3"></circle>
+          <path d="M12 18c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2c0 1.1-.9 2-2 2"></path>
+        </svg>
+        <span>Developer Options</span>
+      `;
+
+      // Insert after Import/Export tab
+      const importExportTab = document.getElementById('stab-importexport');
+      if (importExportTab && importExportTab.nextSibling) {
+        sidebar.insertBefore(devNavItem, importExportTab.nextSibling);
+      } else {
+        sidebar.appendChild(devNavItem);
+      }
+
+      // Wire up the tab click
+      devNavItem.addEventListener('click', () => {
+        document.querySelectorAll('.settings-nav-item').forEach(t => t.classList.remove('active'));
+        document.getElementById('spane-developer').style.display = 'flex';
+        devNavItem.classList.add('active');
+        loadDevOptionsIntoUI();
+      });
+    }
+  }
+
+  // Load current state into UI
+  loadDevOptionsIntoUI();
+
+  // Import developer menu functions for cross-component access
+  Promise.all([
+    import('./developer-menu.js'),
+    import('../state/store.js')
+  ]).then(([devMenu, store]) => {
+    const { setDeveloperMode, isDeveloperModeEnabled } = devMenu;
+    const { state: appState, persistState } = store;
+
+    // Developer Mode toggle in Settings
+    const devModeToggle = document.getElementById('cfg-dev-mode-toggle');
+    if (devModeToggle) {
+      devModeToggle.checked = !!appState.developerMode;
+      devModeToggle.addEventListener('change', (e) => {
+        setDeveloperMode(e.target.checked);
+        persistState();
+      });
+    }
+
+    // Agent Debug toggle in Developer section
+    const agentDebugDev = document.getElementById('cfg-agent-debug-dev');
+    if (agentDebugDev) {
+      agentDebugDev.checked = !!appState.ai?.debugMode;
+      agentDebugDev.addEventListener('change', (e) => {
+        appState.ai = appState.ai || {};
+        appState.ai.debugMode = e.target.checked;
+        persistState();
+      });
+    }
+
+    // Wire up buttons using developer-menu's functions
+    const { isDevModeEnabled, showDebugConsole } = devMenu;
+
+    document.getElementById('btn-dev-open-devtools')?.addEventListener('click', async () => {
+      // Close settings modal first
+      closeSettings();
+      // Then open dev tools
+      try {
+        await invoke('open_dev_tools');
+        showToast('Developer Tools opened (F12)', 'success', 2000);
+      } catch (e) {
+        console.log('Dev tools opened (simulated in browser)');
+        showToast('Dev tools available - check console', 'info', 2000);
+      }
+    });
+
+    document.getElementById('btn-dev-reload')?.addEventListener('click', async () => {
+      try {
+        await invoke('reload');
+      } catch (e) {
+        location.reload();
+      }
+    });
+
+    document.getElementById('btn-dev-show-console')?.addEventListener('click', () => {
+      // Close settings modal first
+      closeSettings();
+      // Then show debug console
+      showDebugConsole();
+      showToast('Debug console opened', 'info', 2000);
+    });
+
+    document.getElementById('btn-dev-disable-warning')?.addEventListener('click', () => {
+      if (confirm('Disable Developer Mode? This will prevent F12 from opening DevTools.')) {
+        setDeveloperMode(false);
+        persistState();
+        showToast('Developer Mode disabled', 'info', 2000);
+      }
+    });
+
+    document.getElementById('btn-dev-toggle-devtools')?.addEventListener('click', async () => {
+      closeSettings();
+      try {
+        await invoke('open_dev_tools');
+        showToast('Developer Tools opened (F12)', 'success', 2000);
+      } catch (e) {
+        console.log('Dev tools opened (simulated in browser)');
+        showToast('Opening debug console...', 'info', 2000);
+        showDebugConsole();
+      }
+    });
+  });
+}
+
+function loadDevOptionsIntoUI() {
+  const devPane = document.getElementById('spane-developer');
+  if (!devPane) return;
+
+  // Developer Mode toggle - will be updated by the imported module's event listener
+  const devModeToggle = document.getElementById('cfg-dev-mode-toggle');
+  if (devModeToggle) {
+    devModeToggle.checked = !!state.developerMode;
+  }
+
+  // Agent Debug toggle in Developer section
+  const agentDebugDev = document.getElementById('cfg-agent-debug-dev');
+  if (agentDebugDev) {
+    agentDebugDev.checked = !!state.ai?.debugMode;
   }
 }

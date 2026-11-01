@@ -2573,5 +2573,49 @@ input:checked + .settings-toggle-slider:before {
   margin: 24px 0;
 }
 
+/* Developer Menu Dropdown */
+.dev-dropdown {
+  position: absolute;
+  top: 30px;
+  right: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  padding: 4px 0;
+  min-width: 180px;
+  z-index: 1000;
+  display: none;
+}
+
+.dev-dropdown.active {
+  display: block;
+}
+
+.dev-dropdown-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dev-dropdown-btn {
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dev-dropdown-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-cyan);
+}
+
 
 

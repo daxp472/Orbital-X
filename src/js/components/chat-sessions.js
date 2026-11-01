@@ -250,6 +250,10 @@ export function getActiveSession() {
   return sessions.find(s => s.id === activeSessionId) || sessions[0];
 }
 
+export function getSessions() {
+  return sessions;
+}
+
 export function saveActiveSession() {
   const current = getActiveSession();
   if (!current) return;

@@ -20,6 +20,7 @@ import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, rec
 import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
+import { initDeveloperMenu } from './components/developer-menu.js';
 
 window.showToast = showToast;
 
@@ -207,6 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initWindowControls();
   initShortcutsHelpOverlay();
   initUnifiedContextMenu();
+  initDeveloperMenu();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
@@ -880,36 +882,68 @@ function rememberRecentWorkspace(path, name) {
 }
 
 async function tryRestoreLastWorkspace() {
-  // Auto-restore the most recent workspace on startup so the app opens
-  // where the user left it — exactly like Antigravity / VS Code.
   const recents = getRecentWorkspaces();
-  if (recents.length === 0) { openWelcomeScreen(); return; }
+  if (recents.length === 0) {
+    openWelcomeScreen();
+    return;
+  }
   const last = recents[0];
   try {
     await enterWorkspace(last.path);
-    showToast(`Restored workspace: ${last.name || last.path}`, 'success', 2500);
+    showToast(`Restored workspace: ${last.name || last.path}`, 'success', 2200);
   } catch (e) {
-    showToast(`Could not restore "${last.name || last.path}": ${e}`, 'error', 3500);
-    // Fall back to the welcome screen so the user isn't stuck
+    console.warn(`Workspace at "${last.path}" could not be restored automatically:`, e);
+    // Prune missing/stale workspace from recent list to avoid repeating errors
+    const filtered = recents.filter(r => r.path !== last.path);
+    try { localStorage.setItem(RECENT_WS_KEY, JSON.stringify(filtered)); } catch (_) {}
+    // Open the welcome screen smoothly without disruptive error alert
     openWelcomeScreen();
+  }
+}
+
+function formatChatTimestamp(isoStr) {
+  if (!isoStr) return 'Recently';
+  try {
+    const d = new Date(isoStr);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    if (diffDays === 0) {
+      if (diffHours < 1) return 'Just now';
+      return `Today at ${timeStr}`;
+    }
+    if (diffDays === 1) {
+      return `Yesterday at ${timeStr}`;
+    }
+    if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    }
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  } catch (_) {
+    return 'Recently';
   }
 }
 
 function openWelcomeScreen() {
   const modal = document.getElementById('modal-welcome');
   if (!modal) return;
+
+  // 1. Populate Recent Workspaces
   const recents = getRecentWorkspaces();
   const host = document.getElementById('welcome-recents');
   if (host) {
     host.innerHTML = '';
     if (recents.length === 0) {
-      host.innerHTML = '<div style="font-size: 11px; color: var(--text-muted);">No recent workspaces yet.</div>';
+      host.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); padding: 8px 0;">No recent workspaces yet. Open a folder to get started.</div>';
     }
     for (const r of recents) {
       const row = document.createElement('button');
       row.className = 'btn btn-secondary btn-sm';
-      row.style.cssText = 'justify-content: flex-start; text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px;';
-      row.innerHTML = `<strong style="font-size: 11.5px;">${escapeHtml(r.name || 'workspace')}</strong>
+      row.style.cssText = 'justify-content: flex-start; text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 6px;';
+      row.innerHTML = `<strong style="font-size: 11.5px; color: var(--text-primary);">${escapeHtml(r.name || 'workspace')}</strong>
         <span style="font-size: 9.5px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${escapeHtml(r.path)}</span>`;
       row.addEventListener('click', async () => {
         try {
@@ -923,8 +957,117 @@ function openWelcomeScreen() {
       host.appendChild(row);
     }
   }
+
+  // 2. Populate Continue Chat from Yesterday & Previous Sessions
+  import('./components/chat-sessions.js').then(cs => {
+    const sessions = typeof cs.getSessions === 'function' ? cs.getSessions() : [];
+    const activeSession = typeof cs.getActiveSession === 'function' ? cs.getActiveSession() : null;
+    const latest = sessions.length > 0 ? sessions[0] : activeSession;
+
+    const continueCard = document.getElementById('welcome-continue-last-chat');
+    const timeLabel = document.getElementById('welcome-last-chat-time');
+    const titleLabel = document.getElementById('welcome-last-chat-title');
+    const snippetLabel = document.getElementById('welcome-last-chat-snippet');
+    const sessionsList = document.getElementById('welcome-chat-sessions-list');
+
+    const activateChatAndClose = (sessionId) => {
+      if (sessionId && typeof cs.switchSession === 'function') {
+        cs.switchSession(sessionId);
+      }
+      modal.style.display = 'none';
+
+      // Ensure Agent panel is visible
+      const agentPanel = document.getElementById('agent-panel');
+      const btnToggleAgent = document.getElementById('btn-toggle-agent');
+      if (agentPanel) {
+        agentPanel.classList.remove('hidden');
+        btnToggleAgent?.classList.add('active');
+      }
+      // Focus chat composer
+      const composerInput = document.getElementById('agent-composer-input');
+      if (composerInput) {
+        setTimeout(() => composerInput.focus(), 100);
+      }
+    };
+
+    if (latest && continueCard) {
+      continueCard.style.display = 'block';
+      if (timeLabel) timeLabel.textContent = formatChatTimestamp(latest.updatedAt || latest.createdAt);
+      if (titleLabel) titleLabel.textContent = latest.title || 'Previous Chat';
+
+      // Find last user or assistant message snippet
+      const msgs = latest.messages || [];
+      const lastMsg = msgs.slice().reverse().find(m => !m._ephemeral && m.content);
+      if (snippetLabel) {
+        snippetLabel.textContent = lastMsg ? String(lastMsg.content).slice(0, 110) : 'Resume conversation where you left off.';
+      }
+
+      continueCard.onclick = () => {
+        activateChatAndClose(latest.id);
+        showToast(`Resumed: ${latest.title || 'Chat'}`, 'info', 2000);
+      };
+    } else if (continueCard) {
+      continueCard.style.display = 'none';
+    }
+
+    if (sessionsList) {
+      sessionsList.innerHTML = '';
+      const displaySessions = sessions.slice(0, 6);
+      if (displaySessions.length === 0) {
+        sessionsList.innerHTML = '<div style="font-size: 11px; color: var(--text-muted); padding: 8px 0;">No previous chats yet. Start a new session.</div>';
+      }
+      for (const s of displaySessions) {
+        const row = document.createElement('div');
+        row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 6px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;';
+        row.innerHTML = `
+          <div style="min-width: 0; flex: 1; margin-right: 8px;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(s.title || 'Chat')}</div>
+            <div style="font-size: 10px; color: var(--text-muted);">${formatChatTimestamp(s.updatedAt || s.createdAt)} · ${(s.messages || []).length} msgs</div>
+          </div>
+          <span style="font-size: 10px; color: var(--accent-cyan); font-weight: 500;">Resume ↗</span>
+        `;
+        row.addEventListener('mouseenter', () => {
+          row.style.background = 'rgba(57,197,187,0.08)';
+          row.style.borderColor = 'var(--accent-cyan)';
+        });
+        row.addEventListener('mouseleave', () => {
+          row.style.background = 'rgba(255,255,255,0.03)';
+          row.style.borderColor = 'var(--border-subtle)';
+        });
+        row.addEventListener('click', () => {
+          activateChatAndClose(s.id);
+          showToast(`Resumed: ${s.title || 'Chat'}`, 'info', 2000);
+        });
+        sessionsList.appendChild(row);
+      }
+    }
+
+    // Wire up New Chat, Import, Export buttons
+    document.getElementById('welcome-btn-new-chat')?.addEventListener('click', () => {
+      if (typeof cs.createNewSession === 'function') cs.createNewSession();
+      activateChatAndClose(null);
+    });
+
+    document.getElementById('welcome-btn-import-chat')?.addEventListener('click', () => {
+      if (typeof cs.importSessionFromMarkdown === 'function') cs.importSessionFromMarkdown();
+    });
+
+    document.getElementById('welcome-btn-export-chat')?.addEventListener('click', () => {
+      if (typeof cs.exportActiveSessionMarkdown === 'function') cs.exportActiveSessionMarkdown();
+    });
+  }).catch(e => console.warn('Could not populate chat sessions on welcome screen:', e));
+
   modal.style.display = 'flex';
 
+  // Modal close handlers
+  document.getElementById('welcome-modal-close')?.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  modal.onclick = (e) => {
+    if (e.target === modal) modal.style.display = 'none';
+  };
+
+  // Action buttons
   document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
   document.getElementById('welcome-new-file-btn')?.addEventListener('click', () => {
     modal.style.display = 'none';
@@ -948,6 +1091,7 @@ function openWelcomeScreen() {
       showToast(`Clone failed: ${e}`, 'error', 4500);
     }
   });
+
   document.getElementById('welcome-link-shortcuts')?.addEventListener('click', (e) => { e.preventDefault(); modal.style.display = 'none'; document.getElementById('menu-help')?.click(); });
   document.getElementById('welcome-link-whatsnew')?.addEventListener('click', (e) => { e.preventDefault(); openWhatsNewModal(); });
   document.getElementById('welcome-link-docs')?.addEventListener('click', (e) => {
