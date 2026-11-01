@@ -439,7 +439,7 @@ let showFileTreeContextMenu = function (x, y, node) {
       icon: '📂',
       action: async () => {
         try {
-          await invoke('run_command', { command: `explorer /select,"${node.path}"` });
+          await invoke('open_in_explorer', { path: node.path });
         } catch (e) {
           console.warn("Could not reveal in explorer:", e);
         }

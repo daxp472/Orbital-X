@@ -221,7 +221,7 @@ export async function pickFolder() {
     return null;
   }
 
-  // 1. Primary: backend Rust command with fresh dedicated thread
+  // 1. Primary: backend Rust command with native Windows dialog support
   try {
     const res = await invoke('open_folder_dialog');
     const path = extractPath(res);
@@ -233,24 +233,13 @@ export async function pickFolder() {
     console.warn("[pickFolder] open_folder_dialog IPC failed:", e);
   }
 
-  // 2. Client-side Tauri dialog plugin fallback (folder API)
+  // 2. Client-side Tauri dialog plugin fallback
   try {
     const dialog = await import('@tauri-apps/plugin-dialog');
-    // Try the folder-specific method first
-    if (dialog && typeof dialog.folder === 'function') {
-      console.log('[pickFolder] Using dialog.folder()');
-      const res = await dialog.folder({ directory: true, title: 'Select Workspace Folder' });
-      const path = extractPath(res);
-      if (path) return path;
-      if (res === null) return null;
-    }
-    // Fallback to open with directory option
     if (dialog && typeof dialog.open === 'function') {
-      console.log('[pickFolder] Using dialog.open() with directory option');
       const res = await dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
       const path = extractPath(res);
       if (path) return path;
-      if (res === null) return null;
     }
   } catch (e) {
     console.warn("[pickFolder] @tauri-apps/plugin-dialog fallback failed:", e);
@@ -258,11 +247,10 @@ export async function pickFolder() {
 
   // 3. window.__TAURI__.dialog fallback
   try {
-    if (window.__TAURI__ && window.__TAURI__.dialog && typeof window.__TAURI__.dialog.open === 'function') {
+    if (window.__TAURI__?.dialog?.open) {
       const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
       const path = extractPath(res);
       if (path) return path;
-      if (res === null) return null;
     }
   } catch (e) {
     console.warn("[pickFolder] window.__TAURI__.dialog failed:", e);
@@ -277,8 +265,15 @@ export async function pickFolder() {
     return null;
   }
 
-  console.log('[pickFolder] All methods failed, returning null');
   return null;
+}
+
+export async function openInExplorer(path = null) {
+  try {
+    await invoke('open_in_explorer', { path });
+  } catch (e) {
+    console.warn('[openInExplorer] failed:', e);
+  }
 }
 
 // Native Dialog picker for saving files

@@ -119,6 +119,21 @@ export async function enterWorkspace(rootPath) {
     // Load file tree passing cached meta (avoids duplicate set_workspace IPC)
     await loadWorkspace(meta.root_path, meta);
 
+    // Ensure Explorer view in sidebar is activated and visible
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar) {
+      sidebar.classList.remove('hidden');
+      document.getElementById('btn-toggle-sidebar')?.classList.add('active');
+    }
+    const railExplorer = document.getElementById('rail-explorer');
+    if (railExplorer) {
+      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.sidebar-subview').forEach(v => v.style.display = 'none');
+      railExplorer.classList.add('active');
+      const viewExplorer = document.getElementById('view-explorer');
+      if (viewExplorer) viewExplorer.style.display = 'flex';
+    }
+
     // Background refreshes - catch each so failure never breaks workspace transition
     refreshMemories().catch(e => console.warn('Memory refresh failed:', e));
     refreshGitStatus().catch(e => console.warn('Git status refresh failed:', e));
@@ -253,6 +268,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
   document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
+  document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
+    invoke('open_in_explorer', {}).catch(e => console.warn(e));
+  });
+  document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
+    invoke('open_in_explorer', {}).catch(e => console.warn(e));
+  });
 
   // Theme toggle button in titlebar
   document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
@@ -544,6 +565,12 @@ function initGlobalShortcuts() {
   const appBindings = getAllBindings().filter(b => b.scope === 'app');
 
   window.addEventListener('keydown', (e) => {
+    // Guaranteed Ctrl+O handler anywhere in the app
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'o' || e.key === 'O' || e.code === 'KeyO')) {
+      e.preventDefault();
+      handleOpenFolder();
+      return;
+    }
     const combo = comboFromEvent(e);
     if (!combo) return;
     const hit = appBindings.find(b => b.combo === combo);
@@ -1425,28 +1452,27 @@ function initProductionHardening() {
     }
   });
 
-  // P1: global error capture
-  const reportError = (message, source) => {
+  // P1: global error capture - saves to C drive (~/.orbital/crash.log) or custom directory
+  const reportError = async (message, source) => {
     const detail = `${message}${source ? ` (${source})` : ''}`;
-    showToast('Something went wrong — click to log details', 'error', 8000, [
-      { label: 'Log', onClick: async () => {
-          try {
-            const prev = localStorage.getItem('orbital_crash_buffer') || '';
-            const entry = `[${new Date().toISOString()}] ${detail}\n${prev}`.slice(0, 40000);
-            localStorage.setItem('orbital_crash_buffer', entry);
-            const root = state.workspace.rootPath;
-            if (root) {
-              await invoke('save_file', { path: '.orbital/crash.log', content: entry, description: 'Crash log' });
-              showToast('Crash details written to .orbital/crash.log', 'success', 3000);
-            } else {
-              showToast('Open a workspace to persist crash.log — details kept in memory', 'info', 3200);
-            }
-          } catch (e) {
-            showToast(`Could not write crash log: ${e}`, 'error', 3000);
-          }
-        }, primary: true },
-      { label: 'Dismiss', onClick: () => {} },
-    ]);
+    console.error('[Orbital X Error]', detail);
+
+    try {
+      const customDir = localStorage.getItem('orbital_crash_log_dir') || null;
+      const savedPath = await invoke('save_crash_report', { entry: detail, custom_dir: customDir });
+      showToast('Crash log recorded to disk', 'error', 6000, [
+        {
+          label: 'Show in Explorer',
+          onClick: () => {
+            invoke('open_in_explorer', { path: savedPath }).catch(() => {});
+          },
+          primary: true
+        },
+        { label: 'Dismiss', onClick: () => {} }
+      ]);
+    } catch (e) {
+      console.warn('Could not write crash log to disk:', e);
+    }
   };
 
   window.onerror = (message, source, lineno, colno) => {

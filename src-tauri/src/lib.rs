@@ -431,50 +431,107 @@ fn clear_token_usage() -> Result<(), String> {
 
 #[tauri::command]
 async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let app_handle = app.clone();
-
-    // Spawn a clean dedicated OS thread to guarantee an uninitialized COM apartment
-    // and eliminate any RPC_E_CHANGED_MODE failures on Windows.
-    std::thread::Builder::new()
-        .name("orbital-folder-picker".into())
-        .spawn(move || {
-            // 1. Native rfd folder dialog without parent window handle attachment
-            // to eliminate Win32 COM cross-thread owner window affinity issues.
-            let dialog = rfd::FileDialog::new().set_title("Select Workspace Folder");
-
-            if let Some(path_buf) = dialog.pick_folder() {
-                let clean = workspace::strip_verbatim_prefix(&path_buf);
-                let path_str = clean.to_string_lossy().to_string();
-                if clean.is_dir() {
-                    let _ = tx.send(Some(path_str));
-                    return;
-                }
-            }
-
-            // 2. Secondary fallback: tauri_plugin_dialog with WebviewWindow
-            use tauri_plugin_dialog::DialogExt;
-            if let Some(win) = app_handle.get_webview_window("main") {
-                if let Some(file_path) = win.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
-                    if let Ok(path_buf) = file_path.into_path() {
-                        let clean = workspace::strip_verbatim_prefix(&path_buf);
-                        let path_str = clean.to_string_lossy().to_string();
-                        if clean.is_dir() {
-                            let _ = tx.send(Some(path_str));
-                            return;
-                        }
+    let app_clone = app.clone();
+    let result = tokio::task::spawn_blocking(move || -> Option<String> {
+        use tauri_plugin_dialog::DialogExt;
+        // 1. Try with WebviewWindow handle
+        if let Some(win) = app_clone.get_webview_window("main") {
+            if let Some(file_path) = win.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
+                if let Ok(pb) = file_path.into_path() {
+                    let clean = workspace::strip_verbatim_prefix(&pb);
+                    if clean.is_dir() {
+                        return Some(clean.to_string_lossy().to_string());
                     }
                 }
             }
+        }
 
-            let _ = tx.send(None);
-        })
-        .map_err(|e| format!("Failed to spawn folder picker thread: {}", e))?;
+        // 2. Fallback to app-level dialog
+        if let Some(file_path) = app_clone.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
+            if let Ok(pb) = file_path.into_path() {
+                let clean = workspace::strip_verbatim_prefix(&pb);
+                if clean.is_dir() {
+                    return Some(clean.to_string_lossy().to_string());
+                }
+            }
+        }
 
-    match rx.await {
-        Ok(res) => Ok(res),
-        Err(_) => Ok(None),
+        // 3. Fallback to native rfd
+        if let Some(path_buf) = rfd::FileDialog::new().set_title("Select Workspace Folder").pick_folder() {
+            let clean = workspace::strip_verbatim_prefix(&path_buf);
+            if clean.is_dir() {
+                return Some(clean.to_string_lossy().to_string());
+            }
+        }
+
+        None
+    })
+    .await
+    .map_err(|e| format!("Dialog task failed: {}", e))?;
+
+    Ok(result)
+}
+
+/// Save crash report directly to disk on C drive (~/.orbital/crash.log) or custom directory
+#[tauri::command]
+fn save_crash_report(entry: String, custom_dir: Option<String>) -> Result<String, String> {
+    let base_dir = if let Some(custom) = custom_dir.filter(|s| !s.trim().is_empty()) {
+        std::path::PathBuf::from(custom)
+    } else {
+        dirs::home_dir()
+            .map(|h| h.join(".orbital"))
+            .unwrap_or_else(|| std::path::PathBuf::from("C:\\.orbital"))
+    };
+
+    if let Err(e) = std::fs::create_dir_all(&base_dir) {
+        return Err(format!("Failed to create crash log directory {:?}: {}", base_dir, e));
     }
+
+    let file_path = base_dir.join("crash.log");
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file_path)
+        .map_err(|e| format!("Failed to open crash log file {:?}: {}", file_path, e))?;
+
+    writeln!(file, "[{}] {}", chrono::Local::now().format("%Y-%m-%d %H:%M:%S"), entry)
+        .map_err(|e| format!("Failed to write to crash log {:?}: {}", file_path, e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Open a path or current workspace in the native OS File Explorer
+#[tauri::command]
+fn open_in_explorer(path: Option<String>, state: State<'_, AppState>) -> Result<(), String> {
+    let target = if let Some(p) = path.filter(|s| !s.trim().is_empty()) {
+        std::path::PathBuf::from(p)
+    } else {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root().unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
+    };
+
+    #[cfg(windows)]
+    {
+        if target.is_file() {
+            let _ = std::process::Command::new("explorer")
+                .arg(format!("/select,\"{}\"", target.to_string_lossy()))
+                .spawn();
+        } else {
+            let _ = std::process::Command::new("explorer")
+                .arg(target.to_string_lossy().to_string())
+                .spawn();
+        }
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open").arg(target).spawn();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = std::process::Command::new("xdg-open").arg(target).spawn();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1994,6 +2051,8 @@ pub fn run() {
             clear_token_usage,
             open_folder_dialog,
             pick_save_file,
+            save_crash_report,
+            open_in_explorer,
             test_provider_connection,
             evaluate_tool_policy,
             get_available_tools,

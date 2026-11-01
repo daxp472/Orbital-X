@@ -544,6 +544,14 @@ function bindEditorCommands(ed) {
     contextMenuOrder: 2,
     run: (e) => runGenerateDocstring(e),
   });
+  ed.addAction({
+    id: 'orbital.openFolder',
+    label: 'Open Workspace Folder',
+    keybindings: [C2 | K2.KeyO],
+    run: () => {
+      import('../app.js').then(m => m.handleOpenFolder());
+    },
+  });
 }
 
 /** Re-applies editor keybindings after the user edits them (G4). */
@@ -1291,7 +1299,7 @@ function showTabContextMenu(x, y, panel, tab) {
     { label: 'Copy Relative Path', icon: '🔗', action: () => navigator.clipboard.writeText(tab.relativePath || tab.name) },
     { label: 'Reveal in File Explorer', icon: '📂', action: async () => {
       try {
-        await invoke('run_command', { command: `explorer /select,"${tab.path}"`, timeout_seconds: 10 });
+        await invoke('open_in_explorer', { path: tab.path });
       } catch (e) { console.warn('Reveal failed:', e); }
       // Also highlight in the sidebar tree
       import('../components/file-tree.js').then(m => {
