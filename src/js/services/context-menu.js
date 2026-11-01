@@ -285,8 +285,14 @@ function handleTreeContextMenu(nodeEl, x, y) {
           const filename = await showInputDialog('New File', 'e.g. index.js or utils/helper.ts');
           if (filename) {
             const fullRel = targetDir ? `${targetDir}/${filename}` : filename;
-            await invoke('save_file', { path: fullRel, content: '', description: 'Created from context menu' });
+            const diff = await invoke('save_file', { path: fullRel, content: '', description: 'Created from context menu' });
             import('../components/file-tree.js').then(f => f.refreshFileTree());
+            const fileData = await invoke('read_file', { path: fullRel });
+            if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
+              fileData.cursor_offset = diff.cursor_offset;
+            }
+            const { openFileInTab } = await import('../editor/monaco.js');
+            openFileInTab(fileData);
           }
         }
       },
@@ -369,8 +375,14 @@ function handleTreeContextMenu(nodeEl, x, y) {
           const { showInputDialog } = await import('./dialogs.js');
           const filename = await showInputDialog('New File', 'e.g. index.js');
           if (filename) {
-            await invoke('save_file', { path: filename, content: '', description: 'Created via context menu' });
+            const diff = await invoke('save_file', { path: filename, content: '', description: 'Created via context menu' });
             import('../components/file-tree.js').then(f => f.refreshFileTree());
+            const fileData = await invoke('read_file', { path: filename });
+            if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
+              fileData.cursor_offset = diff.cursor_offset;
+            }
+            const { openFileInTab } = await import('../editor/monaco.js');
+            openFileInTab(fileData);
           }
         }
       },

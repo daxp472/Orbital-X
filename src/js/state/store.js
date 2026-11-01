@@ -92,6 +92,8 @@ export const state = {
   settings: {
     autoSave: true,
     autoSaveDelay: 1000,
+    // File boilerplate starter content templates
+    boilerplate: { enabled: true, disabledLanguages: [] },
     // B1: inline AI autocomplete (ghost text)
     inlineComplete: { enabled: false, provider: 'ollama' },
     // Editor appearance/formatting options (monaco.js applyEditorSettings)
@@ -195,6 +197,12 @@ export function loadPersistedState() {
         state.settings.autoSaveDelay = parsedDelay;
       }
     }
+    const savedBoilerplate = localStorage.getItem('orbital_boilerplate');
+    if (savedBoilerplate) {
+      try {
+        state.settings.boilerplate = { ...state.settings.boilerplate, ...JSON.parse(savedBoilerplate) };
+      } catch (e) { /* keep defaults */ }
+    }
   } catch (e) {
     console.warn("Could not load persisted state:", e);
   }
@@ -216,6 +224,7 @@ export function persistState() {
     localStorage.setItem('orbital_keys', JSON.stringify(state.ai.keys));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');
     localStorage.setItem('orbital_autosave_delay', (state.settings.autoSaveDelay || 1000).toString());
+    localStorage.setItem('orbital_boilerplate', JSON.stringify(state.settings.boilerplate || { enabled: true, disabledLanguages: [] }));
   } catch (e) {
     console.warn("Could not persist state:", e);
   }

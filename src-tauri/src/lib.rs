@@ -1,3 +1,4 @@
+pub mod boilerplate;
 mod extensions;
 mod memory;
 mod policy;
@@ -101,6 +102,21 @@ fn read_file(path: String, state: State<'_, AppState>) -> Result<FileReadResult,
 fn save_file(path: String, content: String, description: Option<String>, state: State<'_, AppState>) -> Result<FileDiff, String> {
     let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
     ws.write_file(&path, &content, &description.unwrap_or_else(|| "User manual save".into()))
+}
+
+#[tauri::command]
+fn render_file_boilerplate(path: String) -> Result<Option<boilerplate::RenderedTemplate>, String> {
+    Ok(boilerplate::render_for_path(std::path::Path::new(&path)))
+}
+
+#[tauri::command]
+fn get_boilerplate_settings() -> Result<boilerplate::BoilerplateSettings, String> {
+    Ok(boilerplate::settings::load_settings_from_disk())
+}
+
+#[tauri::command]
+fn save_boilerplate_settings(settings: boilerplate::BoilerplateSettings) -> Result<(), String> {
+    boilerplate::settings::save_settings_to_disk(&settings)
 }
 
 #[tauri::command]
@@ -1795,7 +1811,10 @@ pub fn run() {
             install_skill_from_folder,
             delete_skill,
             set_skill_enabled,
-            verify_workspace_build
+            verify_workspace_build,
+            render_file_boilerplate,
+            get_boilerplate_settings,
+            save_boilerplate_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

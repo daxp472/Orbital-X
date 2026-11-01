@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use walkdir::WalkDir;
 
 /// Strips Windows verbatim prefix (\\?\, \\?\UNC\, or //?/) so paths can be safely compared
@@ -63,6 +64,8 @@ pub struct FileReadResult {
     pub is_binary: bool,
     pub total_lines: usize,
     pub size_bytes: u64,
+    #[serde(default)]
+    pub cursor_offset: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +76,8 @@ pub struct FileDiff {
     pub diff_unified: String,
     pub additions: usize,
     pub deletions: usize,
+    #[serde(default)]
+    pub cursor_offset: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,6 +97,7 @@ pub struct WorkspaceService {
     /// Metadata scanned once at set_root; served to get_workspace_meta without
     /// re-walking the tree on every IPC call.
     cached_meta: Option<WorkspaceMeta>,
+    pub last_created_cursor: Mutex<HashMap<String, usize>>,
 }
 
 impl WorkspaceService {
@@ -101,12 +107,16 @@ impl WorkspaceService {
             change_journal: Vec::new(),
             pending_manifests: HashMap::new(),
             cached_meta: None,
+            last_created_cursor: Mutex::new(HashMap::new()),
         }
     }
 
     pub fn set_root(&mut self, path_str: &str) -> Result<WorkspaceMeta, String> {
         let trimmed = path_str.trim().trim_matches('"');
+        #[cfg(windows)]
         let norm_str = trimmed.replace('/', "\\");
+        #[cfg(not(windows))]
+        let norm_str = trimmed.to_string();
         let p = PathBuf::from(&norm_str);
 
         let clean_canonical = if let Ok(canonical) = p.canonicalize() {
@@ -333,11 +343,18 @@ impl WorkspaceService {
                 is_binary: true,
                 total_lines: 0,
                 size_bytes: meta.len(),
+                cursor_offset: None,
             });
         }
 
         let content = String::from_utf8_lossy(&bytes).to_string();
         let line_count = content.lines().count();
+
+        let cursor_offset = self.last_created_cursor.lock().ok().and_then(|mut m| {
+            m.remove(&full_path.to_string_lossy().replace('\\', "/"))
+                .or_else(|| m.remove(&path_str.replace('\\', "/")))
+                .or_else(|| m.remove(&rel_path))
+        });
 
         Ok(FileReadResult {
             path: full_path.to_string_lossy().replace('\\', "/"),
@@ -346,6 +363,7 @@ impl WorkspaceService {
             is_binary: false,
             total_lines: line_count,
             size_bytes: meta.len(),
+            cursor_offset,
         })
     }
 
@@ -363,7 +381,27 @@ impl WorkspaceService {
             String::new()
         };
 
-        let diff = self.compute_diff(&full_path.to_string_lossy(), &old_content, content);
+        // Boilerplate is applied only if the file is new or empty AND the caller provided empty content.
+        let is_new_or_empty = !full_path.exists() || old_content.trim().is_empty();
+        let (effective_content, cursor_offset) = if is_new_or_empty && content.is_empty() {
+            if let Some(rendered) = crate::boilerplate::render_for_path(&full_path) {
+                (rendered.content, rendered.cursor_offset)
+            } else {
+                (content.to_string(), None)
+            }
+        } else {
+            (content.to_string(), None)
+        };
+
+        if let Some(offset) = cursor_offset {
+            if let Ok(mut map) = self.last_created_cursor.lock() {
+                map.insert(full_path.to_string_lossy().replace('\\', "/"), offset);
+                map.insert(path_str.replace('\\', "/"), offset);
+            }
+        }
+
+        let mut diff = self.compute_diff(&full_path.to_string_lossy(), &old_content, &effective_content);
+        diff.cursor_offset = cursor_offset;
 
         // Journal this change for undo capability
         let entry = AgentChangeEntry {
@@ -371,12 +409,12 @@ impl WorkspaceService {
             timestamp: chrono::Utc::now().to_rfc3339(),
             path: full_path.to_string_lossy().replace('\\', "/"),
             before_content: if full_path.exists() { Some(old_content.clone()) } else { None },
-            after_content: content.to_string(),
+            after_content: effective_content.clone(),
             description: description.to_string(),
         };
         self.change_journal.push(entry);
 
-        fs::write(&full_path, content).map_err(|e| e.to_string())?;
+        fs::write(&full_path, &effective_content).map_err(|e| e.to_string())?;
 
         Ok(diff)
     }
@@ -712,6 +750,7 @@ impl WorkspaceService {
             diff_unified: unified,
             additions,
             deletions,
+            cursor_offset: None,
         }
     }
 
@@ -1525,6 +1564,41 @@ mod tests {
         let mut ws = WorkspaceService::new();
         let path_slash = tmp.to_string_lossy().replace('\\', "/");
         assert!(ws.set_root(&path_slash).is_ok());
+        let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_boilerplate_empty_file_only_rule() {
+        let tmp = std::env::temp_dir().join(format!("orbital_bp_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&tmp);
+        let mut ws = WorkspaceService::new();
+        ws.set_root(&tmp.to_string_lossy()).unwrap();
+
+        // 1. New file with empty content -> gets boilerplate
+        let diff1 = ws.write_file("user-card.jsx", "", "New file").unwrap();
+        assert!(diff1.new_content.contains("export default function UserCard()"));
+        assert!(diff1.cursor_offset.is_some());
+
+        // 2. Read file returns the boilerplate content and cursor offset
+        let read1 = ws.read_file("user-card.jsx").unwrap();
+        assert!(read1.content.contains("export default function UserCard()"));
+        assert_eq!(read1.cursor_offset, diff1.cursor_offset);
+
+        // 3. New file with existing/imported non-empty content -> boilerplate is NOT applied
+        let imported_code = "// imported code\nconst a = 1;";
+        let diff2 = ws.write_file("imported.jsx", imported_code, "Imported file").unwrap();
+        assert_eq!(diff2.new_content, imported_code);
+        assert_eq!(diff2.cursor_offset, None);
+
+        // 4. Overwriting existing non-empty file -> boilerplate is NEVER applied even if saving empty
+        ws.write_file("notes.rs", "fn existing() {}", "Initial").unwrap();
+        let diff3 = ws.write_file("notes.rs", "// new edit", "Edit").unwrap();
+        assert_eq!(diff3.new_content, "// new edit");
+
+        // 5. Unknown extension gets empty file with no error
+        let diff4 = ws.write_file("file.unknownext", "", "Unknown").unwrap();
+        assert_eq!(diff4.new_content, "");
+
         let _ = fs::remove_dir_all(&tmp);
     }
 }
