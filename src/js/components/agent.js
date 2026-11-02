@@ -1427,6 +1427,7 @@ async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
     ? state.workspace.rootPath.split(/[\\/]/).pop()
     : 'Workspace';
 
+  const activeTab = state.editor?.tabs?.find(t => t.id === state.editor.activeTabId);
   const recentActions = activeExecutionMemory.completedActions.slice(-6);
   const memoryContext = `\n\n## TIER 1: CORE ACTIVE MEMORY (Pinned Context Anchor):
 - Working Directory: ${state.workspace.rootPath || 'None'} (${stackHint})
@@ -1460,7 +1461,6 @@ ${recentActions.map(a => `  • ${a}`).join('\n') || '  • Session ready. No pr
 
   // 2. Active editor context (file path only, not full content)
   let activeEditorContext = '';
-  const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
   if (activeTab) {
     activeEditorContext = `\nActive file: ${activeTab.path || activeTab.name}`;
   }
