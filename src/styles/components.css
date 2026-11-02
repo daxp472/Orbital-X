@@ -2619,3 +2619,96 @@ input:checked + .settings-toggle-slider:before {
 
 
 
+
+
+/* ==========================================================================
+   Orbital X — Native IDE Menubar Dropdown System (Matches Image 2 / VS Code)
+   ========================================================================== */
+
+.menubar-dropdown {
+  position: fixed;
+  background: rgba(22, 25, 34, 0.98);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 4px 0;
+  min-width: 240px;
+  max-width: 290px;
+  z-index: 100000;
+  display: none;
+  flex-direction: column;
+  user-select: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  animation: menubarFadeIn 0.12s ease-out;
+}
+
+@keyframes menubarFadeIn {
+  from { opacity: 0; transform: translateY(-3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.menubar-dropdown.active {
+  display: flex;
+}
+
+.menubar-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 5px 14px;
+  border: none;
+  background: transparent;
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  transition: background 0.08s ease, color 0.08s ease;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.menubar-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+.menubar-dropdown-item:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.menubar-dropdown-item.disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.menubar-dropdown-item .item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menubar-dropdown-item .item-shortcut {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: #888888;
+  margin-left: 20px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.menubar-dropdown-item:hover .item-shortcut {
+  color: #bbbbbb;
+}
+
+.menubar-dropdown-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}

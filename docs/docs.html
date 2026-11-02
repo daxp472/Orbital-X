@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documentation — Orbital X Native AI Coding IDE</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="logo.png" />
+
+  <!-- SEO & Social Meta -->
+  <meta name="description" content="Comprehensive documentation, architecture guides, safety modes, and hardware setup for Orbital X Native AI Coding IDE." />
+  <meta name="keywords" content="Orbital X Documentation, AI IDE docs, Ollama setup, Tauri 2 Rust, safety modes, developer guide" />
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    /* Documentation Hub Specific Styles */
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 40px;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 110px 24px 80px;
+    }
+
+    .docs-sidebar {
+      position: sticky;
+      top: 90px;
+      height: calc(100vh - 120px);
+      overflow-y: auto;
+      padding-right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .docs-sidebar::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .docs-sidebar-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .docs-sidebar-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      padding-left: 10px;
+    }
+
+    .docs-nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: all var(--trans-fast);
+    }
+
+    .docs-nav-link:hover {
+      color: var(--text-primary-bright);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .docs-nav-link.active {
+      color: var(--accent-cyan);
+      background: rgba(57, 197, 187, 0.1);
+      font-weight: 600;
+    }
+
+    .docs-content {
+      min-width: 0;
+      line-height: 1.7;
+    }
+
+    .docs-section {
+      margin-bottom: 64px;
+      scroll-margin-top: 100px;
+    }
+
+    .docs-section h1 {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 16px;
+      background: linear-gradient(180deg, #ffffff 40%, #9aa5b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .docs-section h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin: 36px 0 16px;
+      color: var(--text-primary-bright);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .docs-section h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 24px 0 12px;
+      color: var(--text-primary);
+    }
+
+    .docs-section p {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      font-size: 0.98rem;
+    }
+
+    .docs-callout {
+      background: rgba(57, 197, 187, 0.08);
+      border-left: 3px solid var(--accent-cyan);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding: 16px 20px;
+      margin: 24px 0;
+    }
+
+    .docs-callout.warning {
+      background: rgba(255, 159, 10, 0.08);
+      border-left-color: var(--accent-orange);
+    }
+
+    .docs-callout-title {
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text-primary-bright);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .docs-code-block {
+      background: #06090e;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      margin: 20px 0;
+      overflow: hidden;
+    }
+
+    .docs-code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .docs-code-content {
+      padding: 16px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.86rem;
+      line-height: 1.55;
+      color: #e6edf3;
+    }
+
+    @media (max-width: 900px) {
+      .docs-layout {
+        grid-template-columns: 1fr;
+        padding-top: 80px;
+      }
+      .docs-sidebar {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <img src="logo.png" alt="Orbital X Logo" class="brand-logo-img" />
+        <span>Orbital X</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="index.html#features">Features</a></li>
+        <li><a href="docs.html" class="active">Documentation</a></li>
+        <li><a href="index.html#modes">Safety Modes</a></li>
+        <li><a href="index.html#models">Hardware Guide</a></li>
+        <li><a href="report-issue.html">Report Issue</a></li>
+        <li><a href="index.html#download">Download</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary btn-sm nav-btn-gh">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub ★
+        </a>
+        <a href="index.html#download" class="btn btn-primary btn-sm">Get v2.2.9</a>
+        <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation Menu" aria-expanded="false">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Docs Container -->
+  <div class="docs-layout">
+    <!-- Sidebar Navigation -->
+    <aside class="docs-sidebar">
+      <div class="docs-sidebar-section">
+        <div class="docs-sidebar-title">Getting Started</div>
+        <a href="#intro" class="docs-nav-link active">📖 Introduction</a>
+        <a href="#quickstart" class="docs-nav-link">⚡ Quickstart &amp; Install</a>
+        <a href="#architecture" class="docs-nav-link">🏛️ Architecture &amp; Rust IPC</a>
+      </div>
+
+      <div class="docs-sidebar-section">
+        <div class="docs-sidebar-title">Core Features</div>
+        <a href="#safety-modes" class="docs-nav-link">🎛️ Tri-Mode Safety System</a>
+        <a href="#ollama-ai" class="docs-nav-link">🧠 Local AI with Ollama</a>
+        <a href="#workspace" class="docs-nav-link">📂 Workspaces &amp; File Tree</a>
+        <a href="#editor-terminal" class="docs-nav-link">💻 Monaco &amp; Terminal</a>
+      </div>
+
+      <div class="docs-sidebar-section">
+        <div class="docs-sidebar-title">Developer &amp; Support</div>
+        <a href="#menubar-shortcuts" class="docs-nav-link">⌨️ Menubar &amp; Keybindings</a>
+        <a href="#devtools" class="docs-nav-link">🛠️ DevTools &amp; F12 Debug</a>
+        <a href="#troubleshooting" class="docs-nav-link">🔧 Troubleshooting &amp; Logs</a>
+        <a href="report-issue.html" class="docs-nav-link">🐛 Report an Issue</a>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="docs-content">
+      <!-- 1. Introduction -->
+      <section class="docs-section" id="intro">
+        <div class="pill-badge" style="margin-bottom: 12px;">Orbital X Reference Manual</div>
+        <h1>Documentation Hub</h1>
+        <p>
+          Welcome to the official technical documentation for <strong>Orbital X</strong>.
+          Orbital X is an open-source, ultra-efficient desktop coding IDE engineered on <strong>Tauri 2 and Rust</strong>.
+          It delivers native speed, complete data confidentiality with 100% offline local model inference, durable memory, and an idle memory footprint of just <strong>~95 MB RAM</strong>.
+        </p>
+
+        <div class="docs-callout">
+          <div class="docs-callout-title">🔒 Air-Gapped Privacy First</div>
+          Orbital X never dials home or sends telemetry. All workspace index data, memory cards, and AI inference runs locally on your machine via direct IPC or Ollama.
+        </div>
+      </section>
+
+      <!-- 2. Quickstart -->
+      <section class="docs-section" id="quickstart">
+        <h2>⚡ Quickstart &amp; Installation</h2>
+        <p>
+          Orbital X offers official binaries across Windows, macOS, and Linux platforms.
+        </p>
+
+        <h3>Windows Installation</h3>
+        <p>You can install Orbital X using the official Windows NSIS setup package or directly from Windows Package Manager (winget):</p>
+        
+        <div class="docs-code-block">
+          <div class="docs-code-header">PowerShell / Command Prompt</div>
+          <div class="docs-code-content">winget install daxp472.OrbitalX</div>
+        </div>
+
+        <p>Alternatively, download the standalone installer <code>Orbital X_2.2.9_x64-setup.exe</code> from the <a href="index.html#download" style="color: var(--accent-cyan);">download section</a>.</p>
+
+        <h3>macOS Installation</h3>
+        <p>Download <code>Orbital.X_2.2.9_aarch64.dmg</code> for Apple Silicon (M1/M2/M3/M4) or Intel macs. Open the disk image and drag Orbital X into your Applications directory.</p>
+
+        <h3>Linux Installation</h3>
+        <p>We provide both standalone <code>.AppImage</code> binaries and <code>.deb</code> packages for Debian and Ubuntu distributions:</p>
+        
+        <div class="docs-code-block">
+          <div class="docs-code-header">Bash</div>
+          <div class="docs-code-content">chmod +x Orbital.X_2.2.9_amd64.AppImage
+./Orbital.X_2.2.9_amd64.AppImage</div>
+        </div>
+      </section>
+
+      <!-- 3. Architecture -->
+      <section class="docs-section" id="architecture">
+        <h2>🏛️ Architecture &amp; Native Rust IPC</h2>
+        <p>
+          Unlike legacy Electron-based editors (which bundle Chromium and Node.js for every window and consume 1.5GB to 2.2GB RAM upon launch), Orbital X separates frontend rendering from operating system execution:
+        </p>
+
+        <ul style="color: var(--text-secondary); margin-left: 20px; margin-bottom: 20px;">
+          <li><strong>Rust Backend Core:</strong> Handles file I/O, OS directory watchers, PTY terminal execution, workspace boundary guards, and memory index storage.</li>
+          <li><strong>OS Native Webview (WebView2 / WebKit):</strong> Provides a hardware-accelerated 120+ FPS canvas for Monaco Editor and the agent workspace.</li>
+          <li><strong>Zero Cross-Thread Deadlocks:</strong> File dialogs and OS calls execute asynchronously on dedicated blocking tasks, ensuring the UI remains buttery smooth.</li>
+        </ul>
+      </section>
+
+      <!-- 4. Safety Modes -->
+      <section class="docs-section" id="safety-modes">
+        <h2>🎛️ Tri-Mode Safety System</h2>
+        <p>
+          Orbital X features kernel-enforced sandboxing with three operational autonomy levels. You can switch modes instantly via the top header pill or status bar:
+        </p>
+
+        <div class="table-container">
+          <table class="modes-comparison-table">
+            <thead>
+              <tr>
+                <th>Autonomy Policy</th>
+                <th class="dev">Dev Mode (Default)</th>
+                <th class="pro">Agent Pro Mode</th>
+                <th class="user">User Mode</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>File Inspections &amp; Searches</strong></td>
+                <td class="mode-cell dev">⚡ Automatic</td>
+                <td class="mode-cell pro">⚡ Automatic</td>
+                <td class="mode-cell user">🛡️ Requires Approval</td>
+              </tr>
+              <tr>
+                <td><strong>Code Edits &amp; File Writes</strong></td>
+                <td class="mode-cell dev">🛡️ Approval Card + Monaco Diff</td>
+                <td class="mode-cell pro">⚡ Auto (with Undo Journal)</td>
+                <td class="mode-cell user">🛡️ Strict Approval</td>
+              </tr>
+              <tr>
+                <td><strong>Terminal Execution</strong></td>
+                <td class="mode-cell dev">🛡️ Confirmation Required</td>
+                <td class="mode-cell pro">⚡ Safe build/test auto-run</td>
+                <td class="mode-cell user">🛡️ Strict Confirmation</td>
+              </tr>
+              <tr>
+                <td><strong>Recommended Use Case</strong></td>
+                <td>Balanced everyday coding</td>
+                <td>Fast feature generation &amp; refactoring</td>
+                <td>High-security &amp; sensitive codebases</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 5. Ollama AI -->
+      <section class="docs-section" id="ollama-ai">
+        <h2>🧠 Local AI with Ollama</h2>
+        <p>
+          Orbital X communicates directly with Ollama on <code>http://127.0.0.1:11434</code>.
+        </p>
+
+        <h3>Step 1: Install Ollama</h3>
+        <p>Download and install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener" style="color: var(--accent-cyan);">ollama.com</a>.</p>
+
+        <h3>Step 2: Pull Your Preferred Coding Model</h3>
+        <div class="docs-code-block">
+          <div class="docs-code-header">Terminal</div>
+          <div class="docs-code-content"># Recommended for 16GB RAM machines:
+ollama pull qwen2.5-coder:7b
+
+# Recommended for lightweight 8GB machines:
+ollama pull llama3.2:3b
+
+# High performance for 32GB+ systems:
+ollama pull deepseek-coder-v2:16b</div>
+        </div>
+
+        <h3>Step 3: Launch Orbital X</h3>
+        <p>Open Orbital X. The AI agent will auto-detect your local Ollama models. Select your active model from the top status badge and begin coding!</p>
+      </section>
+
+      <!-- 6. Menubar & Shortcuts -->
+      <section class="docs-section" id="menubar-shortcuts">
+        <h2>⌨️ Menubar &amp; Keyboard Shortcuts</h2>
+        <p>
+          Orbital X features a full native menubar with compact dropdown menus for <strong>File, Edit, Selection, View, Go, Run, Terminal, Developer, and Help</strong>.
+        </p>
+
+        <div class="table-container">
+          <table class="bench-table">
+            <thead>
+              <tr>
+                <th>Shortcut</th>
+                <th>Action</th>
+                <th>Scope</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><kbd>Ctrl+O</kbd></td>
+                <td>Open Workspace / Select Folder</td>
+                <td>Global</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+S</kbd></td>
+                <td>Save Active File</td>
+                <td>Editor</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+Shift+P</kbd></td>
+                <td>Open Command Palette</td>
+                <td>Global</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+P</kbd></td>
+                <td>Quick Open (Fuzzy File Search)</td>
+                <td>Workspace</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+`</kbd></td>
+                <td>Toggle Integrated Terminal</td>
+                <td>View</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+Shift+`</kbd></td>
+                <td>Create New Terminal Instance</td>
+                <td>Terminal</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+Shift+B</kbd></td>
+                <td>Run Project Build Task</td>
+                <td>Terminal</td>
+              </tr>
+              <tr>
+                <td><kbd>F12</kbd></td>
+                <td>Open DevTools / Debug Console</td>
+                <td>Developer</td>
+              </tr>
+              <tr>
+                <td><kbd>Ctrl+W</kbd></td>
+                <td>Close Current Editor Tab</td>
+                <td>Editor</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 7. Troubleshooting -->
+      <section class="docs-section" id="troubleshooting">
+        <h2>🔧 Troubleshooting &amp; Crash Logs</h2>
+        <p>
+          If you ever experience an issue, Orbital X automatically logs crash details directly to disk on your C: drive:
+        </p>
+
+        <div class="docs-code-block">
+          <div class="docs-code-header">Default Crash Log Path</div>
+          <div class="docs-code-content">C:\Users\&lt;YourUsername&gt;\.orbital\crash.log</div>
+        </div>
+
+        <p>
+          You can inspect this file directly in Windows File Explorer or copy diagnostic details from the <strong>Developer &gt; Copy Diagnostic Info</strong> menu.
+        </p>
+
+        <p>
+          To report a bug or request a feature, click <strong>Help &gt; Report Issue</strong> inside Orbital X or visit our <a href="report-issue.html" style="color: var(--accent-cyan);">Report Issue Page</a>.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <img src="logo.png" alt="Orbital X Logo" class="brand-logo-img" style="width: 24px; height: 24px;" />
+            <span style="font-weight: 700; color: #fff;">Orbital X</span>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;">v2.2.9</span>
+          </div>
+          <div class="footer-copy">
+            An Open-Source Community Desktop IDE Project.<br>
+            Licensed under the <a href="https://github.com/daxp472/Orbital-X/blob/main/LICENSE" target="_blank" rel="noopener" style="color: var(--accent-cyan);">MIT License</a>.
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="docs.html">Documentation</a>
+          <a href="report-issue.html">Report Issue</a>
+          <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener">GitHub</a>
+          <a href="https://github.com/daxp472/Orbital-X/releases" target="_blank" rel="noopener">Releases</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
+

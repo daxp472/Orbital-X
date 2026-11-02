@@ -21,6 +21,8 @@ import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
 import { initDeveloperMenu } from './components/developer-menu.js';
+import { initMenubar } from './components/menubar.js';
+import { checkForUpdatesManually, CURRENT_VERSION } from './components/updater.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 
 window.showToast = showToast;
@@ -230,6 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initShortcutsHelpOverlay();
   initUnifiedContextMenu();
   initDeveloperMenu();
+  initMenubar();
 
   // 4. Panel Layout Toggles (Matching screenshot buttons)
   const sidebarEl = document.getElementById('sidebar');
@@ -271,7 +274,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('menu-file')?.addEventListener('click', handleOpenFolder);
   document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
   document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
@@ -352,11 +354,11 @@ function initStatusBarExtras() {
 
   // Report Issue in status bar
   document.getElementById('sb-report-issue')?.addEventListener('click', async () => {
+    const issueUrl = 'https://daxp472.github.io/Orbital-X/report-issue.html';
     try {
-      await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
-      invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+      await invoke('open_url', { url: issueUrl });
     } catch (e) {
-      showReportIssueOfflineModal();
+      window.open(issueUrl, '_blank');
     }
   });
 }
@@ -666,7 +668,6 @@ function initShortcutsHelpOverlay() {
   });
 
   // Help menu in titlebar opens Help modal with Report Issue and Shortcuts
-  document.getElementById('menu-help')?.addEventListener('click', openHelpModal);
 
   // Keyboard shortcuts button in Help modal
   document.getElementById('btn-help-shortcuts')?.addEventListener('click', () => {
@@ -676,11 +677,11 @@ function initShortcutsHelpOverlay() {
 
   // Report Issue button in Help modal
   document.getElementById('btn-help-report-issue')?.addEventListener('click', async () => {
+    const issueUrl = 'https://daxp472.github.io/Orbital-X/report-issue.html';
     try {
-      const response = await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
-      await invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+      await invoke('open_url', { url: issueUrl });
     } catch (e) {
-      showReportIssueOfflineModal();
+      window.open(issueUrl, '_blank');
     }
   });
 
@@ -756,16 +757,14 @@ function initAboutModal() {
     if (e.target === modal) closeAbout();
   });
 
-  btnCheckUpdates?.addEventListener('click', checkForUpdatesManually);
+  btnCheckUpdates?.addEventListener('click', () => checkForUpdatesManually(true));
 
   btnReportIssue?.addEventListener('click', async () => {
+    const issueUrl = 'https://daxp472.github.io/Orbital-X/report-issue.html';
     try {
-      // Check if online before opening URL
-      const response = await fetch('https://github.com/daxp472/Orbital-X', { method: 'HEAD' });
-      await invoke('open_url', { url: 'https://daxp472.github.io/Orbital-X/report-issue.html' });
+      await invoke('open_url', { url: issueUrl });
     } catch (e) {
-      // Offline fallback - show modal with instructions
-      showReportIssueOfflineModal();
+      window.open(issueUrl, '_blank');
     }
   });
 }
@@ -1532,7 +1531,7 @@ function initProductionHardening() {
 }
 
 
-const CURRENT_VERSION = '2.2.8';
+// CURRENT_VERSION is imported from updater.js
 
 // P3 — update check with modal UI
 function initUpdateCheck() {
@@ -1666,26 +1665,7 @@ async function startDownloadAndInstall(latest, downloadUrl) {
   }
 }
 
-// Manual check for updates (called from settings)
-async function checkForUpdatesManually() {
-  try {
-    const res = await invoke('check_latest_release');
-    const latest = (res?.tag || '').replace(/^v/, '');
-    if (!latest) {
-      showToast('Could not check for updates - offline or API error', 'error', 3000);
-      return;
-    }
-    const isNewer = latest.split('.').map(Number).some((n, i) => n > (latest.split('.').map(Number)[i] || 0)) &&
-      latest !== CURRENT_VERSION;
-    if (!isNewer) {
-      showToast('Orbital X is up to date', 'success', 2500);
-      return;
-    }
-    showUpdateModal(latest, res?.download_url || '', res?.changelog || '');
-  } catch (e) {
-    showToast('Could not check for updates: ' + e, 'error', 3000);
-  }
-}
+// checkForUpdatesManually is imported from updater.js
 
 function escapeHtml(s) {
   return String(s ?? '')
