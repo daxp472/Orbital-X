@@ -347,6 +347,27 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "query_information_directory",
+                "description": "Consult the Information Directory (Project Knowledge Library & Librarian Indexer). Retrieves historical iteration work, architectural records, past decisions, and changelogs on demand so you don't fill the context window.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Topic, keyword, or question to search (e.g. 'previous iteration changes', 'database schema', 'auth design')"
+                        },
+                        "category": {
+                            "type": "string",
+                            "description": "Optional category filter: 'architecture', 'convention', 'iteration_history', 'rule', or 'progress'"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "search_project_memory",
                 "description": "Search persistent project memory for saved rules, conventions, and architectural decisions.",
                 "parameters": {

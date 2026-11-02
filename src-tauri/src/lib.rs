@@ -1054,6 +1054,14 @@ async fn execute_tool(
             let mems = MemoryService::search_memories(&root, query);
             Ok(serde_json::json!(mems))
         }
+        "query_information_directory" => {
+            let query = arguments.get("query").and_then(|q| q.as_str()).unwrap_or("");
+            let category = arguments.get("category").and_then(|c| c.as_str());
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let root = ws.get_root().ok_or("No workspace open")?;
+            let result = MemoryService::query_information_directory(&root, query, category);
+            Ok(result)
+        }
         "web_search" => {
             let query = arguments
                 .get("query")
@@ -1795,13 +1803,29 @@ fn install_update(installer_path: String, app: AppHandle) -> Result<(), String> 
         return Err("Installer file not found".to_string());
     }
 
-    // Spawn installer as a detached child process, then exit current app immediately so files can be modified
+    // Windows UAC: launching via PowerShell Start-Process with -Verb runAs triggers the OS UAC prompt,
+    // avoiding Windows error 740 (ERROR_ELEVATION_REQUIRED).
     #[cfg(windows)]
     {
         use std::process::Command;
-        Command::new(&path)
-            .spawn()
-            .map_err(|e| format!("Failed to start installer: {}", e))?;
+        let escaped = path.to_string_lossy().replace('\'', "''");
+        let status = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-WindowStyle", "Hidden",
+                "-Command",
+                &format!("Start-Process -FilePath '{}' -Verb runAs", escaped)
+            ])
+            .spawn();
+
+        if let Err(e) = status {
+            // Secondary fallback via cmd.exe /C start
+            Command::new("cmd")
+                .args(["/C", "start", "", &path.to_string_lossy()])
+                .spawn()
+                .map_err(|e2| format!("Failed to start installer: {} (fallback: {})", e, e2))?;
+        }
     }
 
     #[cfg(not(windows))]

@@ -1418,27 +1418,23 @@ async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
   // I5: smart routing — pick this run's specialist model once from the prompt
   const routedModel = pickRoutedModel(initialUserPrompt);
 
-  // 1. Load durable project memories — richer injection so the model always
-  //    knows the project even after a context reset. Ordered by importance,
-  //    capped to stay token-efficient for local models.
-  let memoryContext = '';
-  try {
-    const mems = await invoke('list_memories');
-    if (mems && mems.length > 0) {
-      // Sort by importance (desc), then by recency
-      const sorted = [...mems].sort((a, b) => {
-        const imp = (b.importance || 3) - (a.importance || 3);
-        if (imp !== 0) return imp;
-        return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
-      });
-      const top = sorted.slice(0, 8); // 8 most important memories
-      memoryContext = '\n\n## Project Memory (persistent across sessions):\n' +
-        top.map(m => `• [${m.category || 'info'}] ${m.title}: ${String(m.content || '').substring(0, 200)}`).join('\n') +
-        `\n(You can call search_project_memory or list_memories to see ALL ${mems.length} memories at any time.)`;
-    }
-  } catch (e) {
-    console.warn("Could not load memories:", e);
-  }
+  // =========================================================================
+  // TWO-TIER PROJECT MEMORY ARCHITECTURE (Token-Efficient for 8K Context)
+  // Tier 1: Core Active Memory (Compact anchor pinned to every turn)
+  // Tier 2: Information Directory Library (Librarian Indexer queried on demand)
+  // =========================================================================
+  const stackHint = state.workspace?.rootPath
+    ? state.workspace.rootPath.split(/[\\/]/).pop()
+    : 'Workspace';
+
+  const recentActions = activeExecutionMemory.completedActions.slice(-6);
+  const memoryContext = `\n\n## TIER 1: CORE ACTIVE MEMORY (Pinned Context Anchor):
+- Working Directory: ${state.workspace.rootPath || 'None'} (${stackHint})
+- Active Editor Tab: ${activeTab ? (activeTab.path || activeTab.name) : 'None'}
+- Recent Work & Verified Progress:
+${recentActions.map(a => `  • ${a}`).join('\n') || '  • Session ready. No prior actions in this turn.'}
+- Anti-Loop Invariant: Completed tasks and files listed above are ALREADY DONE. Never re-write, re-scaffold, or repeat them. Proceed directly to the next pending step.
+- TIER 2: Information Directory (Knowledge Library): Past iteration changelogs, architecture records, and historical library facts are indexed in the library. If you need historical context or past data without wasting your context window, call the tool \`query_information_directory(query="...")\`.`;
 
   // 1b. Enabled skill packs — a digest so the model knows what exists; the
   // full skill body is read on demand via the read_skill tool.
@@ -1808,7 +1804,7 @@ async function saveTaskCompletionMemory(userPrompt, tally) {
       .map(([n, c]) => `${n}×${c}`)
       .join(', ');
     await invoke('save_memory_entry', {
-      category: 'progress',
+      category: 'iteration_history',
       title: `Completed: ${userPrompt.substring(0, 60)}`,
       content: `Task accomplished. Files: ${files.join(', ') || 'none'}. Tools: ${toolSummary}. This memory persists across context resets — the agent can continue or reference this work in future sessions.`,
     });
@@ -2349,6 +2345,7 @@ async function processToolCallWithPolicy(toolCall) {
   else if (name === 'web_search') opSummary = `🔎 Searching web: ${args.query}`;
   else if (name === 'fetch_page') opSummary = `🌐 Fetching page: ${String(args.url || '').slice(0, 60)}`;
   else if (name === 'update_task_status') opSummary = `Task ${args.task_id} → ${args.status}`;
+  else if (name === 'query_information_directory') opSummary = `Querying Knowledge Library: ${args.query || 'past data'}`;
   updateLiveActivityOp(opSummary);
 
   // 3. Execute approved tool in backend

@@ -133,4 +133,90 @@ impl MemoryService {
             })
             .collect()
     }
+
+    /// Information Directory Query (Librarian Indexer).
+    /// Retrieves historical work, changelogs, and persistent knowledge without
+    /// flooding the LLM context window.
+    pub fn query_information_directory(
+        workspace_root: &Path,
+        query: &str,
+        category_filter: Option<&str>,
+    ) -> serde_json::Value {
+        let q_lower = query.trim().to_lowercase();
+        let cat_filter = category_filter.map(|c| c.trim().to_lowercase());
+
+        // 1. Search memory entries
+        let memories = Self::load_memories(workspace_root);
+        let mut matching_records = Vec::new();
+
+        for m in &memories {
+            if let Some(ref cf) = cat_filter {
+                if !m.category.to_lowercase().contains(cf) {
+                    continue;
+                }
+            }
+            if q_lower.is_empty()
+                || m.title.to_lowercase().contains(&q_lower)
+                || m.content.to_lowercase().contains(&q_lower)
+                || m.category.to_lowercase().contains(&q_lower)
+            {
+                matching_records.push(serde_json::json!({
+                    "source": "project_memory",
+                    "id": m.id,
+                    "category": m.category,
+                    "title": m.title,
+                    "content": m.content,
+                    "timestamp": m.timestamp,
+                }));
+            }
+        }
+
+        // 2. Search changelogs/ directory (past iteration changes and library records)
+        let changelog_dir = workspace_root.join("changelogs");
+        if changelog_dir.exists() {
+            if let Ok(entries) = fs::read_dir(&changelog_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().map_or(false, |ext| ext == "md") {
+                        if let Ok(content) = fs::read_to_string(&path) {
+                            let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            if q_lower.is_empty()
+                                || filename.to_lowercase().contains(&q_lower)
+                                || content.to_lowercase().contains(&q_lower)
+                            {
+                                let preview = if content.len() > 600 {
+                                    format!("{}...", &content[..600])
+                                } else {
+                                    content
+                                };
+                                matching_records.push(serde_json::json!({
+                                    "source": "changelog_library",
+                                    "id": filename.clone(),
+                                    "category": "iteration_history",
+                                    "title": format!("Changelog: {}", filename),
+                                    "content": preview,
+                                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let total_matches = matching_records.len();
+        let summary = if total_matches == 0 {
+            format!("Information Directory Indexer: No records matched '{}'. Available categories in library: architecture, convention, iteration_history, rule, progress.", query)
+        } else {
+            format!("Information Directory Indexer: Retrieved {} records from the library matching '{}'.", total_matches, query)
+        };
+
+        serde_json::json!({
+            "status": "success",
+            "query": query,
+            "total_matches": total_matches,
+            "indexer_note": summary,
+            "records": matching_records.into_iter().take(5).collect::<Vec<_>>()
+        })
+    }
 }
