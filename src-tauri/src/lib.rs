@@ -1669,7 +1669,7 @@ fn detect_gpus() -> Vec<GpuInfo> {
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.2.8")
+        .user_agent("OrbitalX-IDE/2.3.0")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1699,21 +1699,29 @@ async fn check_for_updates() -> Result<serde_json::Value, String> {
         latest.iter().enumerate().any(|(i, &v)| v > curr.get(i).copied().unwrap_or(0))
     }).unwrap_or(false);
 
+    let mut asset_url = None;
+    if let Some(assets) = json.get("assets").and_then(|a| a.as_array()) {
+        for asset in assets {
+            if let Some(name) = asset.get("name").and_then(|n| n.as_str()) {
+                if name.ends_with(".exe") {
+                    if name.contains("setup") || asset_url.is_none() {
+                        asset_url = asset.get("browser_download_url").and_then(|u| u.as_str()).map(|s| s.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let version = tag.trim_start_matches('v');
+    let fallback = format!("https://github.com/daxp472/Orbital-X/releases/download/{}/Orbital.X_{}_x64-setup.exe", tag, version);
+    let final_asset = asset_url.unwrap_or(fallback);
+
     Ok(serde_json::json!({
         "available": is_newer,
         "latest_version": tag,
         "current_version": current,
         "download_url": download_url,
         "changelog": body,
-        "asset_url": json.get("assets")
-            .and_then(|a| a.as_array())
-            .and_then(|assets| assets.first())
-            .and_then(|a| a.get("browser_download_url"))
-            .and_then(|u| u.as_str())
-            .unwrap_or_else(|| {
-                let version = tag.strip_prefix('v').unwrap_or(tag);
-                Box::leak(format!("https://github.com/daxp472/Orbital-X/releases/download/v{}/Orbital.X_{}_x64-setup.exe", version, version).into_boxed_str())
-            })
+        "asset_url": final_asset,
     }))
 }
 
@@ -1726,7 +1734,11 @@ async fn download_update(
     use std::io::Write;
     use futures_util::StreamExt;
 
-    let resp = reqwest::get(&url).await.map_err(|e| format!("Download failed: {}", e))?;
+    let client = reqwest::Client::builder()
+        .user_agent("OrbitalX-IDE/2.3.0")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client.get(&url).send().await.map_err(|e| format!("Download failed: {}", e))?;
 
     if !resp.status().is_success() {
         return Err(format!("Download server returned HTTP {}", resp.status()));
@@ -1783,31 +1795,21 @@ fn install_update(installer_path: String, app: AppHandle) -> Result<(), String> 
         return Err("Installer file not found".to_string());
     }
 
-    // Run installer with elevated privileges (will handle UAC on Windows)
+    // Spawn installer as a detached child process, then exit current app immediately so files can be modified
     #[cfg(windows)]
     {
         use std::process::Command;
-        let status = Command::new(&path)
-            .arg("/S") // Silent install for NSIS
-            .status()
+        Command::new(&path)
+            .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
-
-        if !status.success() {
-            return Err("Installer failed with non-zero exit code".to_string());
-        }
     }
 
     #[cfg(not(windows))]
     {
         use std::process::Command;
-        let status = Command::new(&path)
-            .arg("--silent")
-            .status()
+        Command::new(&path)
+            .spawn()
             .map_err(|e| format!("Failed to start installer: {}", e))?;
-
-        if !status.success() {
-            return Err("Installer failed with non-zero exit code".to_string());
-        }
     }
 
     // Notify user that update is ready and exit
@@ -1894,11 +1896,12 @@ fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), Stri
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.2.8")
+        .user_agent("OrbitalX-IDE/2.3.0")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
         .get("https://api.github.com/repos/daxp472/Orbital-X/releases/latest")
+        .header("Accept", "application/vnd.github.v3+json")
         .send()
         .await
         .map_err(|e| format!("Release check failed: {}", e))?;
@@ -1906,11 +1909,30 @@ async fn check_latest_release() -> Result<serde_json::Value, String> {
         return Err(format!("GitHub API returned HTTP {}", resp.status()));
     }
     let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let tag = json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default();
+
+    let mut asset_url = None;
+    if let Some(assets) = json.get("assets").and_then(|a| a.as_array()) {
+        for asset in assets {
+            if let Some(name) = asset.get("name").and_then(|n| n.as_str()) {
+                if name.ends_with(".exe") {
+                    if name.contains("setup") || asset_url.is_none() {
+                        asset_url = asset.get("browser_download_url").and_then(|u| u.as_str()).map(|s| s.to_string());
+                    }
+                }
+            }
+        }
+    }
+    let version = tag.trim_start_matches('v');
+    let fallback = format!("https://github.com/daxp472/Orbital-X/releases/download/{}/Orbital.X_{}_x64-setup.exe", tag, version);
+    let final_asset = asset_url.unwrap_or(fallback);
+
     Ok(serde_json::json!({
-        "tag": json.get("tag_name").and_then(|t| t.as_str()).unwrap_or_default(),
+        "tag": tag,
         "url": json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default(),
         "name": json.get("name").and_then(|t| t.as_str()).unwrap_or_default(),
         "changelog": json.get("body").and_then(|t| t.as_str()).unwrap_or(""),
+        "asset_url": final_asset,
     }))
 }
 

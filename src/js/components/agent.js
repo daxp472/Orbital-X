@@ -278,6 +278,29 @@ function initChatDropZone() {
     });
   }
 
+  const stickyCancelBtn = document.getElementById('task-sticky-cancel-btn');
+  if (stickyCancelBtn) {
+    stickyCancelBtn.addEventListener('click', async () => {
+      isLoopRunning = false;
+      setAgentBusy(false);
+      removeLiveActivityBar();
+      hideStickyTaskProgress();
+      if (activeTurnId) {
+        try {
+          await invoke('cancel_agent_operation', { opId: activeTurnId });
+        } catch (e) {
+          console.warn('Cancel failed:', e);
+        }
+      }
+      if (state.orchestrator.activePlan && state.orchestrator.activePlan.status === 'in_progress') {
+        state.orchestrator.activePlan.status = 'cancelled';
+        persistPlanState(null);
+      }
+      updateStatusBarAgentStatus();
+      appendTimelineCard('assistant', '🛑 Task cancelled by user.');
+    });
+  }
+
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
       clearAgentContext();
@@ -3171,6 +3194,41 @@ export function updatePlanTaskInDOM(plan, taskId, status, evidence) {
   if (progressText) progressText.textContent = `${completedCount} / ${totalCount} Tasks Completed (${percentage}%)`;
 }
 
+export function showStickyTaskProgress(taskIdx, totalTasks, taskTitle, opText = 'In progress') {
+  const chipsBar = document.getElementById('composer-chips-bar');
+  const stickyBar = document.getElementById('composer-task-sticky-bar');
+  if (!stickyBar) return;
+
+  if (chipsBar) chipsBar.style.display = 'none';
+  stickyBar.style.display = 'flex';
+
+  const badge = document.getElementById('task-sticky-badge');
+  const title = document.getElementById('task-sticky-title');
+  const op = document.getElementById('task-sticky-op');
+  const fill = document.getElementById('task-sticky-progress-fill');
+
+  if (badge) badge.textContent = `Task ${taskIdx}/${totalTasks}`;
+  if (title) {
+    title.textContent = taskTitle || 'Executing task...';
+    title.title = taskTitle || '';
+  }
+  if (op) {
+    op.textContent = `• ${opText}`;
+    op.title = opText;
+  }
+  if (fill) {
+    const pct = Math.max(5, Math.min(100, Math.round((taskIdx / totalTasks) * 100)));
+    fill.style.width = `${pct}%`;
+  }
+}
+
+export function hideStickyTaskProgress() {
+  const chipsBar = document.getElementById('composer-chips-bar');
+  const stickyBar = document.getElementById('composer-task-sticky-bar');
+  if (stickyBar) stickyBar.style.display = 'none';
+  if (chipsBar) chipsBar.style.display = 'flex';
+}
+
 export function showLiveActivityBar(taskTitle, operation = 'Starting execution...') {
   let bar = document.getElementById('live-activity-bar');
   const timeline = document.getElementById('agent-timeline');
@@ -3190,8 +3248,12 @@ export function showLiveActivityBar(taskTitle, operation = 'Starting execution..
       const min = Math.floor(elapsedSec / 60);
       const sec = elapsedSec % 60;
       const timerElem = document.getElementById('live-activity-timer-val');
+      const stickyTimer = document.getElementById('task-sticky-timer');
       if (timerElem) {
         timerElem.textContent = `${min}:${sec < 10 ? '0' : ''}${sec}s`;
+      }
+      if (stickyTimer) {
+        stickyTimer.textContent = `${min}:${sec < 10 ? '0' : ''}${sec}s`;
       }
       if (state.orchestrator.activePlan) {
         state.orchestrator.activePlan.elapsedSeconds = elapsedSec;
@@ -3231,6 +3293,11 @@ export function updateLiveActivityOp(opText) {
   if (opElem) {
     opElem.textContent = `• ${opText}`;
   }
+  const stickyOp = document.getElementById('task-sticky-op');
+  if (stickyOp) {
+    stickyOp.textContent = `• ${opText}`;
+    stickyOp.title = opText;
+  }
 }
 
 export function removeLiveActivityBar() {
@@ -3240,6 +3307,7 @@ export function removeLiveActivityBar() {
   }
   liveActivityStartTime = null;
   document.getElementById('live-activity-bar')?.remove();
+  hideStickyTaskProgress();
 }
 
 export function renderFinalSummaryCard(plan) {
@@ -3359,6 +3427,7 @@ async function executePlanPhases(plan, card) {
       if (dotEl) dotEl.textContent = '🔵';
 
       showLiveActivityBar(`${nextTask.title} — task ${taskIdx + 1}/${plan.tasks.length}`, `Executing ${nextTask.title}…`);
+      showStickyTaskProgress(taskIdx + 1, plan.tasks.length, nextTask.title, `Executing ${nextTask.title}…`);
 
       let taskSuccess = false;
       let lastErr = null;

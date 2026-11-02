@@ -2712,3 +2712,131 @@ input:checked + .settings-toggle-slider:before {
   background: rgba(255, 255, 255, 0.08);
   margin: 4px 0;
 }
+
+
+/* Sticky Task Progress Indicator directly above Chat Enter */
+.composer-task-sticky-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  margin-bottom: 6px;
+  background: rgba(18, 22, 33, 0.95);
+  backdrop-filter: var(--glass-blur-md);
+  -webkit-backdrop-filter: var(--glass-blur-md);
+  border: 1px solid rgba(0, 212, 255, 0.35);
+  border-radius: var(--radius-sm, 8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px rgba(0, 212, 255, 0.12);
+  animation: slideInTaskSticky 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  min-height: 36px;
+  gap: 10px;
+}
+
+@keyframes slideInTaskSticky {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.task-sticky-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.task-sticky-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+  animation: pulseLiveDot 1.4s infinite ease-in-out;
+  flex-shrink: 0;
+}
+
+.task-sticky-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.14);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.task-sticky-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.task-sticky-op {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.task-sticky-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.task-sticky-progress-wrap {
+  width: 75px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.task-sticky-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00d4ff, #10b981);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+.task-sticky-timer {
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 212, 255, 0.2);
+}
+
+.task-sticky-cancel-btn {
+  font-size: 10px;
+  font-weight: 600;
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+
+.task-sticky-cancel-btn:hover {
+  background: rgba(255, 107, 107, 0.25);
+  border-color: rgba(255, 107, 107, 0.5);
+  color: #fff;
+}
