@@ -185,9 +185,12 @@
 
           <!-- Mockup Right AI Assistant -->
           <div class="mockup-chat">
-            <div style="font-size: 0.8rem; font-weight: 700; color: #ffffff; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-              <span>🤖 Orbital Assistant</span>
-              <span style="font-size: 0.7rem; background: rgba(57, 197, 187, 0.2); color: #39c5bb; padding: 2px 6px; border-radius: 4px;">DEV MODE</span>
+            <div style="font-size: 0.8rem; font-weight: 700; color: #ffffff; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+              <span style="display: flex; align-items: center; gap: 6px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #39c5bb; box-shadow: 0 0 8px #39c5bb;"></span>
+                Orbital Assistant
+              </span>
+              <span style="font-size: 0.68rem; background: rgba(57, 197, 187, 0.15); color: #39c5bb; border: 1px solid rgba(57, 197, 187, 0.3); padding: 2px 7px; border-radius: 4px; font-weight: 600;">DEV MODE</span>
             </div>
 
             <div class="mockup-bubble user">
@@ -196,12 +199,15 @@
 
             <div class="mockup-bubble ai">
               Examined workspace boundaries. I will implement <code>delete_directory</code> with path canonicalization, previewing 4 files (~12 KB).
-              <div style="margin-top: 8px; padding: 8px; background: rgba(18, 22, 34, 0.9); border: 1px solid rgba(255, 159, 10, 0.4); border-radius: 6px;">
-                <div style="font-size: 0.72rem; color: #ff9f0a; font-weight: 600;">⚠️ APPROVAL REQUIRED</div>
-                <div style="font-size: 0.75rem; color: #ffffff; margin-top: 2px;">Target: <code>src/temp_cache/</code></div>
-                <div style="display: flex; gap: 6px; margin-top: 6px;">
-                  <button style="background: #39c5bb; color: #000; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">Approve</button>
-                  <button style="background: #202b3f; color: #fff; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem;">Reject</button>
+              <div class="mockup-approval-card">
+                <div class="mockup-approval-badge">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  APPROVAL REQUIRED
+                </div>
+                <div class="mockup-approval-target">Target: <code>src/temp_cache/</code></div>
+                <div class="mockup-approval-actions">
+                  <button class="mockup-btn-approve" id="mockup-approve-btn">Approve</button>
+                  <button class="mockup-btn-reject" id="mockup-reject-btn">Reject</button>
                 </div>
               </div>
             </div>
@@ -221,40 +227,76 @@
       </div>
 
       <div class="features-grid">
+        <!-- 1. Offline Ollama -->
         <div class="feature-card">
-          <div class="feature-icon">🛡️</div>
-          <h3>100% Offline Ollama Intelligence</h3>
-          <p>Connect directly to your local Ollama port (<code>11434</code>). Run state-of-the-art models like Qwen 2.5 Coder, DeepSeek Coder, and Llama 3 with zero data leaving your machine.</p>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+          </div>
+          <h3>100% Offline Local Intelligence</h3>
+          <p>Connect directly to your local Ollama port (<code>11434</code>). Run Qwen 2.5 Coder, DeepSeek Coder, and Llama 3 with zero telemetry and zero cloud lock-in.</p>
         </div>
 
+        <!-- 2. Rust Performance -->
         <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Tauri 2 + Rust Core Performance</h3>
-          <p>Ditch Chromium and multi-gigabyte Electron bloat. Orbital X runs on an ultra-optimized Rust native backend, launching in under ~280ms and idling at ~95MB RAM.</p>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3>Tauri 2 + Rust Core (~95MB RAM)</h3>
+          <p>Ditch Chromium and multi-gigabyte Electron bloat. Orbital X runs on an ultra-optimized Rust backend, launching in ~280ms while idling at just ~95MB RAM.</p>
         </div>
 
+        <!-- 3. Two-Tier Memory -->
         <div class="feature-card">
-          <div class="feature-icon">🧠</div>
-          <h3>Durable Project Architecture Memory</h3>
-          <p>Orbital X automatically parses your codebase conventions, design tokens, and recurring libraries into persistent memory (<code>.orbital/memory.json</code>) across sessions.</p>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </div>
+          <h3>Two-Tier Project Memory Architecture</h3>
+          <p>Compact Tier 1 Core Memory (&lt;200 tokens) with Anti-Loop directives anchors every turn, while a Tier 2 Librarian Indexer queries historical specs on demand.</p>
         </div>
 
+        <!-- 4. Tri-Mode Safety -->
         <div class="feature-card">
-          <div class="feature-icon">🎛️</div>
-          <h3>Tri-Mode Security &amp; Confinement</h3>
-          <p>Choose between <strong>Dev Mode</strong> (interactive diff approval), <strong>Agent Pro Mode</strong> (autonomous safe execution), and <strong>User Mode</strong> (strict per-action confirmation).</p>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h3>Tri-Mode Kernel Safety Policies</h3>
+          <p>Confinement engine evaluating tool calls: <strong>Dev Mode</strong> (interactive diff approval), <strong>Agent Pro Mode</strong> (autonomous safe execution), and <strong>User Mode</strong> (strict confirmation).</p>
         </div>
 
+        <!-- 5. Integrated Terminal -->
         <div class="feature-card">
-          <div class="feature-icon">💻</div>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </div>
           <h3>Integrated VS Code-Grade Terminal</h3>
-          <p>Multi-tab terminal subsystem with command history navigation (ArrowUp/Down), built-ins, and hotkey toggling (<code>Ctrl+`</code>) directly inside the bottom panel.</p>
+          <p>Native multi-tab PTY terminal in Rust streaming real-time ANSI output for PowerShell, CMD, and Bash with built-in hotkey toggling (<code>Ctrl+`</code>).</p>
         </div>
 
+        <!-- 6. Monaco Diffs -->
         <div class="feature-card">
-          <div class="feature-icon">⏪</div>
-          <h3>Interactive Rollback &amp; Diff Previews</h3>
-          <p>Inspect every file mutation before it happens via Monaco Side-by-Side Diff, with full single-click rollback for any AI edit.</p>
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>
+          </div>
+          <h3>Interactive Monaco Diff Rollbacks</h3>
+          <p>Inspect every file mutation before it touches disk via side-by-side diff previews, with single-click instant rollback for complete code peace of mind.</p>
+        </div>
+
+        <!-- 7. Smart Routing -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          </div>
+          <h3>Smart Semantic Model Routing</h3>
+          <p>Dynamically dispatches quick completions to lightweight local models and routes complex multi-file refactoring to deep reasoning models for optimal speed and accuracy.</p>
+        </div>
+
+        <!-- 8. 1-Click Auto-Updater -->
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <h3>Seamless 1-Click Auto-Updater</h3>
+          <p>In-app GitHub release sync, chunked download stream with real-time MB progress, and native Windows UAC elevation without permission errors.</p>
         </div>
       </div>
     </div>

@@ -245,6 +245,8 @@
         <div class="docs-sidebar-title">Core Features</div>
         <a href="#safety-modes" class="docs-nav-link">🎛️ Tri-Mode Safety System</a>
         <a href="#ollama-ai" class="docs-nav-link">🧠 Local AI with Ollama</a>
+        <a href="#two-tier-memory" class="docs-nav-link">🏛️ Two-Tier Project Memory</a>
+        <a href="#model-routing" class="docs-nav-link">🔀 Smart Model Routing</a>
         <a href="#workspace" class="docs-nav-link">📂 Workspaces &amp; File Tree</a>
         <a href="#editor-terminal" class="docs-nav-link">💻 Monaco &amp; Terminal</a>
       </div>
@@ -392,6 +394,59 @@ ollama pull deepseek-coder-v2:16b</div>
 
         <h3>Step 3: Launch Orbital X</h3>
         <p>Open Orbital X. The AI agent will auto-detect your local Ollama models. Select your active model from the top status badge and begin coding!</p>
+      </section>
+
+      
+      <!-- 5b. Two-Tier Memory Architecture -->
+      <section class="docs-section" id="two-tier-memory">
+        <h2>🧠 Two-Tier Project Memory Architecture</h2>
+        <p>
+          To deliver deep codebase comprehension without overwhelming small-context local models (8K token context windows), Orbital X employs a specialized two-tier memory design:
+        </p>
+
+        <div class="table-container">
+          <table class="modes-comparison-table">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Scope &amp; Budget</th>
+                <th>Mechanism</th>
+                <th>Primary Job</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Tier 1: Core Active Memory</strong></td>
+                <td>&lt;200 tokens (Pinned to every turn)</td>
+                <td>Active prompt context digest</td>
+                <td>Working directory, stack hint, active editor tab, recent 6 actions, and explicit Anti-Loop Invariant instructions.</td>
+              </tr>
+              <tr>
+                <td><strong>Tier 2: Information Directory Library</strong></td>
+                <td>Queried on demand via tool call</td>
+                <td><code>query_information_directory</code> (Rust Librarian Indexer)</td>
+                <td>Deep historical memory indexed from <code>.orbital/memory.json</code> and all markdown changelogs in <code>changelogs/*.md</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="docs-callout">
+          <div class="docs-callout-title">⚡ Anti-Loop Guarantee</div>
+          By pinning only the verified completed tasks and anti-loop invariants into Tier 1 Core Memory, local models never repeat completed refactoring steps or re-scaffold files they have already created.
+        </div>
+      </section>
+
+      <!-- 5c. Smart Semantic Model Routing -->
+      <section class="docs-section" id="model-routing">
+        <h2>🔀 Smart Semantic Model Routing Engine</h2>
+        <p>
+          Orbital X supports multi-provider model routing. When enabled in Settings, the agent core inspects the incoming prompt's semantic complexity:
+        </p>
+        <ul style="color: var(--text-secondary); margin-left: 20px; margin-bottom: 20px;">
+          <li><strong>Lightweight Queries:</strong> Queries matching status checks, file searches, or simple explanations are routed to fast, low-parameter local models (e.g. <code>qwen2.5-coder:7b</code> or <code>llama3.2:3b</code>).</li>
+          <li><strong>Complex Engineering:</strong> Tasks involving multi-file refactoring, security policy updates, or architectural planning can be automatically routed to high-capacity local or cloud specialists (e.g. <code>deepseek-coder-v2</code> or Claude 3.5 Sonnet).</li>
+        </ul>
       </section>
 
       <!-- 6. Menubar & Shortcuts -->

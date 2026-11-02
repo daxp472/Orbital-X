@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFadeInAnimations();
   initFAQAccordion();
   initReportIssuePage();
+  initMockupApprovalDemo();
 });
 
 
@@ -47,7 +48,7 @@ function initMobileNav() {
   });
 }
 
-// 1. Detect User OS & update main CTA with verified v2.2.9 release URLs
+// 1. Detect User OS & update main CTA with verified v2.3.0 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -57,16 +58,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.9/Orbital.X_2.2.9_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.0/Orbital.X_2.3.0_x64-setup.exe';
   } else if (ua.includes('mac')) {
     ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.9/Orbital.X_2.2.9_aarch64.dmg';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.0/Orbital.X_2.3.0_aarch64.dmg';
   } else if (ua.includes('linux')) {
     ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.2.9/Orbital.X_2.2.9_amd64.AppImage';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.0/Orbital.X_2.3.0_amd64.AppImage';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.2.9)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.2.9';
+    ctaLabel.textContent = 'Download Orbital X (v2.3.0)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.3.0';
   }
 }
 
@@ -325,4 +326,50 @@ function initReportIssuePage() {
       setTimeout(() => e.target.classList.remove('touching'), 1000);
     });
   }
+}
+
+// Interactive Hero Mockup Card Demo
+function initMockupApprovalDemo() {
+  const approveBtn = document.getElementById('mockup-approve-btn');
+  const rejectBtn = document.getElementById('mockup-reject-btn');
+  const card = document.querySelector('.mockup-approval-card');
+  if (!approveBtn || !rejectBtn || !card) return;
+
+  approveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    card.style.borderColor = 'rgba(48, 209, 88, 0.6)';
+    card.style.background = 'rgba(12, 32, 22, 0.95)';
+    card.innerHTML = `
+      <div style="font-size: 0.74rem; color: #30d158; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Action Approved &amp; Executed
+      </div>
+      <div style="font-size: 0.72rem; color: #a7f3d0; margin-top: 4px; font-family: var(--font-mono);">
+        Deleted: <code>src/temp_cache/</code> (4 files, ~12 KB cleared)
+      </div>
+      <button class="mockup-btn-reject" style="margin-top: 8px; font-size: 0.68rem; padding: 2px 8px;" id="mockup-reset-btn">Reset Demo</button>
+    `;
+    document.getElementById('mockup-reset-btn')?.addEventListener('click', () => {
+      location.reload();
+    });
+  });
+
+  rejectBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    card.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+    card.style.background = 'rgba(32, 16, 20, 0.95)';
+    card.innerHTML = `
+      <div style="font-size: 0.74rem; color: #f87171; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Action Rejected &amp; Cancelled
+      </div>
+      <div style="font-size: 0.72rem; color: #fca5a5; margin-top: 4px;">
+        Operation blocked by user. Workspace boundaries remained safe.
+      </div>
+      <button class="mockup-btn-reject" style="margin-top: 8px; font-size: 0.68rem; padding: 2px 8px;" id="mockup-reset-btn-2">Reset Demo</button>
+    `;
+    document.getElementById('mockup-reset-btn-2')?.addEventListener('click', () => {
+      location.reload();
+    });
+  });
 }
