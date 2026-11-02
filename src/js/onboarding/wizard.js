@@ -18,7 +18,6 @@ export function initOnboarding() {
 
   // Trigger from welcome screen
   document.getElementById('btn-welcome-onboarding')?.addEventListener('click', startOnboarding);
-  document.getElementById('menu-help')?.addEventListener('click', startOnboarding);
 
   if (skipBtn) skipBtn.addEventListener('click', closeOnboarding);
 

@@ -85,7 +85,7 @@ function buildCommandRegistry() {
 
     // ----- Tools -----
     { id: 'tools.settings', group: 'Tools', icon: '⚙️', title: 'Open Settings', keybinding: 'Ctrl+,', run: () => clickById('btn-open-settings') },
-    { id: 'tools.shortcuts', group: 'Tools', icon: '⌨️', title: 'Keyboard Shortcuts Reference', run: () => clickById('menu-help') },
+    { id: 'tools.shortcuts', group: 'Tools', icon: '⌨️', title: 'Keyboard Shortcuts Reference', run: () => document.getElementById('modal-shortcuts-help')?.classList.remove('hidden') },
     { id: 'tools.usage', group: 'Tools', icon: '⚡', title: 'Token Usage Dashboard', run: () => clickById('rail-usage') },
     { id: 'tools.about', group: 'Tools', icon: '🪐', title: 'About Orbital X', run: () => clickById('btn-about-orbital') },
   ];

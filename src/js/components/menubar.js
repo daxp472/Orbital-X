@@ -590,6 +590,12 @@ Date: ${new Date().toISOString()}`;
     case 'menu-help':
       return [
         {
+          label: 'Getting Started Guide',
+          action: () => {
+            import('../onboarding/wizard.js').then(w => w.startOnboarding());
+          }
+        },
+        {
           label: 'Documentation (Docs)',
           action: async () => {
             // Open documentation website hub
