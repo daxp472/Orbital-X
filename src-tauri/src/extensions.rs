@@ -18,18 +18,25 @@ pub struct ExtensionService;
 
 const SUPPORTED_TYPES: &[&str] = &["theme", "prompt-pack", "command-pack"];
 
+fn base_orbital_dir() -> PathBuf {
+    if let Ok(p) = std::env::var("ORBITAL_HOME") {
+        if !p.trim().is_empty() {
+            return PathBuf::from(p);
+        }
+    }
+    dirs::home_dir()
+        .map(|h| h.join(".orbital"))
+        .unwrap_or_else(|| PathBuf::from(".orbital"))
+}
+
 fn extensions_dir() -> PathBuf {
-    let dir = dirs::home_dir()
-        .map(|h| h.join(".orbital").join("extensions"))
-        .unwrap_or_else(|| PathBuf::from(".orbital/extensions"));
+    let dir = base_orbital_dir().join("extensions");
     let _ = fs::create_dir_all(&dir);
     dir
 }
 
 fn state_path() -> PathBuf {
-    let dir = dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let dir = base_orbital_dir();
     let _ = fs::create_dir_all(&dir);
     dir.join("extensions_state.json")
 }
@@ -315,6 +322,10 @@ mod tests {
 
     #[test]
     fn test_install_enable_uninstall_roundtrip() {
+        let test_dir = std::env::temp_dir().join(format!("orbital_tests_run_{}", std::process::id()));
+        unsafe {
+            std::env::set_var("ORBITAL_HOME", &test_dir);
+        }
         let res = ExtensionService::install_from_manifest(&valid_theme()).unwrap();
         assert_eq!(res["id"], "test-theme");
 

@@ -4,6 +4,7 @@ mod memory;
 mod policy;
 mod providers;
 mod skills;
+mod telemetry;
 mod terminal;
 mod tools;
 mod usage;
@@ -181,6 +182,89 @@ async fn complete_code(
     Ok(serde_json::json!({ "completion": completion }))
 }
 
+/// Dual-model speculative ghost-text completion with background verification.
+#[tauri::command]
+async fn speculative_complete_code(
+    app: AppHandle,
+    draft_model: String,
+    verifier_model: String,
+    base_url: Option<String>,
+    prefix: String,
+    suffix: String,
+    language: String,
+    request_id: String,
+) -> Result<serde_json::Value, String> {
+    ProviderService::speculative_complete_code(
+        &app,
+        &draft_model,
+        &verifier_model,
+        base_url,
+        &prefix,
+        &suffix,
+        &language,
+        &request_id,
+    ).await
+}
+
+/// Inspects installed models and auto-picks the fastest small coding or general draft model.
+#[tauri::command]
+fn auto_detect_draft_model(available_models: Vec<String>) -> Option<String> {
+    ProviderService::find_optimal_draft_model(&available_models)
+}
+
+/// Native Zero-Allocation hardware monitoring (CPU, RAM, VRAM & TPS).
+#[tauri::command]
+async fn get_live_telemetry(ollama_url: Option<String>) -> Result<telemetry::HardwareTelemetry, String> {
+    Ok(telemetry::sample_hardware_telemetry(ollama_url).await)
+}
+
+/// Feed streaming tokens to the zero-allocation TPS estimator.
+#[tauri::command]
+fn record_tokens_speed(count: usize) -> Result<(), String> {
+    telemetry::record_tokens_generated(count);
+    Ok(())
+}
+
+/// Time-Travel Agent Journal: marks turn initiation.
+#[tauri::command]
+fn record_agent_turn_start(turn_id: String, prompt: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.record_turn_start(&turn_id, &prompt);
+    Ok(())
+}
+
+/// Time-Travel Agent Journal: marks turn completion and creates VFS atomic diff snapshot.
+#[tauri::command]
+fn record_agent_turn_end(turn_id: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    match ws.record_turn_end(&turn_id) {
+        Some(snapshot) => Ok(serde_json::to_value(&snapshot).map_err(|e| e.to_string())?),
+        None => Ok(serde_json::json!({ "skipped": true })),
+    }
+}
+
+/// Time-Travel Agent Journal: lists turn summaries for visual timeline scrubber.
+#[tauri::command]
+fn list_agent_turns(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    Ok(ws.list_turn_snapshots())
+}
+
+/// Time-Travel Agent Journal: retrieves single turn diff details for inspection.
+#[tauri::command]
+fn get_agent_turn_diff(snapshot_id: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let snap = ws.get_turn_snapshot(&snapshot_id).ok_or_else(|| format!("Turn snapshot '{}' not found", snapshot_id))?;
+    Ok(serde_json::to_value(&snap).map_err(|e| e.to_string())?)
+}
+
+/// Time-Travel Agent Journal: 1-click rollback of multi-file modifications to this turn.
+#[tauri::command]
+fn time_travel_rollback(snapshot_id: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.time_travel_rollback_to_turn(&snapshot_id)
+}
+
 #[tauri::command]
 fn search_workspace(query: String, max_results: Option<usize>, state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -296,6 +380,9 @@ async fn agent_dispatch_turn(
     }
 
     let emit = |value: serde_json::Value| {
+        if value.get("type").and_then(|t| t.as_str()) == Some("token") {
+            telemetry::record_tokens_generated(1);
+        }
         let _ = on_event.send(value);
     };
 
@@ -2141,7 +2228,16 @@ pub fn run() {
             verify_workspace_build,
             render_file_boilerplate,
             get_boilerplate_settings,
-            save_boilerplate_settings
+            save_boilerplate_settings,
+            speculative_complete_code,
+            auto_detect_draft_model,
+            get_live_telemetry,
+            record_tokens_speed,
+            record_agent_turn_start,
+            record_agent_turn_end,
+            list_agent_turns,
+            get_agent_turn_diff,
+            time_travel_rollback
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

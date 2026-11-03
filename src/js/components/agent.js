@@ -812,6 +812,9 @@ async function handleSend() {
   isLoopRunning = true;
   setAgentBusy(true);
 
+  // Time-Travel Agent Journal: Record turn inception
+  invoke('record_agent_turn_start', { turnId: userMid, prompt: promptText }).catch(() => {});
+
   try {
     if (isComplexRequest(promptText)) {
       await generateAndPresentPlan(promptText);
@@ -825,6 +828,8 @@ async function handleSend() {
     isLoopRunning = false;
     setAgentBusy(false);
     updateStatusBarAgentStatus();
+    // Time-Travel Agent Journal: Record turn completion & VFS multi-file snapshot
+    invoke('record_agent_turn_end', { turnId: userMid }).catch(() => {});
     import('./chat-sessions.js').then(m => m.saveActiveSession());
     import('./usage.js').then(m => m.loadAndRenderUsage(false));
   }
@@ -3586,6 +3591,16 @@ function initAgentPanelTabs() {
       if (tab === 'chat') {
         if (timeline) timeline.style.display = '';
         if (checkpoints) checkpoints.style.display = 'none';
+      } else if (tab === 'timetravel') {
+        // Open Visual Time-Travel Journal Scrubber
+        import('./time-travel.js').then(m => m.openTimeTravelModal());
+        // Return tab selection visually to previous or chat
+        setTimeout(() => {
+          tabsBar.querySelectorAll('[data-atab]').forEach(b => b.classList.remove('active'));
+          tabsBar.querySelector('[data-atab="chat"]')?.classList.add('active');
+          if (timeline) timeline.style.display = '';
+          if (checkpoints) checkpoints.style.display = 'none';
+        }, 150);
       } else {
         if (timeline) timeline.style.display = 'none';
         if (checkpoints) checkpoints.style.display = 'flex';

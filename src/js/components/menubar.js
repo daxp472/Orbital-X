@@ -560,6 +560,17 @@ function getMenuItems(menuId) {
         },
         { type: 'separator' },
         {
+          label: 'Telemetry & VRAM Tracker HUD',
+          shortcut: 'HUD',
+          action: () => import('./telemetry-hud.js').then(m => m.openTelemetryHUD())
+        },
+        {
+          label: 'Time-Travel Agent Journal',
+          shortcut: 'Timeline',
+          action: () => import('./time-travel.js').then(m => m.openTimeTravelModal())
+        },
+        { type: 'separator' },
+        {
           label: `Verbose Agent Logs: ${state.agentDebugLogs ? 'ON' : 'OFF'}`,
           action: () => {
             state.agentDebugLogs = !state.agentDebugLogs;
@@ -570,7 +581,7 @@ function getMenuItems(menuId) {
           label: 'Copy System Diagnostic Info',
           action: async () => {
             const info = `Orbital X Diagnostic Info:
-Version: v2.2.9
+Version: 2.3.0
 OS: ${navigator.userAgent}
 Active Workspace: ${state.workspace.rootPath || 'None'}
 Agent Mode: ${state.agentMode}

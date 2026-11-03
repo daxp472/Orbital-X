@@ -593,13 +593,27 @@ function registerInlineCompletions() {
       const indicator = document.getElementById('sb-complete-indicator');
       if (indicator) indicator.style.display = '';
       try {
-        const res = await invoke('complete_code', {
-          prefix,
-          suffix: full.slice(offset, offset + 60),
-          language: model.getLanguageId(),
-        });
+        const spec = state.ai.speculative || {};
+        let res;
+        if (spec.enabled && spec.draftModel) {
+          res = await invoke('speculative_complete_code', {
+            draftModel: spec.draftModel,
+            verifierModel: spec.verifierModel || state.ai.model,
+            baseUrl: state.ai.endpoint || 'http://localhost:11434',
+            prefix,
+            suffix: full.slice(offset, offset + 60),
+            language: model.getLanguageId(),
+            requestId: String(mySeq),
+          });
+        } else {
+          res = await invoke('complete_code', {
+            prefix,
+            suffix: full.slice(offset, offset + 60),
+            language: model.getLanguageId(),
+          });
+        }
         if (mySeq !== inlineCompletionSeq) return { items: [] };
-        let text = (res && res.completion) || '';
+        let text = (res && (res.completion || res.final || res.draft)) || '';
         text = text.trimEnd();
         if (!text || text.length > 400) return { items: [] };
         return { items: [{ insertText: text, range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column) }] };

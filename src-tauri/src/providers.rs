@@ -409,6 +409,185 @@ Continue the code at the cursor. Return only the raw completion text.",
         }
     }
 
+    /// Automatically detects the best small draft model from installed Ollama models.
+    pub fn find_optimal_draft_model(available_models: &[String]) -> Option<String> {
+        let draft_keywords = ["0.5b", "1.5b", "1b", "2b", "3b"];
+        let matches_draft_size = |model: &str, kw: &str| -> bool {
+            let lower = model.to_lowercase();
+            if let Some(idx) = lower.find(kw) {
+                if idx > 0 {
+                    let prev_char = lower.as_bytes()[idx - 1] as char;
+                    if prev_char.is_ascii_digit() {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            false
+        };
+
+        // Priority 1: coding model with small parameter size
+        for kw in &draft_keywords {
+            for m in available_models {
+                let lower = m.to_lowercase();
+                if matches_draft_size(&lower, kw) && (lower.contains("coder") || lower.contains("code")) {
+                    return Some(m.clone());
+                }
+            }
+        }
+        // Priority 2: any model with small parameter size
+        for kw in &draft_keywords {
+            for m in available_models {
+                let lower = m.to_lowercase();
+                if matches_draft_size(&lower, kw) {
+                    return Some(m.clone());
+                }
+            }
+        }
+        None
+    }
+
+    /// Dual-Model Speculative Code Streaming:
+    /// Streams instant ghost-text completions from a tiny draft model (e.g. 1.5B/3B)
+    /// while validating and patching logic in the background via a verifier model (e.g. 7B/14B).
+    pub async fn speculative_complete_code(
+        app: &tauri::AppHandle,
+        draft_model: &str,
+        verifier_model: &str,
+        base_url: Option<String>,
+        prefix: &str,
+        suffix: &str,
+        language: &str,
+        request_id: &str,
+    ) -> Result<serde_json::Value, String> {
+        use tauri::Emitter;
+        use futures_util::StreamExt;
+
+        let url = base_url.unwrap_or_else(|| "http://localhost:11434".into());
+        let endpoint = format!("{}/api/chat", url.trim_end_matches('/'));
+
+        let system_prompt = "You are a code completion engine. Complete the code at the cursor. Return ONLY raw code lines, no markdown, no explanation. 1-4 lines max.";
+        let user_prompt = format!(
+            "Language: {}\nCode before cursor:\n{}\n\nCode after cursor:\n{}\n\nContinue the code at the cursor. Return only completion.",
+            language, prefix, suffix
+        );
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(8))
+            .build()
+            .map_err(|e| e.to_string())?;
+
+        // 1. Launch Draft Model (Streaming chunk-by-chunk for instant feedback)
+        let draft_payload = serde_json::json!({
+            "model": draft_model,
+            "messages": [
+                { "role": "system", "content": system_prompt },
+                { "role": "user", "content": user_prompt }
+            ],
+            "stream": true,
+            "keep_alive": "15m",
+            "options": {
+                "num_predict": 48,
+                "num_ctx": 2048,
+                "temperature": 0.1,
+                "top_p": 0.85,
+                "stop": ["```", "\n\n\n"]
+            }
+        });
+
+        let mut draft_accumulated = String::new();
+        let draft_resp = client.post(&endpoint).json(&draft_payload).send().await;
+
+        if let Ok(resp) = draft_resp {
+            if resp.status().is_success() {
+                let mut stream = resp.bytes_stream();
+                while let Some(item) = stream.next().await {
+                    if let Ok(bytes) = item {
+                        if let Ok(text) = std::str::from_utf8(&bytes) {
+                            for line in text.lines() {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(line) {
+                                    if let Some(token) = val.pointer("/message/content").and_then(|c| c.as_str()) {
+                                        draft_accumulated.push_str(token);
+                                        let _ = app.emit("speculative:draft_chunk", serde_json::json!({
+                                            "requestId": request_id,
+                                            "chunk": token,
+                                            "accumulated": draft_accumulated
+                                        }));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Run Verifier Model to validate or correct the draft
+        let verifier_payload = serde_json::json!({
+            "model": verifier_model,
+            "messages": [
+                { "role": "system", "content": system_prompt },
+                { "role": "user", "content": user_prompt }
+            ],
+            "stream": false,
+            "keep_alive": "15m",
+            "options": {
+                "num_predict": 64,
+                "num_ctx": 2048,
+                "temperature": 0.1,
+                "top_p": 0.85,
+                "stop": ["```", "\n\n\n"]
+            }
+        });
+
+        let verifier_resp = client.post(&endpoint).json(&verifier_payload).send().await;
+        let mut verifier_content = String::new();
+        let mut patched = false;
+
+        if let Ok(resp) = verifier_resp {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<serde_json::Value>().await {
+                    if let Some(content) = json.pointer("/message/content").and_then(|c| c.as_str()) {
+                        verifier_content = content.trim().to_string();
+                    }
+                }
+            }
+        }
+
+        let draft_clean = draft_accumulated.trim().to_string();
+        let final_completion = if verifier_content.is_empty() {
+            draft_clean
+        } else if draft_clean.is_empty() {
+            verifier_content
+        } else if draft_clean == verifier_content || verifier_content.starts_with(&draft_clean) {
+            // Verifier approved the draft
+            let _ = app.emit("speculative:verified", serde_json::json!({
+                "requestId": request_id,
+                "status": "approved",
+                "final": verifier_content
+            }));
+            verifier_content
+        } else {
+            // Verifier patched the draft
+            patched = true;
+            let _ = app.emit("speculative:patch", serde_json::json!({
+                "requestId": request_id,
+                "status": "patched",
+                "original": draft_clean,
+                "final": verifier_content
+            }));
+            verifier_content
+        };
+
+        Ok(serde_json::json!({
+            "requestId": request_id,
+            "draftModel": draft_model,
+            "verifierModel": verifier_model,
+            "completion": final_completion,
+            "patched": patched
+        }))
+    }
+
     /// Sends a prompt and tools to the chosen provider and standardizes the response
     pub async fn dispatch_turn(
         provider: &str,
@@ -1319,6 +1498,39 @@ mod tests {
         });
         let calls = parse_ollama_tool_calls(&msg);
         assert!(calls[0].arguments.as_object().map(|o| o.is_empty()).unwrap_or(false));
+    }
+
+    #[test]
+    fn test_find_optimal_draft_model_prioritizes_small_code_models() {
+        let models = vec![
+            "qwen2.5-coder:7b".to_string(),
+            "llama3.2:3b".to_string(),
+            "qwen2.5-coder:1.5b".to_string(),
+            "deepseek-coder:6.7b".to_string(),
+        ];
+        let draft = ProviderService::find_optimal_draft_model(&models);
+        assert_eq!(draft, Some("qwen2.5-coder:1.5b".to_string()));
+    }
+
+    #[test]
+    fn test_find_optimal_draft_model_falls_back_to_any_small_model() {
+        let models = vec![
+            "mistral:7b".to_string(),
+            "llama3.2:1b".to_string(),
+            "llama3.1:8b".to_string(),
+        ];
+        let draft = ProviderService::find_optimal_draft_model(&models);
+        assert_eq!(draft, Some("llama3.2:1b".to_string()));
+    }
+
+    #[test]
+    fn test_find_optimal_draft_model_returns_none_if_no_small_model() {
+        let models = vec![
+            "qwen2.5-coder:7b".to_string(),
+            "deepseek-coder:33b".to_string(),
+        ];
+        let draft = ProviderService::find_optimal_draft_model(&models);
+        assert_eq!(draft, None);
     }
 
     #[test]

@@ -90,6 +90,33 @@ pub struct AgentChangeEntry {
     pub description: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnFileMutation {
+    pub path: String,
+    pub relative_path: String,
+    pub kind: String,
+    pub before_content: Option<String>,
+    pub after_content: String,
+    pub additions: usize,
+    pub deletions: usize,
+    pub diff_unified: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentTurnSnapshot {
+    pub id: String,
+    pub turn_id: String,
+    pub prompt: String,
+    pub timestamp: String,
+    pub timestamp_ms: u64,
+    pub files: Vec<TurnFileMutation>,
+    pub total_additions: usize,
+    pub total_deletions: usize,
+    pub journal_index_end: usize,
+}
+
 pub struct WorkspaceService {
     root: Option<PathBuf>,
     change_journal: Vec<AgentChangeEntry>,
@@ -98,6 +125,8 @@ pub struct WorkspaceService {
     /// re-walking the tree on every IPC call.
     cached_meta: Option<WorkspaceMeta>,
     pub last_created_cursor: Mutex<HashMap<String, usize>>,
+    pub turn_snapshots: Vec<AgentTurnSnapshot>,
+    pub active_turn_meta: Option<(String, String, usize, u64)>,
 }
 
 impl WorkspaceService {
@@ -108,6 +137,8 @@ impl WorkspaceService {
             pending_manifests: HashMap::new(),
             cached_meta: None,
             last_created_cursor: Mutex::new(HashMap::new()),
+            turn_snapshots: Vec::new(),
+            active_turn_meta: None,
         }
     }
 
@@ -791,6 +822,135 @@ impl WorkspaceService {
 
     /// Restores the workspace to the state just AFTER checkpoint `index`
     /// by reverting every journal entry newer than it (newest first).
+    pub fn record_turn_start(&mut self, turn_id: &str, prompt: &str) {
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let start_idx = self.change_journal.len();
+        self.active_turn_meta = Some((turn_id.to_string(), prompt.to_string(), start_idx, now_ms));
+    }
+
+    pub fn record_turn_end(&mut self, turn_id: &str) -> Option<AgentTurnSnapshot> {
+        let (saved_turn_id, prompt, start_idx, timestamp_ms) = self.active_turn_meta.take()?;
+        let end_idx = self.change_journal.len();
+        if start_idx >= end_idx {
+            return None;
+        }
+
+        let root_str = self.root.as_ref().map(|r| r.to_string_lossy().to_string()).unwrap_or_default();
+        let mut file_map: HashMap<String, (Option<String>, String)> = HashMap::new();
+
+        for entry in &self.change_journal[start_idx..end_idx] {
+            let key = entry.path.clone();
+            file_map
+                .entry(key)
+                .and_modify(|(_, after)| *after = entry.after_content.clone())
+                .or_insert((entry.before_content.clone(), entry.after_content.clone()));
+        }
+
+        let mut files = Vec::new();
+        let mut total_additions = 0;
+        let mut total_deletions = 0;
+
+        for (path, (before, after)) in file_map {
+            let norm_path = path.replace('\\', "/");
+            let norm_root = root_str.replace('\\', "/");
+            let rel = if !norm_root.is_empty() && norm_path.starts_with(&norm_root) {
+                norm_path[norm_root.len()..].trim_start_matches('/').to_string()
+            } else {
+                norm_path.clone()
+            };
+
+            let before_str = before.as_deref().unwrap_or("");
+            let diff = self.compute_diff(&rel, before_str, &after);
+            total_additions += diff.additions;
+            total_deletions += diff.deletions;
+
+            let kind = if before.is_none() {
+                "create".to_string()
+            } else if after.is_empty() && !before_str.is_empty() {
+                "delete".to_string()
+            } else {
+                "edit".to_string()
+            };
+
+            files.push(TurnFileMutation {
+                path,
+                relative_path: rel,
+                kind,
+                before_content: before,
+                after_content: after,
+                additions: diff.additions,
+                deletions: diff.deletions,
+                diff_unified: diff.diff_unified,
+            });
+        }
+
+        let snapshot = AgentTurnSnapshot {
+            id: uuid::Uuid::new_v4().to_string(),
+            turn_id: if !turn_id.is_empty() { turn_id.to_string() } else { saved_turn_id },
+            prompt,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            timestamp_ms,
+            files,
+            total_additions,
+            total_deletions,
+            journal_index_end: end_idx.saturating_sub(1),
+        };
+
+        self.turn_snapshots.push(snapshot.clone());
+        if self.turn_snapshots.len() > 50 {
+            self.turn_snapshots.remove(0);
+        }
+        Some(snapshot)
+    }
+
+    pub fn list_turn_snapshots(&self) -> Vec<serde_json::Value> {
+        self.turn_snapshots
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "id": s.id,
+                    "turnId": s.turn_id,
+                    "prompt": s.prompt,
+                    "timestamp": s.timestamp,
+                    "timestampMs": s.timestamp_ms,
+                    "fileCount": s.files.len(),
+                    "totalAdditions": s.total_additions,
+                    "totalDeletions": s.total_deletions,
+                    "journalIndexEnd": s.journal_index_end,
+                    "filePaths": s.files.iter().map(|f| &f.relative_path).collect::<Vec<_>>(),
+                })
+            })
+            .collect()
+    }
+
+    pub fn get_turn_snapshot(&self, id_or_turn_id: &str) -> Option<AgentTurnSnapshot> {
+        self.turn_snapshots
+            .iter()
+            .find(|s| s.id == id_or_turn_id || s.turn_id == id_or_turn_id)
+            .cloned()
+    }
+
+    pub fn time_travel_rollback_to_turn(&mut self, snapshot_id: &str) -> Result<serde_json::Value, String> {
+        let pos = self
+            .turn_snapshots
+            .iter()
+            .position(|s| s.id == snapshot_id || s.turn_id == snapshot_id)
+            .ok_or_else(|| format!("Turn snapshot '{}' not found", snapshot_id))?;
+
+        let snapshot = self.turn_snapshots[pos].clone();
+        let restore_res = self.restore_to_checkpoint(snapshot.journal_index_end)?;
+
+        self.turn_snapshots.truncate(pos + 1);
+
+        Ok(serde_json::json!({
+            "success": true,
+            "targetTurnId": snapshot.turn_id,
+            "restoredAt": snapshot.timestamp,
+            "reverted": restore_res.get("reverted").and_then(|r| r.as_u64()).unwrap_or(0),
+            "remainingTurns": self.turn_snapshots.len()
+        }))
+    }
+
     pub fn restore_to_checkpoint(&mut self, index: usize) -> Result<serde_json::Value, String> {
         if index >= self.change_journal.len() {
             return Err(format!("Checkpoint {} not found (journal has {} entries)", index, self.change_journal.len()));
@@ -1442,6 +1602,33 @@ impl WorkspaceService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_time_travel_turn_snapshots() {
+        let mut ws = WorkspaceService::new();
+        let temp = std::env::temp_dir().join(format!("orbital_ws_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp);
+        ws.set_root(&temp.to_string_lossy()).unwrap();
+
+        ws.record_turn_start("turn-1", "Create test file");
+        ws.write_file("test_vfs.txt", "line 1\nline 2\n", "create test file").unwrap();
+        let snap = ws.record_turn_end("turn-1").expect("snapshot created");
+        assert_eq!(snap.files.len(), 1);
+        assert_eq!(snap.files[0].relative_path, "test_vfs.txt");
+
+        ws.record_turn_start("turn-2", "Edit test file");
+        ws.write_file("test_vfs.txt", "line 1\nline 2 modified\n", "modify test file").unwrap();
+        let snap2 = ws.record_turn_end("turn-2").expect("snapshot 2 created");
+        assert_eq!(snap2.files.len(), 1);
+
+        assert_eq!(ws.list_turn_snapshots().len(), 2);
+        let rollback = ws.time_travel_rollback_to_turn(&snap.id).unwrap();
+        assert_eq!(rollback["success"], true);
+
+        let content = fs::read_to_string(temp.join("test_vfs.txt")).unwrap();
+        assert_eq!(content, "line 1\nline 2\n");
+        let _ = fs::remove_dir_all(&temp);
+    }
 
     #[test]
     fn test_compute_diff() {

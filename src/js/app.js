@@ -22,6 +22,8 @@ import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
 import { initDeveloperMenu } from './components/developer-menu.js';
 import { initMenubar } from './components/menubar.js';
+import { initTelemetryHUD } from './components/telemetry-hud.js';
+import { initTimeTravel } from './components/time-travel.js';
 import { checkForUpdatesManually, CURRENT_VERSION } from './components/updater.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 

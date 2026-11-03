@@ -1827,6 +1827,164 @@ function setupAgentEngineSettings() {
     `;
     modelsPane.appendChild(block);
 
+    // Multi-Model Speculative Streaming Settings
+    if (!document.getElementById('cfg-speculative-enabled')) {
+      const specBlock = document.createElement('div');
+      specBlock.style.cssText = 'background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-top: 12px;';
+      specBlock.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <strong style="display: flex; align-items: center; gap: 6px;">
+            <span>🚀</span> Multi-Model Speculative Streaming
+          </strong>
+          <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(0, 229, 255, 0.1); color: var(--accent-cyan, #00e5ff); font-weight: 600;">OLLAMA DUAL ENGINE</span>
+        </div>
+        <div class="settings-section-desc" style="margin-bottom: 10px;">
+          Stream completions instantly into Monaco from an ultra-fast draft model (e.g. 1.5B/3B), while your core coding model (e.g. 7B/14B) validates and patches logic in the background.
+        </div>
+
+        <!-- On/Off Switch -->
+        <div class="settings-setting-row" style="margin-bottom: 8px;">
+          <div class="settings-setting-info">
+            <span class="settings-setting-label">Enable Speculative Streaming</span>
+            <span class="settings-setting-caption">Run dual local models concurrently for lightning-fast completions.</span>
+          </div>
+          <div><label class="settings-toggle-switch"><input type="checkbox" id="cfg-speculative-enabled"><span class="settings-toggle-slider"></span></label></div>
+        </div>
+
+        <!-- Auto-Set Option -->
+        <div class="settings-setting-row" style="margin-bottom: 10px; background: rgba(255, 255, 255, 0.02); padding: 8px 10px; border-radius: 6px;">
+          <div class="settings-setting-info">
+            <span class="settings-setting-label">Automatic Draft Model Selection</span>
+            <span class="settings-setting-caption">Automatically inspects installed models and binds the fastest small draft model (0.5b/1.5b/3b).</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label class="settings-toggle-switch"><input type="checkbox" id="cfg-speculative-autoset"><span class="settings-toggle-slider"></span></label>
+            <button class="btn btn-secondary btn-sm" id="btn-speculative-autoset-now" style="font-size: 10px; padding: 3px 8px;">Auto-Set Now</button>
+          </div>
+        </div>
+
+        <!-- Dropdowns for Draft & Verifier -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Fast Draft Model (Instant Completion)</label>
+            <select class="select-input" id="cfg-speculative-draft"></select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Verifier Model (Background Validation)</label>
+            <select class="select-input" id="cfg-speculative-verifier"></select>
+          </div>
+        </div>
+
+        <!-- Dynamic Model Use-Case Info Card -->
+        <div id="cfg-speculative-desc" style="
+          margin-top: 10px;
+          padding: 8px 12px;
+          border-radius: 6px;
+          background: rgba(0, 229, 255, 0.05);
+          border: 1px solid rgba(0, 229, 255, 0.18);
+          font-size: 11px;
+          line-height: 1.4;
+          color: var(--text-primary);
+        ">
+          Select or auto-set a draft model to see recommended hardware and use-case details.
+        </div>
+      `;
+      modelsPane.appendChild(specBlock);
+
+      const specEn = specBlock.querySelector('#cfg-speculative-enabled');
+      const specAuto = specBlock.querySelector('#cfg-speculative-autoset');
+      const btnAutoNow = specBlock.querySelector('#btn-speculative-autoset-now');
+      const selDraft = specBlock.querySelector('#cfg-speculative-draft');
+      const selVerifier = specBlock.querySelector('#cfg-speculative-verifier');
+      const descCard = specBlock.querySelector('#cfg-speculative-desc');
+
+      function updateModelDescription(modelName) {
+        if (!modelName) {
+          descCard.textContent = 'Select or auto-set a draft model to view recommended hardware workload.';
+          return;
+        }
+        const lower = modelName.toLowerCase();
+        if (lower.includes('0.5b') || lower.includes('1.5b') || lower.includes('1b')) {
+          descCard.innerHTML = `<strong style="color: #00e5ff;">⚡ Ultra-Fast Draft:</strong> ${modelName} is ideal for sub-10ms ghost-text completions with minimal VRAM consumption (&lt;1.2 GB).`;
+        } else if (lower.includes('3b') || lower.includes('2b')) {
+          descCard.innerHTML = `<strong style="color: #00e5ff;">🚀 Fast Balanced Draft:</strong> ${modelName} provides strong syntax completion with snappy latency and light VRAM footprint (~2.0 GB).`;
+        } else if (lower.includes('7b') || lower.includes('8b')) {
+          descCard.innerHTML = `<strong style="color: #a78bfa;">🧠 Core Verifier / Deep Logic:</strong> ${modelName} is best suited for verification or primary coding to guarantee correctness (~4.5 GB VRAM).`;
+        } else if (lower.includes('14b') || lower.includes('32b')) {
+          descCard.innerHTML = `<strong style="color: #f59e0b;">🏛️ Heavy Reasoning:</strong> ${modelName} handles complex multi-file logic and architectural refactoring (~8-18 GB VRAM).`;
+        } else {
+          descCard.innerHTML = `<strong style="color: var(--text-primary);">💡 Local Speculative Model:</strong> ${modelName} configured. Ensure sufficient system VRAM to run alongside your primary model.`;
+        }
+      }
+
+      function saveSpeculativeState() {
+        if (!state.ai.speculative) state.ai.speculative = {};
+        state.ai.speculative.enabled = specEn.checked;
+        state.ai.speculative.autoSet = specAuto.checked;
+        state.ai.speculative.draftModel = selDraft.value;
+        state.ai.speculative.verifierModel = selVerifier.value;
+        persistState();
+        updateModelDescription(selDraft.value);
+      }
+
+      async function runAutoSet(models) {
+        try {
+          const detected = await invoke('auto_detect_draft_model', { availableModels: models });
+          if (detected) {
+            selDraft.value = detected;
+            saveSpeculativeState();
+          }
+        } catch (e) {}
+      }
+
+      invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(models => {
+        const list = models || [];
+        const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
+        selDraft.innerHTML = opts;
+        selVerifier.innerHTML = opts;
+
+        const spec = state.ai.speculative || {};
+        specEn.checked = !!spec.enabled;
+        specAuto.checked = spec.autoSet !== false;
+
+        if (spec.verifierModel && list.includes(spec.verifierModel)) {
+          selVerifier.value = spec.verifierModel;
+        } else if (list.includes(state.ai.model)) {
+          selVerifier.value = state.ai.model;
+        }
+
+        if (spec.draftModel && list.includes(spec.draftModel)) {
+          selDraft.value = spec.draftModel;
+          updateModelDescription(selDraft.value);
+        } else if (spec.autoSet !== false && list.length > 0) {
+          runAutoSet(list);
+        } else if (list.length > 0) {
+          selDraft.value = list[0];
+          updateModelDescription(list[0]);
+        }
+      }).catch(() => {
+        selDraft.innerHTML = selVerifier.innerHTML = '<option value="">(Ollama not reachable)</option>';
+      });
+
+      specEn.addEventListener('change', () => {
+        if (specEn.checked && specAuto.checked) {
+          invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(runAutoSet).catch(() => {});
+        }
+        saveSpeculativeState();
+      });
+      specAuto.addEventListener('change', () => {
+        if (specAuto.checked) {
+          invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(runAutoSet).catch(() => {});
+        }
+        saveSpeculativeState();
+      });
+      btnAutoNow.addEventListener('click', () => {
+        invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(runAutoSet).catch(() => {});
+      });
+      selDraft.addEventListener('change', saveSpeculativeState);
+      selVerifier.addEventListener('change', saveSpeculativeState);
+    }
+
     const selEn = block.querySelector('#cfg-routing-enabled');
     const selCode = block.querySelector('#cfg-routing-code');
     const selExplain = block.querySelector('#cfg-routing-explain');

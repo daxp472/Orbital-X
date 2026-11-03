@@ -14,18 +14,25 @@ use std::path::PathBuf;
 
 pub struct SkillService;
 
+fn base_orbital_dir() -> PathBuf {
+    if let Ok(p) = std::env::var("ORBITAL_HOME") {
+        if !p.trim().is_empty() {
+            return PathBuf::from(p);
+        }
+    }
+    dirs::home_dir()
+        .map(|h| h.join(".orbital"))
+        .unwrap_or_else(|| PathBuf::from(".orbital"))
+}
+
 fn skills_dir() -> PathBuf {
-    let dir = dirs::home_dir()
-        .map(|h| h.join(".orbital").join("skills"))
-        .unwrap_or_else(|| PathBuf::from(".orbital/skills"));
+    let dir = base_orbital_dir().join("skills");
     let _ = fs::create_dir_all(&dir);
     dir
 }
 
 fn state_path() -> PathBuf {
-    let dir = dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let dir = base_orbital_dir();
     let _ = fs::create_dir_all(&dir);
     dir.join("skills_state.json")
 }
@@ -234,6 +241,10 @@ mod tests {
 
     #[test]
     fn test_install_list_read_toggle_delete_roundtrip() {
+        let test_dir = std::env::temp_dir().join(format!("orbital_tests_run_{}", std::process::id()));
+        unsafe {
+            std::env::set_var("ORBITAL_HOME", &test_dir);
+        }
         let tmp = std::env::temp_dir().join(format!("orbital_skill_ok_{}", std::process::id()));
         let _ = fs::create_dir_all(&tmp);
         let _ = fs::write(

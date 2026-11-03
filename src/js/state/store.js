@@ -56,6 +56,13 @@ export const state = {
     },
     // I5: smart routing — specialist models per task type (Ollama only)
     smartRouting: { enabled: false, codeModel: '', explainModel: '', fastModel: '' },
+    // Multi-Model Speculative Streaming
+    speculative: {
+      enabled: false,
+      autoSet: true,
+      draftModel: '',
+      verifierModel: '',
+    },
     // I9: verbose agent debug output
     debugMode: false,
     // I4: per-session approval allowlist set by "Remember this decision"
@@ -164,6 +171,11 @@ export function loadPersistedState() {
       } catch (e) { /* keep defaults */ }
     }
 
+    const savedSpeculative = localStorage.getItem('orbital_speculative_streaming');
+    if (savedSpeculative) {
+      try { state.ai.speculative = { ...state.ai.speculative, ...JSON.parse(savedSpeculative) }; } catch (e) {}
+    }
+
     const savedSmartRouting = localStorage.getItem('orbital_smart_routing');
     if (savedSmartRouting) {
       try { state.ai.smartRouting = { ...state.ai.smartRouting, ...JSON.parse(savedSmartRouting) }; } catch (e) { /* keep defaults */ }
@@ -233,6 +245,7 @@ export function persistState() {
     localStorage.setItem('orbital_ai_settings', JSON.stringify(state.ai.settings));
     localStorage.setItem('orbital_model_info', JSON.stringify(state.ai.modelInfo || {}));
     localStorage.setItem('orbital_smart_routing', JSON.stringify(state.ai.smartRouting || {}));
+    localStorage.setItem('orbital_speculative_streaming', JSON.stringify(state.ai.speculative || {}));
     localStorage.setItem('orbital_debug_mode', state.ai.debugMode ? 'true' : 'false');
     localStorage.setItem('orbital_dev_mode_enabled', state.developerMode ? 'true' : 'false');
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
