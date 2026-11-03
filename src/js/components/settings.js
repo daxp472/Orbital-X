@@ -857,13 +857,8 @@ export function openSettings() {
   // Model-aware hint: show the cached real limit for the default local model
   const numCtxHint = document.getElementById('numctx-hint');
   if (numCtxHint) {
-    const defModel = state.ai.defaultModels.ollama;
-    const info = (state.ai.modelInfo || {})[defModel];
-    if (info && Number.isFinite(info.contextLength) && info.contextLength > 0) {
-      numCtxHint.textContent = `Model "${defModel}" reports a real context limit of ${Number(info.contextLength).toLocaleString()} tokens — requests are capped to min(setting, model limit). Larger context uses more memory and can be slower per token; only raise it for tasks that need it.`;
-    } else {
-      numCtxHint.textContent = 'The effective context is automatically capped by each model\'s real limit once known (open a model\'s Info above, or select it in the model picker, to read it from Ollama).';
-    }
+    const val = Number(s.numCtx || 8192).toLocaleString();
+    numCtxHint.textContent = `Strict user allocation: ${val} tokens are assigned directly to the model as primary context without scaling or downscaling for device RAM/VRAM.`;
   }
   const keepAliveSel = document.getElementById('cfg-keep-alive');
   if (keepAliveSel) keepAliveSel.value = s.keepAlive || '30m';

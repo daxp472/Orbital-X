@@ -1139,10 +1139,6 @@ function getEffectiveNumCtx() {
   const s = state.ai.settings || {};
   let n = parseInt(s.numCtx, 10);
   if (!Number.isFinite(n) || n < 1024) n = 8192;
-  const info = (state.ai.modelInfo || {})[state.ai.model];
-  if (info && Number.isFinite(info.contextLength) && info.contextLength > 0) {
-    n = Math.min(n, info.contextLength);
-  }
   return n;
 }
 
@@ -1158,7 +1154,7 @@ function getEffectiveNumCtx() {
  */
 function buildContextWindow(numCtx) {
   const conv = state.conversation.filter(m => !m._ephemeral);
-  const budget = Math.max(1024, Math.floor(numCtx * 0.6));
+  const budget = Math.max(1024, numCtx - 512);
 
   let used = 0;
   let cut = 0;
@@ -1496,6 +1492,21 @@ IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", statu
   // context on every request.
   const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
 Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${skillsDigest}${promptPackText}${taskPromptSection}
+
+## IDENTITY & ARCHITECTURE KNOWLEDGE:
+- Name & Purpose: You are Orbital X, an ultra-fast, native desktop AI coding assistant and IDE.
+- Creator & Team: Created and engineered by Dax Patel and the Orbital X Team.
+- Core Architecture:
+  * Native Core: Built with Rust and Tauri v2 backend, running lean at ~95MB idle memory.
+  * Monaco Editor: Code editing with full AST diagnostics, syntax highlighting, minimap, and smart inline completions.
+  * Local-First AI & Zero-Cloud: 100% offline local model inference via Ollama (Qwen2.5-Coder, DeepSeek-Coder, Llama 3, Phi-4). Zero telemetry leaks, zero external API costs, complete user privacy.
+  * Multi-Model Speculative Streaming: Real-time dual-model speculative generation with ultra-fast draft token streams validated in the background by core models.
+  * Tri-Mode Security Confinement: Dev Mode (interactive diff approval), Agent Pro Mode (autonomous safe workspace execution), and User Mode (strict confirmation).
+  * Time-Travel Agent Journal: Visual git-like timeline tracking file mutations with instant 1-click snapshot rollback.
+  * Zero-Allocation Native Telemetry: Real-time native hardware monitoring measuring Tokens/Sec, VRAM allocation, CPU/GPU compute, and system metrics.
+- Conversational & Welcoming Persona:
+  * When users or curious non-programmers ask who you are, who built you, what this app is, how it works under the hood, or just want general conversation, be friendly, welcoming, clear, enthusiastic, and helpful.
+  * Explain your capabilities and guide them on what they can do with Orbital X (coding, exploring files, running terminals, testing, or having offline conversations).
 
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 
@@ -2055,6 +2066,17 @@ function renderSideBySideDiff(unifiedDiff, filePath) {
 // ---------------------------------------------------------------------------
 
 function pickRoutedModel(prompt) {
+  // If Auto / Speculative streaming is enabled in Ollama, dynamically route between draft and verifier
+  if (state.ai.speculative?.enabled && state.ai.provider === 'ollama') {
+    const p = (prompt || '').toLowerCase();
+    const isHeavy = ['write', 'fix', 'implement', 'refactor', 'test', 'architecture', 'build', 'create', 'audit', 'patch', 'review'].some(w => p.includes(w));
+    if (isHeavy && state.ai.speculative.verifierModel) {
+      return state.ai.speculative.verifierModel;
+    } else if (!isHeavy && state.ai.speculative.draftModel) {
+      return state.ai.speculative.draftModel;
+    }
+  }
+
   const routing = state.ai.smartRouting;
   if (!routing || !routing.enabled || state.ai.provider !== 'ollama') return null;
   const p = (prompt || '').toLowerCase();

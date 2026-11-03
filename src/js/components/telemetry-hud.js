@@ -329,3 +329,4 @@ function drawLine(points, valueExtractor, color, maxScale, stepX, startIdx, line
   });
   ctx.stroke();
 }
+

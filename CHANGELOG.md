@@ -6,6 +6,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.3.1] — 2026-11-03
+
+### Added & Upgraded
+- **Multi-Model Speculative Streaming:** Run ultra-fast draft models (0.5B/1.5B/3B) concurrently with heavy verifier models (7B/14B) via Ollama, streaming instant speculative code completions into Monaco while the background thread validates logic.
+- **Zero-Allocation Token Telemetry & VRAM Tracker:** Native Rust crate sysinfo monitoring real-time host CPU, RAM, GPU VRAM allocation, and tokens per second embedded directly into the status bar HUD.
+- **The "Time-Travel" Agent Journal:** Atomic Virtual File System snapshot patches before and after every agent turn with visual scrubber timeline and 1-click rollback of multi-file modifications.
+- **Strict Context Window Allocation:** Enforced strict allocation where the exact user-specified context number (e.g. 8,192 or 16,384 tokens) is assigned directly to the model as primary context without downscaling or clamping for laptop hardware or VRAM limits.
+- **In-Chat Auto Mode & Speculative Toggle:** Added one-click toggle pill in the chat composer bar and dropdown card in the model picker, enabling seamless switching into dual-model speculative mode.
+- **Agent Self-Identity & Architecture Awareness:** System prompt expanded with rich creator facts (created by Dax Patel and the Orbital X Team), native Rust/Tauri v2 architecture details, and conversational guidance for curious non-programmers.
+
+---
+
+## [v2.3.0] — 2026-11-02
+
+### Added & Upgraded
+- **In-App 1-Click Update System:** Complete native streaming downloader with live percentage and transfer speed reporting, paired with a non-blocking "Restart Application" flow that cleanly replaces Windows executables.
+- **Persistent Sticky Task Progress Banner:** Real-time task progress tracker anchored directly above the chat composer input, replacing action chips while tasks are in flight and displaying animated progress, live timers, and cancel controls.
+
+---
+
 ## [v2.2.8] — 2026-11-01
 
 ### Upgraded

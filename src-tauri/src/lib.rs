@@ -1764,7 +1764,7 @@ fn detect_gpus() -> Vec<GpuInfo> {
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.0")
+        .user_agent("OrbitalX-IDE/2.3.1")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1830,7 +1830,7 @@ async fn download_update(
     use futures_util::StreamExt;
 
     let client = reqwest::Client::builder()
-        .user_agent("OrbitalX-IDE/2.3.0")
+        .user_agent("OrbitalX-IDE/2.3.1")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client.get(&url).send().await.map_err(|e| format!("Download failed: {}", e))?;
@@ -2007,7 +2007,7 @@ fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), Stri
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.0")
+        .user_agent("OrbitalX-IDE/2.3.1")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client

@@ -581,7 +581,7 @@ function getMenuItems(menuId) {
           label: 'Copy System Diagnostic Info',
           action: async () => {
             const info = `Orbital X Diagnostic Info:
-Version: 2.3.0
+Version: 2.3.1
 OS: ${navigator.userAgent}
 Active Workspace: ${state.workspace.rootPath || 'None'}
 Agent Mode: ${state.agentMode}

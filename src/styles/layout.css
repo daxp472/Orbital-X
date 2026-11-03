@@ -765,6 +765,35 @@ body {
   transition: all var(--trans-fast);
 }
 
+
+.composer-speculative-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--trans-fast);
+  user-select: none;
+}
+
+.composer-speculative-pill:hover {
+  color: var(--accent-cyan);
+  border-color: rgba(57, 197, 187, 0.4);
+  background: rgba(57, 197, 187, 0.08);
+}
+
+.composer-speculative-pill.active {
+  background: rgba(57, 197, 187, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 8px rgba(57, 197, 187, 0.2);
+}
+
 .composer-model-pill:hover {
   color: var(--text-primary-bright);
   border-color: var(--border-focus);

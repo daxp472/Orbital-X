@@ -18,6 +18,7 @@ export function initModelPicker() {
 
   // Header Current Model Indicator Pill
   setupHeaderModelPill();
+  setupComposerSpeculativeToggle();
 
   document.addEventListener('click', (e) => {
     const headerPill = document.getElementById('header-model-pill');
@@ -32,6 +33,64 @@ export function initModelPicker() {
       updateHeaderModelDisplay(payload?.model || state.ai.model);
     }
   });
+}
+
+
+function updateComposerSpeculativePill() {
+  const pill = document.getElementById('composer-speculative-toggle');
+  const label = document.getElementById('composer-speculative-label');
+  if (!pill) return;
+  const isEnabled = !!state.ai.speculative?.enabled;
+  if (isEnabled) {
+    pill.classList.add('active');
+    const draft = state.ai.speculative?.draftModel;
+    if (label) label.textContent = draft ? `Auto: ${draft}` : 'Auto: Dual';
+    pill.title = 'Auto Speculative Dual-Model Mode is ACTIVE. Click to turn OFF.';
+  } else {
+    pill.classList.remove('active');
+    if (label) label.textContent = 'Auto: Off';
+    pill.title = 'Auto Speculative Dual-Model Mode is OFF. Click to turn ON.';
+  }
+}
+
+function setupComposerSpeculativeToggle() {
+  const pill = document.getElementById('composer-speculative-toggle');
+  if (!pill) return;
+
+  pill.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (!state.ai.speculative) {
+      state.ai.speculative = { enabled: false, autoSet: true, draftModel: '', verifierModel: '' };
+    }
+    state.ai.speculative.enabled = !state.ai.speculative.enabled;
+
+    if (state.ai.speculative.enabled && (!state.ai.speculative.draftModel || !state.ai.speculative.verifierModel)) {
+      try {
+        const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+        if (models && models.length > 0) {
+          const autoDraft = await invoke('auto_detect_draft_model', { availableModels: models });
+          if (autoDraft) state.ai.speculative.draftModel = autoDraft;
+          if (!state.ai.speculative.verifierModel) {
+            state.ai.speculative.verifierModel = state.ai.model || models[0];
+          }
+        }
+      } catch (err) {
+        console.warn('Auto detect failed:', err);
+      }
+    }
+
+    try {
+      localStorage.setItem('orbital_speculative_streaming', JSON.stringify(state.ai.speculative || {}));
+    } catch (e) {}
+
+    updateComposerSpeculativePill();
+    const cfgEn = document.getElementById('cfg-speculative-enabled');
+    if (cfgEn) cfgEn.checked = state.ai.speculative.enabled;
+    const mpToggle = document.getElementById('mp-speculative-toggle');
+    if (mpToggle) mpToggle.checked = state.ai.speculative.enabled;
+  });
+
+  updateComposerSpeculativePill();
 }
 
 function setupHeaderModelPill() {
@@ -176,6 +235,25 @@ async function loadProviderModels(provider) {
         </div>
       </div>
 
+      
+      <!-- Speculative / Auto Mode Quick Toggle Card -->
+      <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 11px; font-weight: 600; color: var(--accent-cyan); display: flex; align-items: center; gap: 4px;">
+            <span>⚡</span> Auto / Dual Speculative Mode
+          </div>
+          <label class="settings-toggle-switch" style="transform: scale(0.85); margin: 0;">
+            <input type="checkbox" id="mp-speculative-toggle" ${state.ai.speculative?.enabled ? 'checked' : ''}>
+            <span class="settings-toggle-slider"></span>
+          </label>
+        </div>
+        <div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;">
+          ${state.ai.speculative?.enabled
+            ? `Active: Uses draft model (${state.ai.speculative?.draftModel || 'auto'}) for instant streaming + verifier (${state.ai.speculative?.verifierModel || state.ai.model}) for validation.`
+            : 'Toggle ON to enable dual-model streaming (draft for speed + core for logic validation).'}
+        </div>
+      </div>
+
       <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: flex; justify-content: space-between;">
         <span>Curated Coding Models:</span>
       </div>
@@ -209,6 +287,36 @@ async function loadProviderModels(provider) {
       </div>
     `;
 
+    
+    const mpToggle = container.querySelector('#mp-speculative-toggle');
+    if (mpToggle) {
+      mpToggle.addEventListener('change', async () => {
+        if (!state.ai.speculative) {
+          state.ai.speculative = { enabled: false, autoSet: true, draftModel: '', verifierModel: '' };
+        }
+        state.ai.speculative.enabled = mpToggle.checked;
+        if (state.ai.speculative.enabled && (!state.ai.speculative.draftModel || !state.ai.speculative.verifierModel)) {
+          try {
+            const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+            if (models && models.length > 0) {
+              const autoDraft = await invoke('auto_detect_draft_model', { availableModels: models });
+              if (autoDraft) state.ai.speculative.draftModel = autoDraft;
+              if (!state.ai.speculative.verifierModel) {
+                state.ai.speculative.verifierModel = state.ai.model || models[0];
+              }
+            }
+          } catch (e) {}
+        }
+        try {
+          localStorage.setItem('orbital_speculative_streaming', JSON.stringify(state.ai.speculative || {}));
+        } catch (e) {}
+        updateComposerSpeculativePill();
+        const cfgEn = document.getElementById('cfg-speculative-enabled');
+        if (cfgEn) cfgEn.checked = state.ai.speculative.enabled;
+        loadProviderModels('ollama');
+      });
+    }
+  
     // Wire curated model clicks
     container.querySelectorAll('.curated-model-row').forEach(row => {
       row.addEventListener('click', () => {

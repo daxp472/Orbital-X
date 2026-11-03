@@ -752,11 +752,19 @@
           <div class="composer-box">
             <textarea class="composer-textarea" id="agent-input" placeholder="Ask Orbital X to edit, test, or explain..." rows="2" aria-label="Agent chat input"></textarea>
             <div class="composer-bottom-bar">
-              <!-- Model selector pill on bottom left -->
-              <div class="composer-model-pill" id="composer-model-selector" title="Click to change model">
-                <span style="color: var(--accent-cyan); font-weight: bold;">+</span>
-                <span id="composer-model-name">Ollama (llama3)</span>
-                <span style="font-size: 8px; opacity: 0.6;">▼</span>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <!-- Model selector pill on bottom left -->
+                <div class="composer-model-pill" id="composer-model-selector" title="Click to change model">
+                  <span style="color: var(--accent-cyan); font-weight: bold;">+</span>
+                  <span id="composer-model-name">Ollama (llama3)</span>
+                  <span style="font-size: 8px; opacity: 0.6;">▼</span>
+                </div>
+
+                <!-- Auto / Speculative Mode quick toggle pill -->
+                <div class="composer-speculative-pill" id="composer-speculative-toggle" title="Click to toggle Auto Speculative Dual-Model Mode">
+                  <span class="spec-sparkle" style="color: var(--accent-cyan);">⚡</span>
+                  <span id="composer-speculative-label">Auto: Off</span>
+                </div>
               </div>
 
               <!-- Context @ and Send button on bottom right -->

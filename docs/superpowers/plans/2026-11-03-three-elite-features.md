@@ -136,3 +136,4 @@
   - Run `npm run tauri build` to generate `release/Orbital.X_2.3.0_x64-setup.exe`.
 - [ ] **Step 7.3: Git commit and sync**
   - Clean commit on `claude/forge` and fast-forward `main`.
+
