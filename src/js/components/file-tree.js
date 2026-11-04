@@ -212,6 +212,7 @@ function renderTree(treeNode, container) {
   });
 
   container.appendChild(list);
+  wireTreeDragDrop();
 }
 
 function buildNodeElement(node, parentElem, indentLevel) {
@@ -234,7 +235,33 @@ function buildNodeElement(node, parentElem, indentLevel) {
   nodeRow.appendChild(icon);
 
   nodeRow.dataset.isDir = node.is_directory ? 'true' : 'false';
+  nodeRow.dataset.path = node.path;
+  nodeRow.dataset.name = node.name;
   nodeRow.draggable = true;
+
+  nodeRow.addEventListener('dragstart', (e) => {
+    if (e.target.closest('.tree-arrow')) {
+      e.preventDefault();
+      return;
+    }
+    setDragSession({
+      path: node.path,
+      isDir: node.is_directory,
+      name: node.name,
+      el: nodeRow
+    });
+    e.dataTransfer.effectAllowed = 'move';
+    try {
+      e.dataTransfer.setData('text/plain', node.path);
+      e.dataTransfer.setData('application/orbital-path', node.path);
+      e.dataTransfer.setData('application/orbital-is-dir', node.is_directory ? 'true' : 'false');
+    } catch (_) {}
+    nodeRow.classList.add('dragging');
+  });
+
+  nodeRow.addEventListener('dragend', () => {
+    cleanupDragSession();
+  });
   const label = document.createElement('span');
   label.className = 'tree-label';
   label.textContent = node.name;
@@ -315,15 +342,10 @@ function buildNodeElement(node, parentElem, indentLevel) {
     });
   });
 
-  // Right-click context menu
-  nodeRow.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
+    // Right-click selects node; unified context-menu handles displaying the menu
+  nodeRow.addEventListener('contextmenu', () => {
     document.querySelectorAll('.tree-node.selected').forEach(el => el.classList.remove('selected'));
     nodeRow.classList.add('selected');
-
-    showFileTreeContextMenu(e.clientX, e.clientY, node);
   });
 }
 
@@ -386,178 +408,9 @@ export function initFileTreeHeaderActions() {
 }
 
 // ==========================================================================
-// Right-Click Context Menu Implementation
-// ==========================================================================
-
-let activeContextMenu = null;
-
+// Dismiss Context Menu
 export function dismissFileTreeContextMenu() {
-  if (activeContextMenu) {
-    activeContextMenu.remove();
-    activeContextMenu = null;
-  }
-}
-
-let showFileTreeContextMenu = function (x, y, node) {
-  dismissFileTreeContextMenu();
-
-  const menu = document.createElement('div');
-  menu.className = 'tree-context-menu';
-  menu.id = 'file-tree-context-menu';
-
-  // Prevent browser context menu on our custom menu
-  menu.addEventListener('contextmenu', (e) => e.preventDefault());
-
-  const items = [
-    {
-      label: 'Open',
-      icon: '📄',
-      action: async () => {
-        if (!node.is_directory) {
-          try {
-            const fileData = await invoke('read_file', { path: node.path });
-            if (fileData.is_binary) {
-              alert("Cannot view binary files in the code editor.");
-              return;
-            }
-            openFileInTab(fileData);
-          } catch (e) {
-            alert("Error opening file: " + e);
-          }
-        }
-      }
-    },
-    {
-      label: 'Copy Path',
-      icon: '📋',
-      action: () => {
-        navigator.clipboard.writeText(node.path);
-      }
-    },
-    {
-      label: 'Reveal in Explorer',
-      icon: '📂',
-      action: async () => {
-        try {
-          await invoke('open_in_explorer', { path: node.path });
-        } catch (e) {
-          console.warn("Could not reveal in explorer:", e);
-        }
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Rename...',
-      icon: '✏️',
-      action: async () => {
-        const newName = await showInputDialog("Rename File", `New name for ${node.name}`, node.name);
-        if (!newName || !newName.trim() || newName.trim() === node.name) return;
-        const trimmed = newName.trim();
-        const lastSlash = Math.max(node.path.lastIndexOf('/'), node.path.lastIndexOf('\\'));
-        const dir = lastSlash !== -1 ? node.path.substring(0, lastSlash) : '';
-        const newPath = dir ? `${dir}/${trimmed}` : trimmed;
-        try {
-          await invoke('execute_tool', {
-            name: 'rename_file',
-            arguments: { from: node.path, to: newPath },
-            mode: 'agent_pro'
-          });
-          await refreshFileTree();
-        } catch (e) {
-          try {
-            await invoke('run_command', {
-              command: `powershell -Command "Rename-Item -LiteralPath '${node.path}' -NewName '${trimmed}'"`
-            });
-            await refreshFileTree();
-          } catch (err) {
-            alert("Rename failed: " + err);
-          }
-        }
-      }
-    },
-    {
-      label: 'Delete',
-      icon: '🗑️',
-      danger: true,
-      action: async () => {
-        const confirmed = await showConfirmDialog(`Delete File`, `Are you sure you want to delete "${node.name}"?`, 'Delete', true);
-        if (!confirmed) return;
-        try {
-          await invoke('execute_tool', {
-            name: 'delete_file',
-            arguments: { path: node.path },
-            mode: 'agent_pro'
-          });
-          await refreshFileTree();
-        } catch (e) {
-          try {
-            await invoke('run_command', {
-              command: `powershell -Command "Remove-Item -LiteralPath '${node.path}' -Recurse -Force"`
-            });
-            await refreshFileTree();
-          } catch (err) {
-            alert("Delete failed: " + err);
-          }
-        }
-      }
-    }
-  ];
-
-  items.forEach(item => {
-    if (item.type === 'separator') {
-      const sep = document.createElement('div');
-      sep.className = 'tree-context-menu-separator';
-      menu.appendChild(sep);
-      return;
-    }
-
-    const menuItem = document.createElement('div');
-    menuItem.className = `tree-context-menu-item ${item.danger ? 'danger' : ''}`;
-    menuItem.innerHTML = `<span style="font-size: 13px; opacity: 0.85;">${item.icon}</span> <span>${item.label}</span>`;
-    menuItem.addEventListener('click', (e) => {
-      e.stopPropagation();
-      dismissFileTreeContextMenu();
-      item.action();
-    });
-    menu.appendChild(menuItem);
-  });
-
-  document.body.appendChild(menu);
-  activeContextMenu = menu;
-
-  // Viewport bounds detection
-  const rect = menu.getBoundingClientRect();
-  const posX = Math.min(x, window.innerWidth - rect.width - 8);
-  const posY = Math.min(y, window.innerHeight - rect.height - 8);
-  menu.style.left = `${Math.max(8, posX)}px`;
-  menu.style.top = `${Math.max(8, posY)}px`;
-
-  // Dismiss on click outside or Escape
-  const onClickOutside = (e) => {
-    if (!menu.contains(e.target)) {
-      dismissFileTreeContextMenu();
-      cleanupListeners();
-    }
-  };
-
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') {
-      dismissFileTreeContextMenu();
-      cleanupListeners();
-    }
-  };
-
-  const cleanupListeners = () => {
-    window.removeEventListener('click', onClickOutside);
-    window.removeEventListener('contextmenu', onClickOutside);
-    window.removeEventListener('keydown', onKeyDown);
-  };
-
-  setTimeout(() => {
-    window.addEventListener('click', onClickOutside);
-    window.addEventListener('contextmenu', onClickOutside);
-    window.addEventListener('keydown', onKeyDown);
-  }, 10);
+  import('../services/context-menu.js').then(c => c.dismissContextMenu?.());
 }
 
 // ==========================================================================
@@ -1084,104 +937,180 @@ function wireExplorerKeyboardShortcuts() {
           pasteEntry(targetDir);
         }
       }
+    } else if (isExplorerFocused && selectedRow) {
+      const path = selectedRow.dataset.path;
+      const isDir = selectedRow.dataset.isDir === 'true';
+      if (e.key === 'F2' && path) {
+        e.preventDefault();
+        import('../services/dialogs.js').then(async ({ showInputDialog }) => {
+          const oldName = path.split('/').pop();
+          const newName = await showInputDialog('Rename', oldName);
+          if (newName && newName.trim() && newName.trim() !== oldName) {
+            const parent = path.split('/').slice(0, -1).join('/');
+            const newPath = parent ? parent + '/' + newName.trim() : newName.trim();
+            await invoke('execute_tool', { name: 'rename_file', arguments: { from: path, to: newPath }, mode: state.agentMode });
+            refreshFileTree();
+          }
+        });
+      } else if (e.key === 'Delete' && path) {
+        e.preventDefault();
+        import('../services/dialogs.js').then(async ({ showConfirmDialog }) => {
+          const name = path.split('/').pop();
+          const ok = await showConfirmDialog('Delete', 'Are you sure you want to delete ' + name + '?');
+          if (ok) {
+            const tool = isDir ? 'delete_directory' : 'delete_file';
+            await invoke('execute_tool', { name: tool, arguments: { path }, mode: state.agentMode });
+            refreshFileTree();
+          }
+        });
+      }
     }
   });
 }
 wireExplorerKeyboardShortcuts();
 
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // Enhanced Drag & Drop (Folders, Files, and Root Drops)
 // ---------------------------------------------------------------
 
-function wireTreeDragDrop() {
+let currentDragSession = null; // { path: string, isDir: boolean, name: string, el: HTMLElement }
+
+export function setDragSession(session) {
+  currentDragSession = session;
+}
+
+export function getDragSession() {
+  return currentDragSession;
+}
+
+export function cleanupDragSession() {
+  currentDragSession = null;
+  document.querySelectorAll('.tree-node.dragging').forEach(el => el.classList.remove('dragging'));
+  document.querySelectorAll('.tree-node.drop-into').forEach(el => el.classList.remove('drop-into'));
+  document.getElementById('file-tree-container')?.classList.remove('drop-root');
+  document.getElementById('sidebar-root-header')?.classList.remove('drop-root');
+}
+
+export function wireTreeDragDrop() {
   const host = explorerHost();
   if (!host || host.dataset.dndWired) return;
   host.dataset.dndWired = '1';
 
-  let draggedSrcPath = null;
-  let draggedIsDir = false;
-
-  host.addEventListener('dragstart', (e) => {
-    const row = e.target.closest('.tree-node');
-    if (!row?.dataset.path) return;
-    draggedSrcPath = row.dataset.path;
-    draggedIsDir = row.dataset.isDir === 'true';
-    e.dataTransfer.effectAllowed = 'move';
-    try {
-      e.dataTransfer.setData('text/plain', row.dataset.path);
-    } catch (_) {}
-    row.classList.add('dragging');
-  });
-
-  host.addEventListener('dragend', () => {
-    draggedSrcPath = null;
-    draggedIsDir = false;
-    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('dragging', 'drop-into'));
-    document.getElementById('file-tree-container')?.classList.remove('drop-root');
-  });
-
+  // Drag over handler
   host.addEventListener('dragover', (e) => {
     e.preventDefault();
+    if (!currentDragSession) return;
+
     e.dataTransfer.dropEffect = 'move';
 
     const row = e.target.closest('.tree-node');
-    const container = e.target.closest('#file-tree-container') || e.target.closest('#view-explorer');
+    const rootHeader = e.target.closest('#sidebar-root-header');
+    const treeContainer = e.target.closest('#file-tree-container');
 
-    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('drop-into'));
-    document.getElementById('file-tree-container')?.classList.remove('drop-root');
+    // Remove drop indicators on non-targeted nodes
+    document.querySelectorAll('.tree-node.drop-into').forEach(el => {
+      if (el !== row) el.classList.remove('drop-into');
+    });
 
     if (row && row.dataset.path) {
+      document.getElementById('file-tree-container')?.classList.remove('drop-root');
+      document.getElementById('sidebar-root-header')?.classList.remove('drop-root');
+
+      const targetPath = row.dataset.path;
+      const targetIsDir = row.dataset.isDir === 'true';
+
+      // Cannot drop on self
+      if (targetPath === currentDragSession.path) {
+        e.dataTransfer.dropEffect = 'none';
+        row.classList.remove('drop-into');
+        return;
+      }
+
+      // Cannot drop folder into itself or its descendant
+      if (currentDragSession.isDir && (targetPath === currentDragSession.path || targetPath.startsWith(currentDragSession.path + '/'))) {
+        e.dataTransfer.dropEffect = 'none';
+        row.classList.remove('drop-into');
+        return;
+      }
+
       row.classList.add('drop-into');
-    } else if (container) {
-      document.getElementById('file-tree-container')?.classList.add('drop-root');
+    } else if (treeContainer || rootHeader) {
+      document.querySelectorAll('.tree-node.drop-into').forEach(el => el.classList.remove('drop-into'));
+
+      // If item is already at root, don't show root drop indicator
+      const isAlreadyRoot = !currentDragSession.path.includes('/');
+      if (isAlreadyRoot) {
+        e.dataTransfer.dropEffect = 'none';
+        document.getElementById('file-tree-container')?.classList.remove('drop-root');
+        document.getElementById('sidebar-root-header')?.classList.remove('drop-root');
+      } else {
+        document.getElementById('file-tree-container')?.classList.add('drop-root');
+        if (rootHeader) rootHeader.classList.add('drop-root');
+      }
     }
   });
 
+  // Drag leave handler
+  host.addEventListener('dragleave', (e) => {
+    const related = e.relatedTarget;
+    if (!host.contains(related)) {
+      cleanupDragSession();
+    }
+  });
+
+  // Drop handler
   host.addEventListener('drop', async (e) => {
     e.preventDefault();
-    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('dragging', 'drop-into'));
-    document.getElementById('file-tree-container')?.classList.remove('drop-root');
+    e.stopPropagation();
 
-    const srcPath = draggedSrcPath || e.dataTransfer.getData('text/plain');
+    const session = currentDragSession;
+    const srcPath = session?.path || e.dataTransfer.getData('application/orbital-path') || e.dataTransfer.getData('text/plain');
+    const isDir = session?.isDir ?? (e.dataTransfer.getData('application/orbital-is-dir') === 'true');
+    const basename = session?.name || (srcPath ? srcPath.split(/[\\/]/).pop() : '');
+
+    cleanupDragSession();
+
     if (!srcPath) return;
 
     const row = e.target.closest('.tree-node');
     let destDir = '';
 
     if (row && row.dataset.path) {
-      const rowIsDir = row.dataset.isDir === 'true';
-      destDir = rowIsDir ? row.dataset.path : (row.dataset.path.split('/').slice(0, -1).join('/') || '');
+      const targetIsDir = row.dataset.isDir === 'true';
+      if (targetIsDir) {
+        destDir = row.dataset.path;
+      } else {
+        // Dropping onto a file moves item into that file's parent folder
+        const parts = row.dataset.path.split('/');
+        parts.pop();
+        destDir = parts.join('/');
+      }
     } else {
-      // Empty explorer area / container: move to workspace root (taking out of a folder)
+      // Empty explorer container or header -> move to workspace root
       destDir = '';
     }
 
-    if (draggedIsDir && destDir && (destDir === srcPath || destDir.startsWith(srcPath + '/'))) {
+    // Safety checks
+    if (isDir && destDir && (destDir === srcPath || destDir.startsWith(srcPath + '/'))) {
       showToast('Cannot move a directory into itself or its own subfolder', 'warning', 2500);
       return;
     }
 
-    const basename = srcPath.split(/[\\/]/).pop();
     const destPath = destDir ? `${destDir}/${basename}` : basename;
-
     if (destPath === srcPath) return;
 
     try {
       await invoke('move_workspace_entry', { from: srcPath, to: destPath });
-      showToast(`Moved "${basename}" to ${destDir || 'workspace root'}`, 'success', 2200);
-      refreshTreeAfterMutation();
+      showToast(`Moved "${basename}" to ${destDir ? '/' + destDir : 'workspace root'}`, 'success', 2200);
+      await refreshFileTree();
     } catch (err) {
       showToast(`Move failed: ${err}`, 'error', 3000);
     }
   });
 }
 
-setTimeout(wireTreeDragDrop, 800);
-
-
-// ---------------------------------------------------------------
-// L4: properties panel + extended context menu items
-// ---------------------------------------------------------------
+setTimeout(wireTreeDragDrop, 400);
 
 export async function showFileProperties(path) {
   document.getElementById('file-properties-modal')?.remove();
@@ -1274,40 +1203,6 @@ export async function copySelectedPaths() {
 
 /** Context menu items are injected into the existing file-tree menu by
  *  augmenting showFileTreeContextMenu through a wrapper. */
-const origShowMenu = showFileTreeContextMenu;
-showFileTreeContextMenu = function (x, y, node) {
-  origShowMenu(x, y, node);
-  // Inject extra items after the original menu renders (it is in the DOM now)
-  const menu = document.getElementById('file-tree-context-menu');
-  if (!menu || node.is_directory === true) {
-    if (menu && node.is_directory) {
-      const sep = document.createElement('div');
-      sep.className = 'tree-context-separator';
-      menu.appendChild(sep);
-      addMenuItem(menu, 'New File', '📝', () => promptNewFile(node.path));
-      addMenuItem(menu, 'New Folder', '📁', () => promptNewFolder(node.path));
-    }
-    return;
-  }
-  const sep = document.createElement('div');
-  sep.className = 'tree-context-separator';
-  menu.appendChild(sep);
-
-  addMenuItem(menu, 'Add to Favorites', '⭐', async () => {
-    if (!favorites.some(f => f.path === node.path)) {
-      favorites.push({ path: node.path, name: node.name });
-      await saveFavorites();
-      renderExplorerTopSections();
-      showToast('Added to Favorites', 'success', 1800);
-    }
-  });
-  addMenuItem(menu, 'Properties', '🧾', () => showFileProperties(node.path));
-  if (multiSelectedPaths.size > 1) {
-    addMenuItem(menu, `Delete Selected (${multiSelectedPaths.size})`, '🗑️', bulkDeleteSelected);
-    addMenuItem(menu, `Copy Paths (${multiSelectedPaths.size})`, '📋', copySelectedPaths);
-  }
-};
-
 function addMenuItem(menu, label, icon, action) {
   const row = document.createElement('div');
   row.className = 'tree-context-item';

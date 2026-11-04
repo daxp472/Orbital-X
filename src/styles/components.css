@@ -473,28 +473,38 @@
 }
 
 
+/* Tree Node Children pointer-events to prevent drag/drop flickering */
+.tree-node > * {
+  pointer-events: none;
+}
+.tree-node > .tree-arrow {
+  pointer-events: auto;
+}
+
 /* Cut pending, Drag & Drop indicator styles */
 .tree-node.cut-pending {
   opacity: 0.45 !important;
-  outline: 1px dashed var(--accent-cyan) !important;
+  outline: 1.5px dashed var(--accent-cyan, #38bdf8) !important;
   outline-offset: -1px;
 }
 
 .tree-node.dragging {
   opacity: 0.35 !important;
-  background-color: rgba(56, 189, 248, 0.12) !important;
+  background-color: rgba(56, 189, 248, 0.15) !important;
 }
 
 .tree-node.drop-into {
-  background-color: rgba(57, 197, 187, 0.22) !important;
-  outline: 1px solid var(--accent-cyan) !important;
+  background-color: rgba(56, 189, 248, 0.28) !important;
+  outline: 1.5px solid #38bdf8 !important;
   outline-offset: -1px;
   color: #ffffff !important;
 }
 
-#file-tree-container.drop-root {
-  outline: 1px dashed var(--accent-cyan) !important;
-  background-color: rgba(57, 197, 187, 0.06) !important;
+#file-tree-container.drop-root,
+#sidebar-root-header.drop-root {
+  outline: 1.5px dashed #38bdf8 !important;
+  outline-offset: -2px;
+  background-color: rgba(56, 189, 248, 0.08) !important;
 }
 
 .tree-node.selected {

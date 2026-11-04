@@ -136,7 +136,7 @@ export function handleGlobalContextMenu(e) {
 
   // 3. Check if inside File Tree
   const treeNode = target.closest('.tree-node');
-  const treeContainer = target.closest('#file-tree-container') || target.closest('#view-explorer');
+  const treeContainer = target.closest('#file-tree-container') || target.closest('#view-explorer') || target.closest('#sidebar-root-header') || target.closest('#sidebar');
   if (treeNode || treeContainer) {
     handleTreeContextMenu(treeNode, x, y);
     return;
@@ -274,138 +274,301 @@ function handleTreeContextMenu(nodeEl, x, y) {
   const path = nodeEl?.dataset.path;
   const isDir = nodeEl?.dataset.isDir === 'true';
 
+  if (nodeEl) {
+    document.querySelectorAll('.tree-node.selected').forEach(el => el.classList.remove('selected'));
+    nodeEl.classList.add('selected');
+  }
+
   const items = [];
   if (path) {
-    items.push(
-      {
-        label: 'New File...',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-        action: async () => {
-          const { showInputDialog } = await import('./dialogs.js');
-          const targetDir = isDir ? path : path.split('/').slice(0, -1).join('/');
-          const filename = await showInputDialog('New File', 'e.g. index.js or utils/helper.ts');
-          if (filename) {
-            const fullRel = targetDir ? `${targetDir}/${filename}` : filename;
-            const diff = await invoke('save_file', { path: fullRel, content: '', description: 'Created from context menu' });
-            import('../components/file-tree.js').then(f => f.refreshFileTree());
-            const fileData = await invoke('read_file', { path: fullRel });
-            if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
-              fileData.cursor_offset = diff.cursor_offset;
+    if (!isDir) {
+      // -------------------------------------------------------------
+      // FILE CONTEXT MENU
+      // -------------------------------------------------------------
+      const filename = path.split('/').pop() || path;
+      const parentDir = path.split('/').slice(0, -1).join('/');
+
+      items.push(
+        {
+          label: 'Open',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+          shortcut: 'Enter',
+          action: async () => {
+            try {
+              const fileData = await invoke('read_file', { path });
+              if (fileData.is_binary) {
+                showToast('Cannot view binary files in code editor', 'warning');
+                return;
+              }
+              const { openFileInTab } = await import('../editor/monaco.js');
+              openFileInTab(fileData);
+            } catch (err) {
+              showToast('Error opening file: ' + err, 'error');
             }
-            const { openFileInTab } = await import('../editor/monaco.js');
-            openFileInTab(fileData);
+          }
+        },
+        {
+          label: 'Open to the Side',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="12" y1="3" x2="12" y2="21"/></svg>',
+          action: async () => {
+            try {
+              const fileData = await invoke('read_file', { path });
+              if (fileData.is_binary) return;
+              const monaco = await import('../editor/monaco.js');
+              monaco.openFileInTab(fileData);
+              monaco.splitActiveTabRight?.(fileData);
+            } catch (err) {
+              showToast('Error opening to side: ' + err, 'error');
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: 'Cut',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+          shortcut: 'Ctrl+X',
+          action: () => cutEntry(path, false)
+        },
+        {
+          label: 'Copy',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+          shortcut: 'Ctrl+C',
+          action: () => copyEntry(path, false)
+        },
+        {
+          label: 'Paste',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
+          shortcut: 'Ctrl+V',
+          disabled: !getExplorerClipboard(),
+          action: () => pasteEntry(parentDir)
+        },
+        { separator: true },
+        {
+          label: 'Rename...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+          shortcut: 'F2',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const newName = await showInputDialog('Rename File', filename);
+            if (newName && newName.trim() && newName.trim() !== filename) {
+              const newPath = parentDir ? parentDir + '/' + newName.trim() : newName.trim();
+              await invoke('execute_tool', { name: 'rename_file', arguments: { from: path, to: newPath }, mode: state.agentMode });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        {
+          label: 'Delete',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+          danger: true,
+          shortcut: 'Del',
+          action: async () => {
+            const { showConfirmDialog } = await import('./dialogs.js');
+            const ok = await showConfirmDialog('Delete File', 'Are you sure you want to delete ' + filename + '?');
+            if (ok) {
+              await invoke('execute_tool', { name: 'delete_file', arguments: { path }, mode: state.agentMode });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: 'New File...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const name = await showInputDialog('New File', 'e.g. index.js');
+            if (name && name.trim()) {
+              const fullRel = parentDir ? parentDir + '/' + name.trim() : name.trim();
+              await invoke('save_file', { path: fullRel, content: '', description: 'Created from context menu' });
+              const f = await import('../components/file-tree.js');
+              await f.refreshFileTree();
+              const fileData = await invoke('read_file', { path: fullRel });
+              const { openFileInTab } = await import('../editor/monaco.js');
+              openFileInTab(fileData);
+            }
+          }
+        },
+        {
+          label: 'New Folder...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const name = await showInputDialog('New Folder', 'e.g. components');
+            if (name && name.trim()) {
+              const fullRel = parentDir ? parentDir + '/' + name.trim() : name.trim();
+              await invoke('create_directory', { path: fullRel });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: 'Reveal in File Explorer',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+          action: async () => {
+            try {
+              await invoke('open_in_explorer', { path });
+            } catch (err) {
+              console.warn('Could not reveal in explorer:', err);
+            }
+          }
+        },
+        {
+          label: 'Copy Relative Path',
+          action: () => {
+            navigator.clipboard.writeText(path);
+            showToast('Copied relative path: ' + path, 'info', 1600);
+          }
+        },
+        {
+          label: 'Tag in Agent Chat (@)',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>',
+          action: () => {
+            const input = document.getElementById('agent-input');
+            if (input) {
+              input.value = '@' + path + ' ' + input.value;
+              input.focus();
+            }
           }
         }
-      },
-      {
-        label: 'New Folder...',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-        action: async () => {
-          const { showInputDialog } = await import('./dialogs.js');
-          const targetDir = isDir ? path : path.split('/').slice(0, -1).join('/');
-          const foldername = await showInputDialog('New Folder', 'e.g. components');
-          if (foldername) {
-            const fullRel = targetDir ? `${targetDir}/${foldername}` : foldername;
-            await invoke('create_directory', { path: fullRel });
-            import('../components/file-tree.js').then(f => f.refreshFileTree());
+      );
+    } else {
+      // -------------------------------------------------------------
+      // FOLDER CONTEXT MENU
+      // -------------------------------------------------------------
+      const folderName = path.split('/').pop() || path;
+      const parentDir = path.split('/').slice(0, -1).join('/');
+
+      items.push(
+        {
+          label: 'New File...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const name = await showInputDialog('New File', 'e.g. script.js');
+            if (name && name.trim()) {
+              const fullRel = path + '/' + name.trim();
+              await invoke('save_file', { path: fullRel, content: '', description: 'Created from context menu' });
+              const f = await import('../components/file-tree.js');
+              await f.refreshFileTree();
+              const fileData = await invoke('read_file', { path: fullRel });
+              const { openFileInTab } = await import('../editor/monaco.js');
+              openFileInTab(fileData);
+            }
+          }
+        },
+        {
+          label: 'New Folder...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const name = await showInputDialog('New Folder', 'e.g. subfolder');
+            if (name && name.trim()) {
+              const fullRel = path + '/' + name.trim();
+              await invoke('create_directory', { path: fullRel });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: 'Cut',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+          shortcut: 'Ctrl+X',
+          action: () => cutEntry(path, true)
+        },
+        {
+          label: 'Copy',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+          shortcut: 'Ctrl+C',
+          action: () => copyEntry(path, true)
+        },
+        {
+          label: 'Paste',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
+          shortcut: 'Ctrl+V',
+          disabled: !getExplorerClipboard(),
+          action: () => pasteEntry(path)
+        },
+        { separator: true },
+        {
+          label: 'Rename...',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>',
+          shortcut: 'F2',
+          action: async () => {
+            const { showInputDialog } = await import('./dialogs.js');
+            const newName = await showInputDialog('Rename Folder', folderName);
+            if (newName && newName.trim() && newName.trim() !== folderName) {
+              const newPath = parentDir ? parentDir + '/' + newName.trim() : newName.trim();
+              await invoke('execute_tool', { name: 'rename_file', arguments: { from: path, to: newPath }, mode: state.agentMode });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        {
+          label: 'Delete',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+          danger: true,
+          shortcut: 'Del',
+          action: async () => {
+            const { showConfirmDialog } = await import('./dialogs.js');
+            const ok = await showConfirmDialog('Delete Folder', 'Are you sure you want to delete folder ' + folderName + ' and all its contents?');
+            if (ok) {
+              await invoke('execute_tool', { name: 'delete_directory', arguments: { path }, mode: state.agentMode });
+              import('../components/file-tree.js').then(f => f.refreshFileTree());
+            }
+          }
+        },
+        { separator: true },
+        {
+          label: 'Reveal in File Explorer',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+          action: async () => {
+            try {
+              await invoke('open_in_explorer', { path });
+            } catch (err) {
+              console.warn('Could not reveal in explorer:', err);
+            }
+          }
+        },
+        {
+          label: 'Copy Relative Path',
+          action: () => {
+            navigator.clipboard.writeText(path);
+            showToast('Copied relative path: ' + path, 'info', 1600);
+          }
+        },
+        {
+          label: 'Tag in Agent Chat (@)',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>',
+          action: () => {
+            const input = document.getElementById('agent-input');
+            if (input) {
+              input.value = '@' + path + ' ' + input.value;
+              input.focus();
+            }
           }
         }
-      },
-      { separator: true },
-      {
-        label: 'Rename...',
-        shortcut: 'F2',
-        action: async () => {
-          const { showInputDialog } = await import('./dialogs.js');
-          const oldName = path.split('/').pop();
-          const newName = await showInputDialog('Rename', oldName);
-          if (newName && newName !== oldName) {
-            const parent = path.split('/').slice(0, -1).join('/');
-            const newPath = parent ? `${parent}/${newName}` : newName;
-            await invoke('execute_tool', { name: 'rename_file', arguments: { from: path, to: newPath }, mode: state.agentMode });
-            import('../components/file-tree.js').then(f => f.refreshFileTree());
-          }
-        }
-      },
-      {
-        label: 'Delete',
-        danger: true,
-        shortcut: 'Del',
-        action: async () => {
-          const { showConfirmDialog } = await import('./dialogs.js');
-          const ok = await showConfirmDialog('Delete File', `Are you sure you want to delete '${path}'?`);
-          if (ok) {
-            const tool = isDir ? 'delete_directory' : 'delete_file';
-            await invoke('execute_tool', { name: tool, arguments: { path }, mode: state.agentMode });
-            import('../components/file-tree.js').then(f => f.refreshFileTree());
-          }
-        }
-      },
-      
-      { separator: true },
-      {
-        label: 'Cut',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
-        shortcut: 'Ctrl+X',
-        action: () => cutEntry(path, isDir)
-      },
-      {
-        label: 'Copy',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
-        shortcut: 'Ctrl+C',
-        action: () => copyEntry(path, isDir)
-      },
-      {
-        label: 'Paste',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
-        shortcut: 'Ctrl+V',
-        disabled: !getExplorerClipboard(),
-        action: () => {
-          const targetDir = isDir ? path : (path ? path.split('/').slice(0, -1).join('/') : '');
-          pasteEntry(targetDir);
-        }
-      },
-      { separator: true },
-      {
-        label: 'Copy Path',
-        action: () => {
-          navigator.clipboard.writeText(path);
-          showToast('Copied path', 'info', 1600);
-        }
-      },
-      {
-        label: 'Copy Relative Path',
-        action: () => {
-          navigator.clipboard.writeText(path);
-          showToast('Copied relative path', 'info', 1600);
-        }
-      },
-      {
-        label: 'Tag in Agent Chat (@)',
-        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#38bdf8" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94"/></svg>',
-        action: () => {
-          const input = document.getElementById('agent-input');
-          if (input) {
-            input.value = `@${path} ` + input.value;
-            input.focus();
-          }
-        }
-      }
-    );
+      );
+    }
   } else {
+    // -------------------------------------------------------------
+    // EMPTY SPACE / WORKSPACE ROOT CONTAINER CONTEXT MENU
+    // -------------------------------------------------------------
     items.push(
       {
         label: 'New File...',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
         action: async () => {
           const { showInputDialog } = await import('./dialogs.js');
-          const filename = await showInputDialog('New File', 'e.g. index.js');
-          if (filename) {
-            const diff = await invoke('save_file', { path: filename, content: '', description: 'Created via context menu' });
-            import('../components/file-tree.js').then(f => f.refreshFileTree());
-            const fileData = await invoke('read_file', { path: filename });
-            if (diff?.cursor_offset !== undefined && fileData.cursor_offset === undefined) {
-              fileData.cursor_offset = diff.cursor_offset;
-            }
+          const filename = await showInputDialog('New File', 'e.g. index.js or src/main.py');
+          if (filename && filename.trim()) {
+            const cleanPath = filename.trim();
+            await invoke('save_file', { path: cleanPath, content: '', description: 'Created via explorer' });
+            const f = await import('../components/file-tree.js');
+            await f.refreshFileTree();
+            const fileData = await invoke('read_file', { path: cleanPath });
             const { openFileInTab } = await import('../editor/monaco.js');
             openFileInTab(fileData);
           }
@@ -413,16 +576,18 @@ function handleTreeContextMenu(nodeEl, x, y) {
       },
       {
         label: 'New Folder...',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>',
         action: async () => {
           const { showInputDialog } = await import('./dialogs.js');
-          const foldername = await showInputDialog('New Folder', 'e.g. src');
-          if (foldername) {
-            await invoke('create_directory', { path: foldername });
+          const foldername = await showInputDialog('New Folder', 'e.g. src or assets');
+          if (foldername && foldername.trim()) {
+            await invoke('create_directory', { path: foldername.trim() });
             import('../components/file-tree.js').then(f => f.refreshFileTree());
           }
         }
       },
-            {
+      { separator: true },
+      {
         label: 'Paste',
         icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
         shortcut: 'Ctrl+V',
@@ -430,10 +595,29 @@ function handleTreeContextMenu(nodeEl, x, y) {
         action: () => pasteEntry('')
       },
       { separator: true },
-{
+      {
         label: 'Refresh Explorer',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
         action: () => {
           import('../components/file-tree.js').then(f => f.refreshFileTree());
+        }
+      },
+      {
+        label: 'Reveal in File Explorer',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+        action: async () => {
+          try {
+            await invoke('open_in_explorer', { path: '' });
+          } catch (err) {
+            console.warn('Could not reveal workspace root:', err);
+          }
+        }
+      },
+      {
+        label: 'Collapse All Folders',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/></svg>',
+        action: () => {
+          document.getElementById('btn-collapse-folders')?.click();
         }
       }
     );
