@@ -5,6 +5,7 @@
 // ==========================================================================
 
 import { state, notify } from '../state/store.js';
+import { getActiveEvidenceLedger } from './evidence-engine.js';
 
 /**
  * Evaluates whether a user request is direct (localized) or complex (multi-step/subsystem).
@@ -268,6 +269,17 @@ export function updateTaskState(plan, taskId, newStatus, evidence = '', notes = 
       };
     }
     task.evidence = cleanEv;
+    try {
+      const ledger = getActiveEvidenceLedger();
+      if (ledger) {
+        const cal = ledger.computeCalibration(cleanEv, task.objective);
+        task.calibration = {
+          psi: cal.psi,
+          status: cal.status,
+          label: cal.label,
+        };
+      }
+    } catch (_) {}
   }
 
   task.status = newStatus;

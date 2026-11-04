@@ -8,6 +8,7 @@ import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
 import { handleLikeResponse, handleDislikeResponse, getFeedbackDirectivesForPrompt, getFeedbackData } from '../services/feedback.js';
 import { openTaskListModal } from './task-list.js';
+import { getActiveEvidenceLedger, resetActiveEvidenceLedger, renderEvidenceBadge } from '../services/evidence-engine.js';
 import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
 import {
   isComplexRequest,
@@ -657,6 +658,7 @@ function regenerateFromAssistant(messageId) {
   import('./chat-sessions.js').then(m => m.saveActiveSession());
 
   state.conversation.push({ role: 'user', content: userText, timestamp: Date.now(), mid: newMessageId() });
+  resetActiveEvidenceLedger();
   isLoopRunning = true;
   setAgentBusy(true);
   runAgentLoop(userText)
@@ -1265,6 +1267,7 @@ export async function dispatchAgentTurn(messages, { onToken, onStatus, modelOver
   const tempRaw = parseFloat(s.temperature);
   const npRaw = parseInt(s.numPredict, 10);
   const numCtx = getEffectiveNumCtx();
+  const evidenceLedger = getActiveEvidenceLedger();
   const options = {
     numCtx: provider === 'ollama' ? numCtx : undefined,
     keepAlive: provider === 'ollama' ? (s.keepAlive || '30m') : undefined,
@@ -1554,6 +1557,13 @@ ${getFeedbackDirectivesForPrompt()}
   * The user's IDE requires the file written directly on disk. Call write_file(path="...", content="...").
   * In both AGENT_PRO mode and DEV mode, you are required to autonomously write files to disk using tools.
 
+## REASONING & EVIDENCE VALIDATION ENGINE (SCIENTIFIC CALIBRATION):
+- Verification Metric: ψ = min(ω_logic, ω_evidence). Deductive bound: ψ ≤ min(ω_logic, ω_evidence).
+- ω_logic (Logical Consistency): Proposed actions and assertions must be strictly non-contradictory. Never claim tests passed or builds succeeded unless verifiable exit codes or diagnostics confirmed it.
+- ω_evidence (Empirical Grounding): Always read or inspect files before editing/patching them. Verify changes using validate_changes or terminal commands before declaring success.
+- Assumption Detection: Distinguish verified facts from unconfirmed leaps. Never state that an unverified assumption is confirmed.
+- Honest Reporting: Calibrated status badges (✓ Verified, ⚡ Partially Grounded, ? Uncertain, ✗ Failed) are attached to your responses. Always maintain calibrated accuracy.
+
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 
 STRATEGY:
@@ -1635,7 +1645,8 @@ STRATEGY:
         liveCard.card.dataset.mid = assistantMid;
         if (turnThinking) renderThinkingSection(liveCard.card, turnThinking);
       }
-      liveCard?.finalize(finalText || (resp.cancelled ? '*(stopped)*' : ''));
+      const turnCalibration = evidenceLedger.computeCalibration(finalText, initialUserPrompt);
+      liveCard?.finalize(finalText || (resp.cancelled ? '*(stopped)*' : ''), turnCalibration);
     }
     if (liveCard?.card) {
       attachMessageActions(liveCard.card, {
@@ -1811,6 +1822,7 @@ STRATEGY:
       const toolResult = await processToolCallWithPolicy(toolCall);
       sessionStats.toolCounts[toolCall.name] = (sessionStats.toolCounts[toolCall.name] || 0) + 1;
       sessionToolTally[toolCall.name] = (sessionToolTally[toolCall.name] || 0) + 1;
+      evidenceLedger.recordToolCall(toolCall, toolResult);
       renderRichToolResult(toolCall, toolResult);
 
       // FIX 3: notify the explorer after any filesystem mutation so the
@@ -1877,7 +1889,11 @@ STRATEGY:
 
   // I3: end-of-run summary card
   if (sessionStats.turns > 0) {
-    appendSessionSummaryCard(sessionStats, iteration);
+    const finalCalibration = evidenceLedger.computeCalibration(
+      state.conversation.filter(m => m.role === 'assistant').slice(-1)[0]?.content || '',
+      initialUserPrompt
+    );
+    appendSessionSummaryCard(sessionStats, iteration, finalCalibration);
   }
   // K3: native notification when the window is hidden during a run
   window.dispatchEvent(new CustomEvent('orbital:agent-run-finished', { detail: { steps: iteration } }));
@@ -2035,7 +2051,7 @@ function estimateCostCents(provider, model, promptTokens, completionTokens) {
   return dollars * 100;
 }
 
-function appendSessionSummaryCard(stats, steps) {
+function appendSessionSummaryCard(stats, steps, calibration = null) {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return;
   const total = stats.promptTokens + stats.completionTokens;
@@ -2043,12 +2059,16 @@ function appendSessionSummaryCard(stats, steps) {
   const cost = estimateCostCents(state.ai.provider, state.ai.model, stats.promptTokens, stats.completionTokens);
   const topTools = Object.entries(stats.toolCounts).sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([n, c]) => `${n}×${c}`).join(', ');
+  const evidenceBadge = calibration ? renderEvidenceBadge(calibration) : '';
 
   const card = document.createElement('div');
   card.className = 'session-summary-card';
   card.style.cssText = 'margin: 8px 0; padding: 8px 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-surface); font-size: 11px; color: var(--text-secondary); display: flex; flex-wrap: wrap; gap: 10px; align-items: center;';
   card.innerHTML = `
-    <strong style="color: var(--text-primary);">Session</strong>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <strong style="color: var(--text-primary);">Session</strong>
+      ${evidenceBadge}
+    </div>
     <span>${stats.turns} turns · ${steps} steps</span>
     <span>${total.toLocaleString()} tokens (${stats.promptTokens.toLocaleString()} in / ${stats.completionTokens.toLocaleString()} out)</span>
     ${stats.lastTps ? `<span>${stats.lastTps} tok/s</span>` : ''}
@@ -2299,6 +2319,12 @@ async function processToolCallWithPolicy(toolCall) {
   if (!args || typeof args !== 'object') args = {};
 
   const target = args.path || args.file_path || args.command || args.query || (args.paths ? `${args.paths.length} files` : "");
+
+  // Pre-tool Grounding & Safety Check (Scientific Evidence Validation)
+  const preCheck = getActiveEvidenceLedger().evaluatePreToolSafety(name, args);
+  if (preCheck && !preCheck.grounded && preCheck.advisory) {
+    console.warn(`[Evidence Validation] ${preCheck.advisory}`);
+  }
 
   // 1. Evaluate policy in Rust
   const decision = await invoke('evaluate_tool_policy', {
@@ -2952,11 +2978,22 @@ function beginStreamingCard() {
       if (bodyEl) bodyEl.textContent = acc || message;
       if (statusEl) statusEl.textContent = '';
     },
-    finalize(fullText) {
+    finalize(fullText, calibration = null) {
       if (raf) cancelAnimationFrame(raf);
       if (statusEl) statusEl.textContent = '';
       card.classList.remove('streaming');
       if (bodyEl) bodyEl.remove();
+      if (calibration) {
+        const headerLeft = card.querySelector('.timeline-card-header > div');
+        if (headerLeft) {
+          const badgeHtml = renderEvidenceBadge(calibration);
+          if (badgeHtml) {
+            const badgeSpan = document.createElement('span');
+            badgeSpan.innerHTML = badgeHtml;
+            headerLeft.appendChild(badgeSpan.firstElementChild);
+          }
+        }
+      }
       const md = document.createElement('div');
       md.className = 'timeline-card-body';
       md.innerHTML = formatMarkdown(fullText);
@@ -2986,12 +3023,14 @@ export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}
   const providerMeta = role === 'assistant'
     ? `<span style="font-size: 10px; opacity: 0.7; font-weight: normal; margin-left: 6px;">• ${escapeHtml(state.ai.provider)} (${escapeHtml(state.ai.model || 'default')})</span>`
     : '';
+  const evidenceBadgeHtml = (role === 'assistant' && opts.calibration) ? renderEvidenceBadge(opts.calibration) : '';
 
   card.innerHTML = `
     <div class="timeline-card-header">
       <div style="display: flex; align-items: center; gap: 6px;">
         <span class="timeline-author-badge ${badgeClass}">${badgeLabel}</span>
         ${providerMeta}
+      ${evidenceBadgeHtml}
       </div>
       <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${relativeTime}</span>
     </div>
@@ -3293,7 +3332,9 @@ export function updatePlanTaskInDOM(plan, taskId, status, evidence) {
   }
 
   if (evidenceEl && evidence) {
-    evidenceEl.textContent = `✓ ${evidence}`;
+    const taskObj = plan.tasks?.find(t => t.id === taskId);
+    const psiNote = taskObj?.calibration ? ` <span style="font-size: 9px; opacity: 0.85; font-family: monospace;">(ψ=${taskObj.calibration.psi})</span>` : '';
+    evidenceEl.innerHTML = `✓ ${escapeHtml(evidence)}${psiNote}`;
     evidenceEl.style.display = 'block';
   }
 
