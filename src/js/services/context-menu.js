@@ -6,6 +6,7 @@
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { showToast } from './notifications.js';
+import { getExplorerClipboard, cutEntry, copyEntry, pasteEntry } from '../components/file-tree.js';
 
 let activeMenu = null;
 let outsideClickListener = null;
@@ -340,6 +341,30 @@ function handleTreeContextMenu(nodeEl, x, y) {
           }
         }
       },
+      
+      { separator: true },
+      {
+        label: 'Cut',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+        shortcut: 'Ctrl+X',
+        action: () => cutEntry(path, isDir)
+      },
+      {
+        label: 'Copy',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+        shortcut: 'Ctrl+C',
+        action: () => copyEntry(path, isDir)
+      },
+      {
+        label: 'Paste',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
+        shortcut: 'Ctrl+V',
+        disabled: !getExplorerClipboard(),
+        action: () => {
+          const targetDir = isDir ? path : (path ? path.split('/').slice(0, -1).join('/') : '');
+          pasteEntry(targetDir);
+        }
+      },
       { separator: true },
       {
         label: 'Copy Path',
@@ -397,7 +422,15 @@ function handleTreeContextMenu(nodeEl, x, y) {
           }
         }
       },
-      {
+            {
+        label: 'Paste',
+        icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>',
+        shortcut: 'Ctrl+V',
+        disabled: !getExplorerClipboard(),
+        action: () => pasteEntry('')
+      },
+      { separator: true },
+{
         label: 'Refresh Explorer',
         action: () => {
           import('../components/file-tree.js').then(f => f.refreshFileTree());

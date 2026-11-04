@@ -129,6 +129,22 @@ pub struct WorkspaceService {
     pub active_turn_meta: Option<(String, String, usize, u64)>,
 }
 
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst_path)?;
+        } else {
+            fs::copy(entry.path(), dst_path)?;
+        }
+    }
+    Ok(())
+}
+
 impl WorkspaceService {
     pub fn new() -> Self {
         Self {
@@ -668,6 +684,30 @@ impl WorkspaceService {
 
     /// Read a specific line range from a file (1-indexed, inclusive).
     /// Returns lines with line numbers prepended — saves context when working on large files.
+        /// Copy a file or directory recursively within the workspace.
+    pub fn copy_entry(&mut self, from_str: &str, to_str: &str) -> Result<String, String> {
+        let from_path = self.resolve_and_validate(from_str)?;
+        let to_path = self.resolve_and_validate(to_str)?;
+        if !from_path.exists() {
+            return Err(format!("Source not found: {}", from_str));
+        }
+        if from_path == to_path {
+            return Err("Cannot copy a path onto itself".to_string());
+        }
+        if let Some(parent) = to_path.parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        if from_path.is_dir() {
+            if to_path.starts_with(&from_path) {
+                return Err("Cannot copy directory into its own subdirectory".to_string());
+            }
+            copy_dir_recursive(&from_path, &to_path).map_err(|e| e.to_string())?;
+        } else {
+            fs::copy(&from_path, &to_path).map_err(|e| e.to_string())?;
+        }
+        Ok(format!("Copied {} -> {}", from_str, to_str))
+    }
+
     pub fn read_file_lines(&self, path_str: &str, start_line: usize, end_line: usize) -> Result<serde_json::Value, String> {
         let full_path = self.resolve_and_validate(path_str)?;
         let root = self.root.as_ref().unwrap();
@@ -1601,6 +1641,29 @@ impl WorkspaceService {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_copy_entry_file_and_dir() {
+        let mut ws = WorkspaceService::new();
+        let temp = std::env::temp_dir().join(format!("orbital_copy_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp);
+        ws.set_root(&temp.to_string_lossy()).unwrap();
+
+        // 1. Copy file
+        ws.write_file("source.txt", "hello copy", "test").unwrap();
+        ws.copy_entry("source.txt", "dest/nested/copy.txt").unwrap();
+        let content = fs::read_to_string(temp.join("dest/nested/copy.txt")).unwrap();
+        assert_eq!(content, "hello copy");
+
+        // 2. Copy dir
+        ws.write_file("my_folder/file1.txt", "f1", "test").unwrap();
+        ws.write_file("my_folder/sub/file2.txt", "f2", "test").unwrap();
+        ws.copy_entry("my_folder", "backup_folder").unwrap();
+        assert_eq!(fs::read_to_string(temp.join("backup_folder/file1.txt")).unwrap(), "f1");
+        assert_eq!(fs::read_to_string(temp.join("backup_folder/sub/file2.txt")).unwrap(), "f2");
+
+        let _ = fs::remove_dir_all(&temp);
+    }
+
     use super::*;
 
     #[test]

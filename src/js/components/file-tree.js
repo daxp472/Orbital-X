@@ -964,9 +964,133 @@ function refreshTreeAfterMutation() {
   document.getElementById('btn-refresh-files')?.click();
 }
 
+
 // ---------------------------------------------------------------
-// L1: drag & drop move (via rename_file) — wired onto directory rows as
-// drop targets and file/folder rows as drag sources.
+// Explorer Clipboard (Cut, Copy, Paste) & Native Move/Copy IPC
+// ---------------------------------------------------------------
+
+let explorerClipboard = null; // { path: string, isDir: boolean, op: 'cut' | 'copy' }
+
+export function getExplorerClipboard() {
+  return explorerClipboard;
+}
+
+export function cancelCut() {
+  document.querySelectorAll('.tree-node.cut-pending').forEach(el => el.classList.remove('cut-pending'));
+}
+
+export function cutEntry(path, isDir) {
+  if (!path) return;
+  cancelCut();
+  explorerClipboard = { path, isDir: !!isDir, op: 'cut' };
+  const row = document.querySelector(`.tree-node[data-path="${CSS.escape(path)}"]`);
+  if (row) row.classList.add('cut-pending');
+  showToast(`Cut "${path.split('/').pop()}". Navigate and Paste (Ctrl+V) or Esc to cancel.`, 'info', 2200);
+}
+
+export function copyEntry(path, isDir) {
+  if (!path) return;
+  cancelCut();
+  explorerClipboard = { path, isDir: !!isDir, op: 'copy' };
+  showToast(`Copied "${path.split('/').pop()}" to clipboard (Ctrl+V to paste).`, 'info', 1800);
+}
+
+export async function pasteEntry(targetDir) {
+  if (!explorerClipboard) {
+    showToast('Clipboard is empty. Copy or cut a file first.', 'info', 1600);
+    return;
+  }
+  const { path: srcPath, isDir, op } = explorerClipboard;
+  const cleanTarget = (targetDir || '').replace(/^[\\/]+|[\\/]+$/g, '');
+  const basename = srcPath.split(/[\\/]/).pop();
+
+  if (isDir && cleanTarget && (cleanTarget === srcPath || cleanTarget.startsWith(srcPath + '/'))) {
+    showToast('Cannot paste a directory into itself or its own subdirectory.', 'error', 2600);
+    return;
+  }
+
+  let destPath = cleanTarget ? `${cleanTarget}/${basename}` : basename;
+
+  try {
+    if (op === 'cut') {
+      if (destPath === srcPath) {
+        showToast('Source and destination are identical.', 'warning', 1800);
+        return;
+      }
+      await invoke('move_workspace_entry', { from: srcPath, to: destPath });
+      showToast(`Moved "${basename}" to ${cleanTarget || 'workspace root'}`, 'success', 2200);
+      cancelCut();
+      explorerClipboard = null;
+    } else {
+      if (destPath === srcPath) {
+        if (isDir) {
+          destPath = cleanTarget ? `${cleanTarget}/${basename}_copy` : `${basename}_copy`;
+        } else {
+          const parts = basename.split('.');
+          if (parts.length > 1) {
+            const ext = parts.pop();
+            destPath = cleanTarget ? `${cleanTarget}/${parts.join('.')}_copy.${ext}` : `${parts.join('.')}_copy.${ext}`;
+          } else {
+            destPath = cleanTarget ? `${cleanTarget}/${basename}_copy` : `${basename}_copy`;
+          }
+        }
+      }
+      await invoke('copy_workspace_entry', { from: srcPath, to: destPath });
+      showToast(`Copied "${basename}" to ${cleanTarget || 'workspace root'}`, 'success', 2200);
+    }
+    refreshTreeAfterMutation();
+  } catch (err) {
+    showToast(`Paste failed: ${err}`, 'error', 3200);
+  }
+}
+
+function wireExplorerKeyboardShortcuts() {
+  window.addEventListener('keydown', (e) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.closest('.monaco-editor')) {
+      return;
+    }
+
+    const selectedRow = document.querySelector('.tree-node.selected');
+    const isExplorerFocused = document.activeElement?.closest('#view-explorer') || selectedRow;
+
+    if (e.key === 'Escape') {
+      if (explorerClipboard?.op === 'cut') {
+        cancelCut();
+        explorerClipboard = null;
+        showToast('Cut cancelled', 'info', 1400);
+      }
+      return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && isExplorerFocused) {
+      const path = selectedRow?.dataset.path;
+      const isDir = selectedRow?.dataset.isDir === 'true';
+
+      if (e.key === 'c' || e.key === 'C') {
+        if (path) {
+          e.preventDefault();
+          copyEntry(path, isDir);
+        }
+      } else if (e.key === 'x' || e.key === 'X') {
+        if (path) {
+          e.preventDefault();
+          cutEntry(path, isDir);
+        }
+      } else if (e.key === 'v' || e.key === 'V') {
+        if (explorerClipboard) {
+          e.preventDefault();
+          const targetDir = isDir ? path : (path ? path.split('/').slice(0, -1).join('/') : '');
+          pasteEntry(targetDir);
+        }
+      }
+    }
+  });
+}
+wireExplorerKeyboardShortcuts();
+
+// ---------------------------------------------------------------
+// Enhanced Drag & Drop (Folders, Files, and Root Drops)
 // ---------------------------------------------------------------
 
 function wireTreeDragDrop() {
@@ -974,53 +1098,86 @@ function wireTreeDragDrop() {
   if (!host || host.dataset.dndWired) return;
   host.dataset.dndWired = '1';
 
+  let draggedSrcPath = null;
+  let draggedIsDir = false;
+
   host.addEventListener('dragstart', (e) => {
     const row = e.target.closest('.tree-node');
     if (!row?.dataset.path) return;
+    draggedSrcPath = row.dataset.path;
+    draggedIsDir = row.dataset.isDir === 'true';
     e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', row.dataset.path); } catch (err) { /* IE */ }
+    try {
+      e.dataTransfer.setData('text/plain', row.dataset.path);
+    } catch (_) {}
     row.classList.add('dragging');
   });
-  host.addEventListener('dragend', (e) => {
+
+  host.addEventListener('dragend', () => {
+    draggedSrcPath = null;
+    draggedIsDir = false;
     host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('dragging', 'drop-into'));
+    document.getElementById('file-tree-container')?.classList.remove('drop-root');
   });
+
   host.addEventListener('dragover', (e) => {
-    const row = e.target.closest('.tree-node');
-    if (!row?.dataset.path) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('drop-into'));
-    row.classList.add('drop-into');
-  });
-  host.addEventListener('drop', async (e) => {
+
     const row = e.target.closest('.tree-node');
-    if (!row?.dataset.path) return;
+    const container = e.target.closest('#file-tree-container') || e.target.closest('#view-explorer');
+
+    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('drop-into'));
+    document.getElementById('file-tree-container')?.classList.remove('drop-root');
+
+    if (row && row.dataset.path) {
+      row.classList.add('drop-into');
+    } else if (container) {
+      document.getElementById('file-tree-container')?.classList.add('drop-root');
+    }
+  });
+
+  host.addEventListener('drop', async (e) => {
     e.preventDefault();
-    const srcPath = e.dataTransfer.getData('text/plain');
-    const destDir = row.dataset.path;
-    const rowIsDir = row.dataset.isDir === 'true';
-    if (!srcPath || !rowIsDir) return;
-    if (destDir === srcPath || destDir.startsWith(srcPath + '/') || destDir.startsWith(srcPath + '\\')) {
-      showToast('Cannot move a folder into itself', 'warning', 2500);
+    host.querySelectorAll('.tree-node').forEach(r => r.classList.remove('dragging', 'drop-into'));
+    document.getElementById('file-tree-container')?.classList.remove('drop-root');
+
+    const srcPath = draggedSrcPath || e.dataTransfer.getData('text/plain');
+    if (!srcPath) return;
+
+    const row = e.target.closest('.tree-node');
+    let destDir = '';
+
+    if (row && row.dataset.path) {
+      const rowIsDir = row.dataset.isDir === 'true';
+      destDir = rowIsDir ? row.dataset.path : (row.dataset.path.split('/').slice(0, -1).join('/') || '');
+    } else {
+      // Empty explorer area / container: move to workspace root (taking out of a folder)
+      destDir = '';
+    }
+
+    if (draggedIsDir && destDir && (destDir === srcPath || destDir.startsWith(srcPath + '/'))) {
+      showToast('Cannot move a directory into itself or its own subfolder', 'warning', 2500);
       return;
     }
-    const newName = srcPath.split(/[\\/]/).pop();
-    const target = `${destDir}/${newName}`;
-    if (target === srcPath) return;
+
+    const basename = srcPath.split(/[\\/]/).pop();
+    const destPath = destDir ? `${destDir}/${basename}` : basename;
+
+    if (destPath === srcPath) return;
+
     try {
-      await invoke('execute_tool', {
-        name: 'rename_file',
-        arguments: { from: srcPath, to: target },
-        mode: 'dev',
-      });
-      showToast(`Moved to ${target}`, 'success', 2400);
+      await invoke('move_workspace_entry', { from: srcPath, to: destPath });
+      showToast(`Moved "${basename}" to ${destDir || 'workspace root'}`, 'success', 2200);
       refreshTreeAfterMutation();
     } catch (err) {
-      showToast(`Move failed: ${err}`, 'error', 3200);
+      showToast(`Move failed: ${err}`, 'error', 3000);
     }
   });
 }
+
 setTimeout(wireTreeDragDrop, 800);
+
 
 // ---------------------------------------------------------------
 // L4: properties panel + extended context menu items

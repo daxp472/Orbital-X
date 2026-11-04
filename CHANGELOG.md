@@ -6,6 +6,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.3.2] — 2026-11-04
+
+### Added & Upgraded
+- **Explorer Cut, Copy, and Paste Operations:** Native file and folder copying and moving with recursive subdirectories, right-click context menu actions, and standard keyboard shortcuts (Ctrl+X, Ctrl+C, Ctrl+V, Esc).
+- **Drag & Drop Inside Explorer:** Move files and directories into folders or drop into empty tree space to move them to the workspace root.
+- **Task List Inspector (Done & What's Next):** Interactive roadmap modal to inspect completed tasks (with verification evidence), active steps (in progress), and upcoming milestones, accessible via sticky task bar or composer chips.
+- **AI Response Feedback & Happy Counter:** Rate AI responses with 👍 or 👎 (enforced one-rating limit), live happy response tally, and diagnostic MCQ box for dislikes that re-loops directives into future agent turns.
+
+---
+
 ## [v2.3.1] — 2026-11-03
 
 ### Added & Upgraded

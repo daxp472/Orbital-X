@@ -121,6 +121,18 @@ fn save_boilerplate_settings(settings: boilerplate::BoilerplateSettings) -> Resu
 }
 
 #[tauri::command]
+fn copy_workspace_entry(from: String, to: String, state: State<'_, AppState>) -> Result<String, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.copy_entry(&from, &to)
+}
+
+#[tauri::command]
+fn move_workspace_entry(from: String, to: String, state: State<'_, AppState>) -> Result<String, String> {
+    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    ws.rename_file(&from, &to)
+}
+
+#[tauri::command]
 fn create_directory(path: String, state: State<'_, AppState>) -> Result<(), String> {
     let ws = state.workspace.lock().map_err(|e| e.to_string())?;
     ws.create_directory(&path)
@@ -769,6 +781,13 @@ async fn execute_tool(
             } else {
                 Err("Missing 'paths' or 'manifest_id' for batch_delete_files".into())
             }
+        }
+                "copy_file" => {
+            let from = arguments.get("from").and_then(|p| p.as_str()).ok_or("Missing from")?;
+            let to = arguments.get("to").and_then(|p| p.as_str()).ok_or("Missing to")?;
+            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            let msg = ws.copy_entry(from, to)?;
+            Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "rename_file" => {
             let from = arguments.get("from").and_then(|p| p.as_str()).ok_or("Missing from")?;
@@ -1764,7 +1783,7 @@ fn detect_gpus() -> Vec<GpuInfo> {
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.1")
+        .user_agent("OrbitalX-IDE/2.3.2")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1830,7 +1849,7 @@ async fn download_update(
     use futures_util::StreamExt;
 
     let client = reqwest::Client::builder()
-        .user_agent("OrbitalX-IDE/2.3.1")
+        .user_agent("OrbitalX-IDE/2.3.2")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client.get(&url).send().await.map_err(|e| format!("Download failed: {}", e))?;
@@ -2007,7 +2026,7 @@ fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), Stri
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.1")
+        .user_agent("OrbitalX-IDE/2.3.2")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -2167,6 +2186,8 @@ pub fn run() {
             read_file,
             save_file,
             create_directory,
+            copy_workspace_entry,
+            move_workspace_entry,
             get_file_diff,
             undo_agent_change,
             search_workspace,

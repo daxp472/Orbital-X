@@ -127,7 +127,7 @@ function createHudModal() {
       <!-- Main Body -->
       <div style="padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;">
         <!-- Metrics Cards Grid -->
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
           <div style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 8px; padding: 12px;">
             <div style="font-size: 11px; text-transform: uppercase; color: #00e5ff; letter-spacing: 0.5px; font-weight: 600;">Tokens / Sec</div>
             <div id="hud-val-tps" style="font-size: 24px; font-weight: 700; color: var(--text-primary); margin-top: 4px; font-family: monospace;">0.0</div>
@@ -246,6 +246,13 @@ function updateUI(data) {
     const elVram = document.getElementById('hud-val-vram');
     const elSubVram = document.getElementById('hud-sub-vram');
     const elCpu = document.getElementById('hud-val-cpu');
+    const elHappy = document.getElementById('hud-val-happy');
+    if (elHappy) {
+      try {
+        const fb = JSON.parse(localStorage.getItem('orbital_feedback_stats') || '{}');
+        elHappy.textContent = `${fb.totalLiked || 0} 👍`;
+      } catch (_) {}
+    }
     const elRam = document.getElementById('hud-val-ram');
     const elSubRam = document.getElementById('hud-sub-ram');
     const elGpuName = document.getElementById('hud-gpu-name');

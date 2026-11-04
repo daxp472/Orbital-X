@@ -6,6 +6,8 @@ import { state, notify, persistState } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { openDiffModal, openFileInTab } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
+import { handleLikeResponse, handleDislikeResponse, getFeedbackDirectivesForPrompt, getFeedbackData } from '../services/feedback.js';
+import { openTaskListModal } from './task-list.js';
 import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
 import {
   isComplexRequest,
@@ -278,6 +280,12 @@ function initChatDropZone() {
     });
   }
 
+  
+  // Wire Task List Inspector triggers
+  document.getElementById('task-sticky-view-btn')?.addEventListener('click', openTaskListModal);
+  document.querySelector('#composer-task-sticky-bar .task-sticky-left')?.addEventListener('click', openTaskListModal);
+  document.getElementById('chip-task-list')?.addEventListener('click', openTaskListModal);
+
   const stickyCancelBtn = document.getElementById('task-sticky-cancel-btn');
   if (stickyCancelBtn) {
     stickyCancelBtn.addEventListener('click', async () => {
@@ -497,6 +505,28 @@ function attachMessageActions(card, { role, messageId, getText, onEdit, onRegene
   buttons.push(`<button class="msg-action" data-act="speak" title="Read aloud" aria-label="Read aloud">${ICON_SVG.speak}</button>`);
 
   bar.innerHTML = buttons.join('');
+  
+  // Highlight existing rating if already rated
+  try {
+    const fbData = getFeedbackData();
+    const priorRating = fbData.ratings[messageId];
+    if (priorRating === 'up') {
+      const upBtn = bar.querySelector('.msg-action[data-act="up"]');
+      if (upBtn) {
+        upBtn.classList.add('liked');
+        upBtn.style.color = '#22c55e';
+        upBtn.style.filter = 'drop-shadow(0 0 6px rgba(34, 197, 94, 0.6))';
+      }
+    } else if (priorRating === 'down') {
+      const downBtn = bar.querySelector('.msg-action[data-act="down"]');
+      if (downBtn) {
+        downBtn.classList.add('disliked');
+        downBtn.style.color = '#ef4444';
+        downBtn.style.filter = 'drop-shadow(0 0 6px rgba(239, 68, 68, 0.6))';
+      }
+    }
+  } catch (_) {}
+
   card.appendChild(bar);
 
   bar.addEventListener('click', (e) => {
@@ -511,9 +541,9 @@ function attachMessageActions(card, { role, messageId, getText, onEdit, onRegene
     } else if (act === 'regen') {
       onRegenerate();
     } else if (act === 'up') {
-      recordFeedback(messageId, 'up');
+      handleLikeResponse(messageId, card);
     } else if (act === 'down') {
-      recordFeedback(messageId, 'down');
+      handleDislikeResponse(messageId, card, getText());
     } else if (act === 'speak') {
       readAloud(getText());
     }
@@ -1507,6 +1537,8 @@ Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath ||
 - Conversational & Welcoming Persona:
   * When users or curious non-programmers ask who you are, who built you, what this app is, how it works under the hood, or just want general conversation, be friendly, welcoming, clear, enthusiastic, and helpful.
   * Explain your capabilities and guide them on what they can do with Orbital X (coding, exploring files, running terminals, testing, or having offline conversations).
+
+${getFeedbackDirectivesForPrompt()}
 
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 
@@ -3184,6 +3216,12 @@ export function renderPlanCard(plan) {
 
 export function updatePlanTaskInDOM(plan, taskId, status, evidence) {
   if (!plan) return;
+  try {
+    localStorage.setItem('orbital_last_plan', JSON.stringify({
+      ...plan,
+      filesModified: Array.from(plan.filesModified || [])
+    }));
+  } catch (_) {}
   const taskEl = document.getElementById(`${plan.id}_task_${taskId}`);
   const dotEl = document.getElementById(`${plan.id}_dot_${taskId}`);
   const evidenceEl = document.getElementById(`${plan.id}_evidence_${taskId}`);

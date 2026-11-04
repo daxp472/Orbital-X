@@ -472,6 +472,31 @@
   color: #ffffff;
 }
 
+
+/* Cut pending, Drag & Drop indicator styles */
+.tree-node.cut-pending {
+  opacity: 0.45 !important;
+  outline: 1px dashed var(--accent-cyan) !important;
+  outline-offset: -1px;
+}
+
+.tree-node.dragging {
+  opacity: 0.35 !important;
+  background-color: rgba(56, 189, 248, 0.12) !important;
+}
+
+.tree-node.drop-into {
+  background-color: rgba(57, 197, 187, 0.22) !important;
+  outline: 1px solid var(--accent-cyan) !important;
+  outline-offset: -1px;
+  color: #ffffff !important;
+}
+
+#file-tree-container.drop-root {
+  outline: 1px dashed var(--accent-cyan) !important;
+  background-color: rgba(57, 197, 187, 0.06) !important;
+}
+
 .tree-node.selected {
   background-color: rgba(56, 189, 248, 0.16);
   color: #ffffff;
