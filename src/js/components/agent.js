@@ -846,10 +846,17 @@ async function handleSend() {
   invoke('record_agent_turn_start', { turnId: userMid, prompt: promptText }).catch(() => {});
 
   try {
+    // If the prompt explicitly asks to write/create code in a file, enrich prompt with directive
+    let effectivePrompt = promptText;
+    const isFileWriteRequest = /\b(write|create|save|put|add|generate|make)\b.*?\b(into|in|to|file)?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i.test(promptText);
+    if (isFileWriteRequest && !effectivePrompt.includes('write_file')) {
+      effectivePrompt += ' (Instruction: You must use the write_file tool to write this file directly to disk.)';
+    }
+
     if (isComplexRequest(promptText)) {
       await generateAndPresentPlan(promptText);
     } else {
-      await runAgentLoop(promptText);
+      await runAgentLoop(effectivePrompt);
     }
   } catch (err) {
     console.error("Agent error:", err);
@@ -1540,6 +1547,13 @@ Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath ||
 
 ${getFeedbackDirectivesForPrompt()}
 
+## MANDATORY RULE: NEVER WRITE CODE INTO CHAT RESPONSES — ALWAYS CALL FILE TOOLS
+- When instructed to write, create, generate, modify, or update code or files (e.g. "write code into test.md", "create file", "write 400 lines into file"):
+  * YOU MUST CALL THE \`write_file\` OR \`patch_file\` TOOL DIRECTLY.
+  * DO NOT output the code as a markdown block in the chat response. Putting code in chat does NOT write the file to the user's workspace.
+  * The user's IDE requires the file written directly on disk. Call write_file(path="...", content="...").
+  * In both AGENT_PRO mode and DEV mode, you are required to autonomously write files to disk using tools.
+
 TOOLS: You have function-calling tools for the workspace (structure, search, symbol lookup, reading, writing, patching, deletion, git, validation, diagnostics, task status and project memory). ALWAYS call tools to act — never narrate what you would do, and never print tool-call JSON as text.
 
 STRATEGY:
@@ -1713,6 +1727,42 @@ STRATEGY:
       const hasStrongDoneSignal =
         /\b(task complete|all done|completed successfully|nothing more to do|the (task|project|portfolio|app|application|website) is (now )?(complete|done|finished|ready))\b/i.test(finalText) ||
         /^\s*(done|finished|complete)\s*[.!]?\s*$/im.test(finalText);
+
+      // Safety Interceptor: If model output code blocks into chat instead of calling write_file
+      const codeBlockMatches = [...finalText.matchAll(/```(?:[a-zA-Z0-9_\-]+)?\n([\s\S]+?)```/g)];
+      const fileTargetMatch =
+        (initialUserPrompt && initialUserPrompt.match(/\b(?:into|in|to|file|create|write)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i)) ||
+        (finalText && finalText.match(/\b(?:into|in|to|file|here is|here's)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i)) ||
+        (activeTask?.files && activeTask.files[0] ? [null, activeTask.files[0]] : null);
+
+      if (codeBlockMatches.length > 0 && fileTargetMatch) {
+        const targetPath = fileTargetMatch[1].replace(/^[/"']+|[/"']+$/g, '');
+        const longestCode = codeBlockMatches.reduce((a, b) => (b[1].length > a.length ? b[1] : a), '');
+        if (longestCode && targetPath) {
+          console.log(`[Agent Loop] Intercepted code block for file "${targetPath}". Auto-writing to disk...`);
+          try {
+            await invoke('save_file', {
+              path: targetPath,
+              content: longestCode,
+              description: `Auto-saved generated code to ${targetPath}`
+            });
+            showToast(`✓ Written directly to ${targetPath}`, 'success', 3000);
+            sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
+            
+            import('./file-tree.js').then(f => f.refreshFileTree());
+            const fileData = await invoke('read_file', { path: targetPath });
+            import('../editor/monaco.js').then(m => m.openFileInTab(fileData));
+            activeExecutionMemory.completedActions.push(`Created/updated file ${targetPath} with generated code.`);
+            
+            if (activeTask) {
+              updateTaskState(plan, activeTask.id, 'completed', `Successfully written code to ${targetPath}`);
+            }
+            break;
+          } catch (err) {
+            console.error(`Failed to auto-write code to ${targetPath}:`, err);
+          }
+        }
+      }
 
       // If the model asked a question OR this was a purely conversational answer with no tools called,
       // end the agent turn immediately and wait for the user. Never force-nudge a conversation into tools!
@@ -3119,10 +3169,8 @@ export async function generateAndPresentPlan(rawPrompt, revisionFeedback = null)
 
   const card = renderPlanCard(plan);
 
-  // Agent Pro mode: auto-approve and execute autonomous plan
-  if (state.agentMode === 'agent_pro') {
-    executePlanPhases(plan, card);
-  }
+  // In both Dev Mode and Agent Pro Mode: render plan card in Pending Approval
+  // and wait for the user to review and click "Approve & Execute".
 }
 
 export function renderPlanCard(plan) {
