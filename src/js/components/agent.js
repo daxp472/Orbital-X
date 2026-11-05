@@ -683,15 +683,15 @@ function updateModeTooltip() {
 function openAttachmentMenu(e) {
   document.getElementById('attachment-menu')?.remove();
   const menu = document.createElement('div');
-  menu.className = 'tree-context-menu';
+  menu.className = 'orbital-context-menu';
   menu.id = 'attachment-menu';
   const items = [
-    { label: 'Current file', icon: '📄', kind: 'current-file' },
-    { label: 'File by path…', icon: '🗂️', kind: 'file' },
-    { label: 'Code selection', icon: '✂️', kind: 'selection' },
-    { label: 'Terminal output (last 60 lines)', icon: '❯_', kind: 'terminal' },
-    { label: 'Git diff', icon: '⑂', kind: 'git-diff' },
-    { label: 'Folder tree', icon: '📁', kind: 'folder' },
+    { label: 'Current file', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', kind: 'current-file' },
+    { label: 'File by path…', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', kind: 'file' },
+    { label: 'Code selection', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>', kind: 'selection' },
+    { label: 'Terminal output', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>', kind: 'terminal' },
+    { label: 'Git diff', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>', kind: 'git-diff' },
+    { label: 'Folder tree', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>', kind: 'folder' },
   ];
   for (const item of items) {
     const row = document.createElement('div');
@@ -1758,6 +1758,7 @@ STRATEGY:
               description: `Auto-saved generated code to ${targetPath}`
             });
             showToast(`✓ Written directly to ${targetPath}`, 'success', 3000);
+            window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: targetPath } }));
             sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
             
             import('./file-tree.js').then(f => f.refreshFileTree());
@@ -1828,7 +1829,7 @@ STRATEGY:
       // FIX 3: notify the explorer after any filesystem mutation so the
       // tree refreshes automatically — no manual reload needed
       if (['write_file', 'patch_file', 'delete_file', 'delete_directory', 'rename_file', 'create_directory', 'batch_delete_files'].includes(toolCall.name)) {
-        window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name } }));
+        window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name, path: toolCall.arguments?.path } }));
       }
 
       // FIX 4: auto-save a progress memory milestone when the agent writes

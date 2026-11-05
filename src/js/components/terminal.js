@@ -419,11 +419,7 @@ export function initTerminal() {
     focusActiveTerminalInput();
   });
 
-  // E6: right-click context menu on the terminal output
-  document.getElementById('tab-content-terminal')?.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    showTerminalContextMenu(e.clientX, e.clientY);
-  });
+  // Terminal context menu is handled globally by unified context-menu service
 
   document.getElementById('btn-run-all-tests')?.addEventListener('click', runValidationTests);
 

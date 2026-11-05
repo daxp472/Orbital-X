@@ -44,6 +44,11 @@ function injectStatusBarPill() {
     <span style="color: #00e5ff;">⚡</span>
     <span id="sb-telemetry-tps" style="font-weight: 600; color: var(--text-primary);">0.0 tps</span>
     <span style="opacity: 0.4;">•</span>
+    <span id="sb-telemetry-ram" style="color: #38bdf8; display: inline-flex; align-items: center; gap: 3px;" title="Real-Time System RAM Usage">
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+      <span id="sb-telemetry-ram-text">0.0/0.0 GB RAM</span>
+    </span>
+    <span style="opacity: 0.4;">•</span>
     <span id="sb-telemetry-vram" style="color: #a78bfa;">0.0 GB VRAM</span>
     <span style="opacity: 0.4;">•</span>
     <span id="sb-telemetry-cpu">0% CPU</span>
@@ -211,7 +216,7 @@ function startBackgroundTelemetry(intervalMs) {
   pollerInterval = setInterval(pollTelemetry, intervalMs);
 }
 
-async function pollTelemetry() {
+export async function pollTelemetry() {
   try {
     const data = await invoke('get_live_telemetry', {
       ollamaUrl: state.ai.endpoint || 'http://localhost:11434',
@@ -234,11 +239,34 @@ function updateUI(data) {
 
   // Status Bar Pill
   const sbTps = document.getElementById('sb-telemetry-tps');
+  const sbRam = document.getElementById('sb-telemetry-ram-text');
   const sbVram = document.getElementById('sb-telemetry-vram');
   const sbCpu = document.getElementById('sb-telemetry-cpu');
+  const ramPercentVal = Math.round(data.ramPercent || 0);
+
   if (sbTps) sbTps.textContent = `${tpsFormatted} tps`;
-  if (sbVram) sbVram.textContent = `${vramGb}/${vramTotalGb} GB VRAM`;
+  if (sbRam) sbRam.textContent = `${ramGb}/${ramTotalGb} GB (${ramPercentVal}%)`;
+  if (sbVram) sbVram.textContent = `${vramGb} GB VRAM`;
   if (sbCpu) sbCpu.textContent = `${cpuPercent}% CPU`;
+
+  // Developer Settings live RAM gauge sync
+  const devRamText = document.getElementById('dev-ram-stats-text');
+  const devRamBar = document.getElementById('dev-ram-progress-bar');
+  const devRamFree = document.getElementById('dev-ram-free-text');
+  const devRamTotal = document.getElementById('dev-ram-total-text');
+  const devCpu = document.getElementById('dev-metric-cpu');
+  const devVram = document.getElementById('dev-metric-vram');
+  const devVramSub = document.getElementById('dev-metric-vram-sub');
+  const devTps = document.getElementById('dev-metric-tps');
+
+  if (devRamText) devRamText.textContent = `${ramGb} / ${ramTotalGb} GB (${ramPercentVal}%)`;
+  if (devRamBar) devRamBar.style.width = `${Math.min(100, Math.max(3, ramPercentVal))}%`;
+  if (devRamFree) devRamFree.textContent = `Free: ${((data.ramFreeMb || 0)/1024).toFixed(1)} GB`;
+  if (devRamTotal) devRamTotal.textContent = `Total: ${ramTotalGb} GB`;
+  if (devCpu) devCpu.textContent = `${cpuPercent}%`;
+  if (devVram) devVram.textContent = `${vramGb} GB`;
+  if (devVramSub) devVramSub.textContent = `${Math.round(data.vramPercent || 0)}% of ${vramTotalGb} GB`;
+  if (devTps) devTps.textContent = `${tpsFormatted} tps`;
 
   // HUD Modal
   if (isHudOpen) {

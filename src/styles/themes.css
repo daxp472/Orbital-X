@@ -297,3 +297,124 @@ body.theme-hc .modal-container {
   background-color: #000000;
   border: 2px solid #6fc3df;
 }
+
+
+/* ==========================================================================
+   Multi-Theme Polish: Buttons, Review Toolbar, and Developer Cards
+   ========================================================================== */
+
+/* Theme Light (Snow / Professional Daylight) */
+body.theme-light .dev-card,
+[data-theme="theme-light"] .dev-card,
+[data-theme="nebula-light"] .dev-card {
+  background: #ffffff;
+  border-color: #d0d7de;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+body.theme-light .dev-metric-box,
+[data-theme="theme-light"] .dev-metric-box,
+[data-theme="nebula-light"] .dev-metric-box {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+}
+
+body.theme-light .dev-status-pill.disabled,
+[data-theme="theme-light"] .dev-status-pill.disabled,
+[data-theme="nebula-light"] .dev-status-pill.disabled {
+  background: #ebedf0;
+  color: #57606a;
+  border-color: #d0d7de;
+}
+
+body.theme-light .review-changes-bar,
+[data-theme="theme-light"] .review-changes-bar,
+[data-theme="nebula-light"] .review-changes-bar {
+  background-color: #f6f8fa;
+  border-color: #d0d7de;
+  color: #24292f;
+}
+
+body.theme-light .review-btn,
+[data-theme="theme-light"] .review-btn,
+[data-theme="nebula-light"] .review-btn {
+  background: #ffffff;
+  border-color: #d0d7de;
+  color: #24292f;
+}
+
+body.theme-light .review-btn:hover,
+[data-theme="theme-light"] .review-btn:hover,
+[data-theme="nebula-light"] .review-btn:hover {
+  background: #0969da;
+  border-color: #0969da;
+  color: #ffffff;
+}
+
+body.theme-light .action-chip,
+[data-theme="theme-light"] .action-chip,
+[data-theme="nebula-light"] .action-chip {
+  background: #ffffff;
+  border-color: #d0d7de;
+  color: #24292f;
+}
+
+body.theme-light .action-chip:hover,
+[data-theme="theme-light"] .action-chip:hover,
+[data-theme="nebula-light"] .action-chip:hover {
+  background: #f3f4f6;
+  border-color: #0969da;
+}
+
+body.theme-light .security-card,
+[data-theme="theme-light"] .security-card,
+[data-theme="nebula-light"] .security-card {
+  background: #ffffff;
+  border-color: #d0d7de;
+}
+
+body.theme-light .security-card.active,
+[data-theme="theme-light"] .security-card.active,
+[data-theme="nebula-light"] .security-card.active {
+  border-color: #059669;
+  background: #f0fdf4;
+}
+
+/* Theme High Contrast (Accessibility) */
+body.theme-hc .dev-card,
+[data-theme="theme-hc"] .dev-card,
+[data-theme="high-contrast"] .dev-card {
+  background: #000000;
+  border: 2px solid #6fc3df;
+}
+
+body.theme-hc .dev-metric-box,
+[data-theme="theme-hc"] .dev-metric-box,
+[data-theme="high-contrast"] .dev-metric-box {
+  background: #000000;
+  border: 1px solid #6fc3df;
+}
+
+body.theme-hc .review-changes-bar,
+[data-theme="theme-hc"] .review-changes-bar,
+[data-theme="high-contrast"] .review-changes-bar {
+  background: #000000;
+  border: 2px solid #6fc3df;
+  color: #ffffff;
+}
+
+body.theme-hc .review-btn,
+[data-theme="theme-hc"] .review-btn,
+[data-theme="high-contrast"] .review-btn {
+  background: #000000;
+  border: 1px solid #ffff00;
+  color: #ffff00;
+}
+
+body.theme-hc .action-chip,
+[data-theme="theme-hc"] .action-chip,
+[data-theme="high-contrast"] .action-chip {
+  background: #000000;
+  border: 1px solid #6fc3df;
+  color: #ffffff;
+}

@@ -711,10 +711,11 @@ export function renderTabs(panel = 'left') {
       }
     });
 
-    // A2: context menu
+    // A2: unified context menu
     tabEl.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      showTabContextMenu(e.clientX, e.clientY, panel, tab);
+      e.stopPropagation();
+      import('../services/context-menu.js').then(c => c.handleTabContextMenu(tabEl, e.clientX, e.clientY));
     });
 
     // A1: drag & drop reordering
@@ -1292,70 +1293,10 @@ function dismissTabContextMenu() {
 
 function showTabContextMenu(x, y, panel, tab) {
   dismissTabContextMenu();
-  const menu = document.createElement('div');
-  menu.className = 'tree-context-menu tab-context-menu';
-  menu.id = 'orbital-tab-context-menu';
-  menu.addEventListener('contextmenu', (e) => e.preventDefault());
-
-  const p = panelState(panel);
-  const idx = p.tabs.findIndex(t => t.id === tab.id);
-  const othersCount = p.tabs.filter(t => t.id !== tab.id && !t.isPinned).length;
-  const rightCount = p.tabs.slice(idx + 1).filter(t => !t.isPinned).length;
-
-  const items = [
-    { label: 'Close Tab', icon: '✕', hint: 'Ctrl+W', enabled: true, action: () => closeTabInternal(tab.id, panel) },
-    { label: 'Close Other Tabs', icon: '🗙', enabled: othersCount > 0, action: () => { if (p.activeTabId !== tab.id) switchToTab(tab.id, panel); closeOthers(panel); } },
-    { label: 'Close Tabs to the Right', icon: '❯', enabled: rightCount > 0, action: () => closeToTheRight(panel, tab) },
-    { label: 'Close All Tabs', icon: '🗂️', enabled: p.tabs.some(t => !t.isPinned), action: () => closeAllTabs(panel) },
-    { type: 'separator' },
-    { label: tab.isPinned ? 'Unpin Tab' : 'Pin Tab', icon: '📌', action: () => { tab.isPinned = !tab.isPinned; persistTabSession(); renderTabs(panel); } },
-    { label: 'Copy File Path', icon: '📋', action: () => navigator.clipboard.writeText(tab.path) },
-    { label: 'Copy Relative Path', icon: '🔗', action: () => navigator.clipboard.writeText(tab.relativePath || tab.name) },
-    { label: 'Reveal in File Explorer', icon: '📂', action: async () => {
-      try {
-        await invoke('open_in_explorer', { path: tab.path });
-      } catch (e) { console.warn('Reveal failed:', e); }
-      // Also highlight in the sidebar tree
-      import('../components/file-tree.js').then(m => {
-        if (typeof m.revealPathInTree === 'function') m.revealPathInTree(tab.path);
-      });
-    } },
-    { label: 'Move to ' + (panel === 'left' ? 'Right' : 'Left') + ' Pane', icon: '⫲', enabled: state.editor.splitMode, action: () => moveTabToPanel(tab, panel, panel === 'left' ? 'right' : 'left') },
-    { type: 'separator' },
-    { label: 'Toggle Git Blame', icon: '👁', action: () => import('../components/source-control.js').then(m => m.toggleGitBlame()) },
-  ];
-
-  for (const item of items) {
-    if (item.type === 'separator') {
-      const sep = document.createElement('div');
-      sep.className = 'tree-context-separator';
-      menu.appendChild(sep);
-      continue;
-    }
-    const row = document.createElement('div');
-    row.className = 'tree-context-item' + (item.enabled === false ? ' disabled' : '');
-    row.innerHTML = `<span class="ctx-icon">${item.icon}</span><span class="ctx-label">${item.label}</span>${item.hint ? `<span class="ctx-hint">${item.hint}</span>` : ''}`;
-    if (item.enabled !== false) {
-      row.addEventListener('click', () => { dismissTabContextMenu(); item.action(); });
-    }
-    menu.appendChild(row);
+  const el = document.querySelector(`.tab[data-tab-id="${tab.id}"]`) || document.querySelector(`.tab[data-path="${tab.path}"]`);
+  if (el) {
+    import('../services/context-menu.js').then(c => c.handleTabContextMenu(el, x, y));
   }
-
-  document.body.appendChild(menu);
-  const menuRect = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(x, window.innerWidth - menuRect.width - 8)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - menuRect.height - 8)}px`;
-
-  setTimeout(() => {
-    const onDown = (e) => {
-      if (!menu.contains(e.target)) { dismissTabContextMenu(); document.removeEventListener('mousedown', onDown); }
-    };
-    const onKey = (e) => {
-      if (e.key === 'Escape') { dismissTabContextMenu(); document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onDown); }
-    };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
-  }, 0);
 }
 
 // ---------------------------------------------------------------------------

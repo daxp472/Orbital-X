@@ -244,6 +244,7 @@ function buildNodeElement(node, parentElem, indentLevel) {
       e.preventDefault();
       return;
     }
+    e.stopPropagation();
     setDragSession({
       path: node.path,
       isDir: node.is_directory,
@@ -1051,11 +1052,13 @@ export function wireTreeDragDrop() {
     }
   });
 
-  // Drag leave handler
+  // Drag leave handler: only clear visual indicators, preserve active session
   host.addEventListener('dragleave', (e) => {
     const related = e.relatedTarget;
     if (!host.contains(related)) {
-      cleanupDragSession();
+      document.querySelectorAll('.tree-node.drop-into').forEach(el => el.classList.remove('drop-into'));
+      document.getElementById('file-tree-container')?.classList.remove('drop-root');
+      document.getElementById('sidebar-root-header')?.classList.remove('drop-root');
     }
   });
 
@@ -1103,6 +1106,7 @@ export function wireTreeDragDrop() {
     try {
       await invoke('move_workspace_entry', { from: srcPath, to: destPath });
       showToast(`Moved "${basename}" to ${destDir ? '/' + destDir : 'workspace root'}`, 'success', 2200);
+      window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { path: destPath, action: 'moved' } }));
       await refreshFileTree();
     } catch (err) {
       showToast(`Move failed: ${err}`, 'error', 3000);
@@ -1201,18 +1205,7 @@ export async function copySelectedPaths() {
   showToast(`Copied ${paths.length} path(s)`, 'success', 1800);
 }
 
-/** Context menu items are injected into the existing file-tree menu by
- *  augmenting showFileTreeContextMenu through a wrapper. */
-function addMenuItem(menu, label, icon, action) {
-  const row = document.createElement('div');
-  row.className = 'tree-context-item';
-  row.innerHTML = `<span class="ctx-icon">${icon}</span><span class="ctx-label">${escapeHtmlAttr(label)}</span>`;
-  row.addEventListener('click', () => {
-    document.getElementById('file-tree-context-menu')?.remove();
-    action();
-  });
-  menu.appendChild(row);
-}
+// Legacy menu helper retired - unified context menu is used
 
 // aria (N3): explorer tree semantics
 export function initExplorerA11y() {
