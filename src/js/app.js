@@ -23,6 +23,7 @@ import { initDebug } from './components/debug.js';
 import { initDeveloperMenu } from './components/developer-menu.js';
 import { initMenubar } from './components/menubar.js';
 import { initTelemetryHUD } from './components/telemetry-hud.js';
+import { initReviewChangesBar } from './services/changed-files.js';
 import { initTimeTravel } from './components/time-travel.js';
 import { checkForUpdatesManually, CURRENT_VERSION } from './components/updater.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
@@ -452,10 +453,8 @@ function initActivityRail() {
     import('./components/usage.js').then(m => m.showUsageModal());
   });
 
-  // Review changes button
-  document.getElementById('btn-review-changes')?.addEventListener('click', () => {
-    document.getElementById('rail-source-control')?.click();
-  });
+  // Review changes toolbar & diff inspector
+  initReviewChangesBar();
 }
 
 function initResizers() {

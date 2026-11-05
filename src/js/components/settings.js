@@ -2041,90 +2041,59 @@ function setupDeveloperOptions() {
   const devPane = document.getElementById('spane-developer');
   if (!devPane) return;
 
-  // Ensure Developer Options tab exists
-  const devTab = document.getElementById('stab-developer');
-  if (!devTab) {
-    // Create the tab in sidebar
-    const sidebar = document.querySelector('.settings-sidebar');
-    if (sidebar) {
-      const devNavItem = document.createElement('div');
-      devNavItem.className = 'settings-nav-item';
-      devNavItem.id = 'stab-developer';
-      devNavItem.setAttribute('data-pane', 'spane-developer');
-      devNavItem.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="6" r="3"></circle>
-          <path d="M12 18c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2c0 1.1-.9 2-2 2"></path>
-        </svg>
-        <span>Developer Options</span>
-      `;
-
-      // Insert after Import/Export tab
-      const importExportTab = document.getElementById('stab-importexport');
-      if (importExportTab && importExportTab.nextSibling) {
-        sidebar.insertBefore(devNavItem, importExportTab.nextSibling);
-      } else {
-        sidebar.appendChild(devNavItem);
-      }
-
-      // Wire up the tab click
-      devNavItem.addEventListener('click', () => {
-        document.querySelectorAll('.settings-nav-item').forEach(t => t.classList.remove('active'));
-        document.getElementById('spane-developer').style.display = 'flex';
-        devNavItem.classList.add('active');
-        loadDevOptionsIntoUI();
-      });
-    }
-  }
-
   // Load current state into UI
   loadDevOptionsIntoUI();
 
-  // Import developer menu functions for cross-component access
+  // Wire developer options using Tauri APIs, telemetry, and developer-menu
   Promise.all([
     import('./developer-menu.js'),
-    import('../state/store.js')
-  ]).then(([devMenu, store]) => {
-    const { setDeveloperMode, isDeveloperModeEnabled } = devMenu;
+    import('../state/store.js'),
+    import('./telemetry-hud.js'),
+    import('../services/notifications.js'),
+    import('../services/dialogs.js'),
+    import('./agent.js'),
+  ]).then(([devMenu, store, telemetry, notifyModule, dialogModule, agentModule]) => {
+    const { setDeveloperMode } = devMenu;
     const { state: appState, persistState } = store;
+    const { pollTelemetry } = telemetry;
+    const { showToast } = notifyModule;
+    const { showConfirmDialog } = dialogModule;
 
-    // Developer Mode toggle in Settings
+    // 1. Developer Mode Master Toggle
     const devModeToggle = document.getElementById('cfg-dev-mode-toggle');
     if (devModeToggle) {
       devModeToggle.checked = !!appState.developerMode;
       devModeToggle.addEventListener('change', (e) => {
         setDeveloperMode(e.target.checked);
         persistState();
+        const pill = document.getElementById('dev-mode-status-pill');
+        if (pill) {
+          pill.textContent = e.target.checked ? 'ACTIVE' : 'DISABLED';
+          pill.className = `dev-status-pill ${e.target.checked ? 'active' : 'disabled'}`;
+        }
+        showToast(e.target.checked ? '✓ Developer Mode enabled (F12 active)' : 'Developer Mode disabled', 'info', 2000);
       });
     }
 
-    // Agent Debug toggle in Developer section
-    const agentDebugDev = document.getElementById('cfg-agent-debug-dev');
-    if (agentDebugDev) {
-      agentDebugDev.checked = !!appState.ai?.debugMode;
-      agentDebugDev.addEventListener('change', (e) => {
-        appState.ai = appState.ai || {};
-        appState.ai.debugMode = e.target.checked;
-        persistState();
-      });
-    }
-
-    // Wire up buttons using developer-menu's functions
-    const { isDevModeEnabled, showDebugConsole } = devMenu;
-
+    // 2. Open DevTools (F12)
     document.getElementById('btn-dev-open-devtools')?.addEventListener('click', async () => {
-      // Close settings modal first
       closeSettings();
-      // Then open dev tools
       try {
         await invoke('open_dev_tools');
         showToast('Developer Tools opened (F12)', 'success', 2000);
       } catch (e) {
-        console.log('Dev tools opened (simulated in browser)');
-        showToast('Dev tools available - check console', 'info', 2000);
+        showToast('Dev tools opened in browser/webview', 'info', 2000);
       }
     });
 
+    // 3. Debug Console
+    document.getElementById('btn-dev-show-console')?.addEventListener('click', () => {
+      closeSettings();
+      devMenu.showDebugConsole();
+      showToast('Debug console opened', 'info', 2000);
+    });
+
+    // 4. Reload Window
     document.getElementById('btn-dev-reload')?.addEventListener('click', async () => {
       try {
         await invoke('reload');
@@ -2133,33 +2102,140 @@ function setupDeveloperOptions() {
       }
     });
 
-    document.getElementById('btn-dev-show-console')?.addEventListener('click', () => {
-      // Close settings modal first
-      closeSettings();
-      // Then show debug console
-      showDebugConsole();
-      showToast('Debug console opened', 'info', 2000);
-    });
-
-    document.getElementById('btn-dev-disable-warning')?.addEventListener('click', () => {
-      if (confirm('Disable Developer Mode? This will prevent F12 from opening DevTools.')) {
-        setDeveloperMode(false);
-        persistState();
-        showToast('Developer Mode disabled', 'info', 2000);
-      }
-    });
-
-    document.getElementById('btn-dev-toggle-devtools')?.addEventListener('click', async () => {
-      closeSettings();
+    // 5. Refresh Live System RAM & Telemetry
+    document.getElementById('btn-dev-refresh-ram')?.addEventListener('click', async () => {
       try {
-        await invoke('open_dev_tools');
-        showToast('Developer Tools opened (F12)', 'success', 2000);
+        await pollTelemetry();
+        showToast('✓ Live RAM and system telemetry refreshed', 'success', 2000);
       } catch (e) {
-        console.log('Dev tools opened (simulated in browser)');
-        showToast('Opening debug console...', 'info', 2000);
-        showDebugConsole();
+        showToast('Telemetry refresh failed: ' + e, 'error', 3000);
       }
     });
+
+    // 6. Test Core IPC Ping
+    document.getElementById('btn-dev-test-ipc')?.addEventListener('click', async () => {
+      const badge = document.getElementById('dev-ipc-latency-badge');
+      if (badge) badge.textContent = 'Testing IPC ping…';
+      try {
+        const t0 = performance.now();
+        await invoke('evaluate_tool_policy', { toolName: 'ping', target: 'dev_test', mode: 'dev' });
+        const ms = (performance.now() - t0).toFixed(2);
+        if (badge) {
+          badge.textContent = `IPC Latency: ${ms} ms (Verified)`;
+          badge.style.color = 'var(--accent-green)';
+          badge.style.borderColor = 'rgba(48, 209, 88, 0.4)';
+        }
+        showToast(`✓ Core IPC round-trip: ${ms} ms`, 'success', 2500);
+      } catch (e) {
+        if (badge) badge.textContent = `IPC Error: ${e}`;
+        showToast('IPC ping failed: ' + e, 'error', 3500);
+      }
+    });
+
+    // 7. Kernel Security Policy Simulator
+    document.getElementById('btn-dev-sim-policy')?.addEventListener('click', async () => {
+      const mode = document.getElementById('dev-sim-mode')?.value || 'dev';
+      const tool = document.getElementById('dev-sim-tool')?.value || 'write_file';
+      const target = document.getElementById('dev-sim-target')?.value || 'src/main.rs';
+      const resultBox = document.getElementById('dev-sim-result');
+
+      try {
+        const dec = await invoke('evaluate_tool_policy', {
+          toolName: tool,
+          target,
+          mode,
+        });
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          const icon = dec.allowed ? '✓' : '🛑';
+          const color = dec.allowed ? 'var(--accent-green)' : '#ef4444';
+          resultBox.innerHTML = `
+            <div style="color: ${color}; font-weight: 600; margin-bottom: 2px;">
+              ${icon} Decision: ${dec.allowed ? 'ALLOWED' : 'BLOCKED'} · Risk: ${dec.risk} · Diff Approval: ${dec.requires_approval ? 'Required' : 'None'}
+            </div>
+            <div style="color: var(--text-secondary);">${dec.reason || 'Conforms to sandbox security boundary.'}</div>
+          `;
+        }
+      } catch (err) {
+        if (resultBox) {
+          resultBox.style.display = 'block';
+          resultBox.innerHTML = `<span style="color: #ef4444;">Simulation error: ${err}</span>`;
+        }
+      }
+    });
+
+    // 8. Dump State to Console
+    document.getElementById('btn-dev-dump-state')?.addEventListener('click', () => {
+      console.log('%c[Orbital X State Dump]', 'color: #39c5bb; font-size: 14px; font-weight: bold;', JSON.parse(JSON.stringify(appState)));
+      showToast('✓ State object dumped to Developer Console (F12)', 'success', 2500);
+    });
+
+    // 9. Copy Diagnostics JSON
+    document.getElementById('btn-dev-copy-diag')?.addEventListener('click', async () => {
+      const diag = {
+        product: 'Orbital X',
+        version: '2.3.3',
+        userAgent: navigator.userAgent,
+        agentMode: appState.agentMode,
+        theme: appState.theme,
+        workspace: appState.workspace?.rootPath || null,
+        editorTabs: appState.editor?.tabs?.length || 0,
+        activeTab: appState.editor?.activeTabId || null,
+        ai: {
+          provider: appState.ai?.provider,
+          model: appState.ai?.model,
+          endpoint: appState.ai?.endpoint,
+          speculativeStreaming: appState.ai?.speculativeStreaming,
+        },
+        timestamp: new Date().toISOString(),
+      };
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(diag, null, 2));
+        showToast('✓ Diagnostic JSON copied to clipboard', 'success', 2500);
+      } catch (e) {
+        showToast('Could not copy to clipboard: ' + e, 'error', 3000);
+      }
+    });
+
+    // 10. Reset Execution Memories
+    document.getElementById('btn-dev-clear-memories')?.addEventListener('click', () => {
+      if (agentModule.activeExecutionMemory) {
+        agentModule.activeExecutionMemory.completedActions = [];
+        agentModule.activeExecutionMemory.userDecisions = [];
+      }
+      showToast('✓ Active agent execution memory reset', 'success', 2200);
+    });
+
+    // 11. Clear App Storage / Cache
+    document.getElementById('btn-dev-clear-storage')?.addEventListener('click', async () => {
+      const confirmed = await showConfirmDialog(
+        'Clear App Storage & Cache',
+        'This will clear local session caches and preferences while preserving your project files. Continue?',
+        'Clear Storage',
+        true
+      );
+      if (confirmed) {
+        const keysToKeep = ['orbital_active_plan_'];
+        Object.keys(localStorage).forEach(k => {
+          if (!keysToKeep.some(prefix => k.startsWith(prefix))) {
+            localStorage.removeItem(k);
+          }
+        });
+        showToast('✓ App cache & storage cleared', 'success', 2500);
+      }
+    });
+
+    // 12. Agent Debug Output Toggle
+    const agentDebugDev = document.getElementById('cfg-agent-debug-dev');
+    if (agentDebugDev) {
+      agentDebugDev.checked = !!appState.ai?.debugMode;
+      agentDebugDev.addEventListener('change', (e) => {
+        appState.ai = appState.ai || {};
+        appState.ai.debugMode = e.target.checked;
+        persistState();
+        showToast(e.target.checked ? 'Agent debug trace enabled' : 'Agent debug trace disabled', 'info', 2000);
+      });
+    }
   });
 }
 
@@ -2167,15 +2243,21 @@ function loadDevOptionsIntoUI() {
   const devPane = document.getElementById('spane-developer');
   if (!devPane) return;
 
-  // Developer Mode toggle - will be updated by the imported module's event listener
   const devModeToggle = document.getElementById('cfg-dev-mode-toggle');
+  const devStatusPill = document.getElementById('dev-mode-status-pill');
   if (devModeToggle) {
     devModeToggle.checked = !!state.developerMode;
   }
+  if (devStatusPill) {
+    devStatusPill.textContent = state.developerMode ? 'ACTIVE' : 'DISABLED';
+    devStatusPill.className = `dev-status-pill ${state.developerMode ? 'active' : 'disabled'}`;
+  }
 
-  // Agent Debug toggle in Developer section
   const agentDebugDev = document.getElementById('cfg-agent-debug-dev');
   if (agentDebugDev) {
     agentDebugDev.checked = !!state.ai?.debugMode;
   }
+
+  // Poll live telemetry so RAM stats appear immediately on open
+  import('./telemetry-hud.js').then(m => m.pollTelemetry?.());
 }

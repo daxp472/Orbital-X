@@ -2833,3 +2833,177 @@ input:checked + .settings-toggle-slider:before {
   border-color: rgba(255, 107, 107, 0.5);
   color: #fff;
 }
+
+
+/* ==========================================================================
+   Reasoning & Evidence Validation Engine (Scientific Calibration Badges)
+   ========================================================================== */
+.evidence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-code, var(--font-mono, monospace));
+  letter-spacing: 0.2px;
+  cursor: help;
+  user-select: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.evidence-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  filter: brightness(1.15);
+}
+
+.evidence-pill.evidence-success {
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.evidence-pill.evidence-info {
+  background: rgba(56, 189, 248, 0.14);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.evidence-pill.evidence-warning {
+  background: rgba(245, 158, 11, 0.14);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.evidence-pill.evidence-danger {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.evidence-reporting-card {
+  margin: 8px 0 12px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+
+/* ==========================================================================
+   Developer & Diagnostic Suite UI (.dev-card, .dev-metric-box)
+   ========================================================================== */
+.dev-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md, 10px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  transition: all var(--trans-fast);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+
+.dev-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.dev-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dev-card-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.dev-card-caption {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dev-status-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.5px;
+  font-family: var(--font-code, monospace);
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.dev-status-pill.active {
+  background: rgba(48, 209, 88, 0.16);
+  color: #30d158;
+  border: 1px solid rgba(48, 209, 88, 0.35);
+}
+
+.dev-status-pill.disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+.dev-metric-box {
+  background: var(--bg-app);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-metric-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.dev-metric-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-code, monospace);
+  margin-top: 2px;
+}
+
+.dev-metric-sub {
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Review Changes Toolbar Enhancements */
+.review-changes-bar.has-changes {
+  border-color: rgba(57, 197, 187, 0.4);
+  background: color-mix(in srgb, var(--accent-cyan) 6%, var(--bg-surface));
+}
+
+.review-changes-bar.has-changes #agent-changed-files-label {
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
