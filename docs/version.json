@@ -1,7 +1,7 @@
 {
-  "version": "2.3.2",
-  "tag": "v2.3.2",
-  "release_date": "2026-11-04",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.2/Orbital.X_2.3.2_x64-setup.exe",
-  "changelog": "v2.3.2: Explorer Cut/Copy/Paste operations, intuitive file & folder Drag & Drop, interactive Task List Inspector (Done & What's Next), and AI Response Feedback System with Happy Counter & MCQ Dislike Re-looping."
+  "version": "2.3.3",
+  "tag": "v2.3.3",
+  "release_date": "2026-11-05",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.3/Orbital.X_2.3.3_x64-setup.exe",
+  "changelog": "v2.3.3: Mathematical Reasoning, Evidence & Calibration Engine, Ask vs Chat Confinement Modes, Autonomous Direct File Writing, Copilot Ghost Text Autocompletion, Unified Glassmorphic Context Menu System, and Live RAM & Telemetry Monitoring."
 }
