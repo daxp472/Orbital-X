@@ -6,6 +6,7 @@ import { state, persistState, notify, setActiveModel, subscribe } from '../state
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
 import { showConfirmDialog } from '../services/dialogs.js';
+import { showToast } from '../services/notifications.js';
 
 export function initSettings() {
   const modal = document.getElementById('modal-settings');
@@ -50,7 +51,7 @@ export function initSettings() {
       }
       if (t.btn === 'stab-developer') {
         loadDevOptionsIntoUI();
-        pollTelemetry();
+        import('./telemetry-hud.js').then(m => m.pollTelemetry?.());
       }
     });
   });
@@ -1173,7 +1174,7 @@ function setupSettingsSearch() {
 
 function highlightText(el, term) {
   // Wraps case-insensitive matches of term inside el's direct text with <mark>
-  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  const walk = document.createTreeWalker(el, (window.NodeFilter?.SHOW_TEXT || 4), null);
   const nodes = [];
   while (walk.nextNode()) nodes.push(walk.currentNode);
   const lower = term.toLowerCase();

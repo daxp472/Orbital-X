@@ -6,6 +6,7 @@ import { state, persistState } from '../state/store.js';
 import { applyTheme } from '../components/settings.js';
 import { switchMode } from '../components/agent.js';
 import { invoke } from '../services/tauri.js';
+import { showToast } from '../services/notifications.js';
 
 let currentStep = 1;
 const totalSteps = 4;

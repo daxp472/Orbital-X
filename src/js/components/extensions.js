@@ -407,9 +407,10 @@ function packCard(ext, { installed }) {
 
 function detailText(ext) {
   switch (ext.type) {
-    case 'theme':
+    case 'theme': {
       const vars = Object.keys(ext.colors || {}).length;
       return `Overrides ${vars} CSS variables (accents, focus, surfaces) at runtime. Does not change layout or Monaco editor syntax colors. Combineable — later enabled packs apply on top.`;
+    }
     case 'prompt-pack':
       return `Appends this guidance to the agent's system prompt when enabled:\n\n"${ext.systemPromptAddition}"\n\nApplies to every agent turn, all providers.`;
     case 'command-pack':

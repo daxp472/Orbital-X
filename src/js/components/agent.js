@@ -10,6 +10,20 @@ import { handleLikeResponse, handleDislikeResponse, getFeedbackDirectivesForProm
 import { openTaskListModal } from './task-list.js';
 import { getActiveEvidenceLedger, resetActiveEvidenceLedger, renderEvidenceBadge } from '../services/evidence-engine.js';
 import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
+
+// Dynamic module-level proxy ensuring evidenceLedger is permanently in scope throughout agent.js
+const evidenceLedger = new Proxy({}, {
+  get(target, prop) {
+    const ledger = getActiveEvidenceLedger();
+    const val = ledger[prop];
+    return typeof val === 'function' ? val.bind(ledger) : val;
+  },
+  set(target, prop, value) {
+    const ledger = getActiveEvidenceLedger();
+    ledger[prop] = value;
+    return true;
+  }
+});
 import {
   isComplexRequest,
   createPlan,
@@ -1511,6 +1525,7 @@ function updateContextMeter(promptTokens, numCtx, tokensPerSecond) {
 // ============================================================================
 
 async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
+  const evidenceLedger = getActiveEvidenceLedger();
   let iteration = 0;
   const maxIterations = parseInt(state.ai.settings?.maxIterations, 10) || 60;
   let hasSavedMemoryThisTurn = false;
