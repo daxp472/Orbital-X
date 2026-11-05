@@ -95,3 +95,4 @@ export function initReviewChangesBar() {
   // Initial poll
   refreshChangedFiles();
 }
+

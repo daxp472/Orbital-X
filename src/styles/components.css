@@ -3007,3 +3007,74 @@ input:checked + .settings-toggle-slider:before {
   color: var(--accent-cyan);
   font-weight: 600;
 }
+
+
+/* ==========================================================================
+   Composer Ask / Chat Segmented Switcher (Cursor / Antigravity styled)
+   ========================================================================== */
+.composer-mode-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-full, 20px);
+  padding: 1.5px;
+  gap: 2px;
+  user-select: none;
+}
+
+.composer-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-full, 16px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.composer-mode-btn:hover {
+  color: var(--text-primary, #f1f5f9);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.composer-mode-btn.active[data-cmode="ask"] {
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(168, 85, 247, 0.4);
+}
+
+.composer-mode-btn.active[data-cmode="chat"] {
+  background: rgba(56, 189, 248, 0.22);
+  color: #38bdf8;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.4);
+}
+
+/* Timeline Context Cleared Divider */
+.timeline-context-cleared-divider {
+  width: 100%;
+  margin: 14px 0 10px 0;
+}
+
+/* Auto-applied file banner */
+.file-written-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  margin-top: 8px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 11.5px;
+  font-family: var(--font-mono, monospace);
+}

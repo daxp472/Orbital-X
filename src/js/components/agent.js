@@ -60,8 +60,12 @@ export function initAgent() {
     document.getElementById('popover-btn-clear')?.addEventListener('click', (e) => {
       e.stopPropagation();
       ctxPopover.style.display = 'none';
-      clearAgentContext();
+      clearContextWindow();
     });
+
+    // Ask vs Chat Mode Switcher
+    document.getElementById('btn-mode-ask')?.addEventListener('click', () => switchComposerMode('ask'));
+    document.getElementById('btn-mode-chat')?.addEventListener('click', () => switchComposerMode('chat'));
 
     document.getElementById('popover-btn-dashboard')?.addEventListener('click', (e) => {
       e.preventDefault();
@@ -331,6 +335,62 @@ export const activeExecutionMemory = {
   userDecisions: [],    // user answers to questions and stated preferences
 };
 
+
+export function clearContextWindow() {
+  const previousTurns = state.conversation.length;
+  state.conversation = [];
+  activeExecutionMemory.completedActions = [];
+  activeExecutionMemory.userDecisions = [];
+
+  // Do NOT wipe out timeline: preserve ongoing conversation in view
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    const divider = document.createElement('div');
+    divider.className = 'timeline-context-cleared-divider';
+    divider.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 8px; margin: 16px 0; color: var(--text-muted); font-size: 11px;">
+        <span style="height: 1px; flex: 1; background: rgba(255, 255, 255, 0.08);"></span>
+        <span style="display: inline-flex; align-items: center; gap: 5px; background: rgba(255, 255, 255, 0.04); padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08);">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+          Context window reset to 0 tokens • ${previousTurns} prior turns preserved in view
+        </span>
+        <span style="height: 1px; flex: 1; background: rgba(255, 255, 255, 0.08);"></span>
+      </div>
+    `;
+    timeline.appendChild(divider);
+    divider.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  showToast('Context window reset to 0 tokens — ongoing chat preserved', 'info', 2200);
+  updateContextMeter(0, getEffectiveNumCtx(), null);
+  const ring = document.getElementById('composer-context-pct');
+  if (ring) ring.textContent = '0%';
+  const fill = document.getElementById('composer-context-ring-arc');
+  if (fill) fill.style.strokeDashoffset = '40.84';
+}
+
+export function switchComposerMode(mode) {
+  const isAsk = mode === 'ask';
+  state.agentMode = isAsk ? 'ask' : (state.agentMode === 'ask' ? 'dev' : state.agentMode);
+
+  const askBtn = document.getElementById('btn-mode-ask');
+  const chatBtn = document.getElementById('btn-mode-chat');
+  if (askBtn && chatBtn) {
+    askBtn.classList.toggle('active', isAsk);
+    chatBtn.classList.toggle('active', !isAsk);
+  }
+
+  const inputElem = document.getElementById('agent-input');
+  if (inputElem) {
+    inputElem.placeholder = isAsk
+      ? 'Ask a question about your code or workspace (read-only)...'
+      : 'Ask Orbital X to edit, test, or code...';
+  }
+
+  updateStatusBarAgentStatus(isAsk ? 'Ask Mode (Read-Only)' : getModeDisplayName());
+  showToast(isAsk ? 'Switched to Ask Mode: Read-only Q&A & explanations' : 'Switched to Chat Mode: Full software engineering & file editing', 'info', 2000);
+}
+
 function clearAgentContext() {
   state.conversation = [];
   activeExecutionMemory.completedActions = [];
@@ -376,6 +436,7 @@ export function compactAgentContext(isAutomatic = false) {
 }
 
 function getModeDisplayName(mode = state.agentMode) {
+  if (mode === 'ask') return 'Ask Mode';
   if (mode === 'agent_pro') return 'Agent Pro Mode';
   if (mode === 'dev') return 'Dev Mode';
   return 'User Mode';
@@ -390,7 +451,9 @@ function updateStatusBarAgentStatus(statusText = null) {
   if (sbItem) {
     const dot = sbItem.querySelector('.mode-dot');
     if (dot) {
-      if (state.agentMode === 'agent_pro') {
+      if (state.agentMode === 'ask') {
+        dot.style.backgroundColor = 'var(--accent-purple)';
+      } else if (state.agentMode === 'agent_pro') {
         dot.style.backgroundColor = 'var(--accent-purple)';
       } else if (state.agentMode === 'user') {
         dot.style.backgroundColor = 'var(--accent-green)';
@@ -850,7 +913,13 @@ async function handleSend() {
   try {
     // If the prompt explicitly asks to write/create code in a file, enrich prompt with directive
     let effectivePrompt = promptText;
-    const isFileWriteRequest = /\b(write|create|save|put|add|generate|make)\b.*?\b(into|in|to|file)?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i.test(promptText);
+    if (state.agentMode !== 'ask') {
+      const isFileWriteRequest = /\b(write|create|save|put|add|generate|make|build|implement|code)\b/i.test(promptText);
+      if (isFileWriteRequest && !effectivePrompt.includes('write_file')) {
+        effectivePrompt += ' (Instruction: You must use the write_file tool to write this file directly to disk. Do not output code into chat without saving to file.)';
+      }
+    }
+    const isFileWriteRequestDummy = /\b(write|create|save|put|add|generate|make)\b.*?\b(into|in|to|file)?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i.test(promptText);
     if (isFileWriteRequest && !effectivePrompt.includes('write_file')) {
       effectivePrompt += ' (Instruction: You must use the write_file tool to write this file directly to disk.)';
     }
@@ -1530,8 +1599,20 @@ IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", statu
   // System prompt — deliberately concise. Full tool schemas are transmitted
   // natively via function calling; duplicating them here wastes local-model
   // context on every request.
-  const systemPrompt = `You are Orbital X Agent, an autonomous AI coding assistant.
-Mode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${skillsDigest}${promptPackText}${taskPromptSection}
+  const isAskMode = state.agentMode === 'ask';
+  const modeInstructions = isAskMode
+    ? `## OPERATING MODE: ASK MODE (STRICT READ-ONLY Q&A)
+- Purpose: You are strictly in read-only assistance mode. Answer questions, explain code architecture, and summarize files.
+- STRICT INVARIANT: You CANNOT modify files, create files, edit files, delete files, or run terminal commands.
+- ALL file writing and mutating tools are prohibited. Do not call write_file, patch_file, delete_file, or run_command.
+- If you need repository context to answer the user, call read-only tools: read_file, search_files, list_files, find_symbol, or get_project_structure.
+- Provide all suggested code snippets as markdown code blocks in the chat response for the user to review. Do not save to disk.`
+    : `## OPERATING MODE: CHAT / AGENT MODE (FULL CODE & FILE MUTATIONS)
+- Purpose: You are an autonomous software engineering assistant. You write code, create files, edit existing files, and execute build tools.
+- MANDATORY INVARIANT: When asked to write, create, generate, modify, or update code or files, YOU MUST CALL write_file(path="...", content="...") OR patch_file DIRECTLY.
+- NEVER leave code trapped inside markdown code blocks in the chat response without calling write_file. The user's project requires files saved directly to disk on their filesystem.`;
+
+  const systemPrompt = `You are Orbital X Agent.\nMode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${skillsDigest}${promptPackText}${taskPromptSection}\n\n${modeInstructions}${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${skillsDigest}${promptPackText}${taskPromptSection}
 
 ## IDENTITY & ARCHITECTURE KNOWLEDGE:
 - Name & Purpose: You are Orbital X, an ultra-fast, native desktop AI coding assistant and IDE.
@@ -1740,38 +1821,103 @@ STRATEGY:
         /^\s*(done|finished|complete)\s*[.!]?\s*$/im.test(finalText);
 
       // Safety Interceptor: If model output code blocks into chat instead of calling write_file
-      const codeBlockMatches = [...finalText.matchAll(/```(?:[a-zA-Z0-9_\-]+)?\n([\s\S]+?)```/g)];
-      const fileTargetMatch =
-        (initialUserPrompt && initialUserPrompt.match(/\b(?:into|in|to|file|create|write)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i)) ||
-        (finalText && finalText.match(/\b(?:into|in|to|file|here is|here's)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i)) ||
-        (activeTask?.files && activeTask.files[0] ? [null, activeTask.files[0]] : null);
+      if (state.agentMode !== 'ask') {
+        const codeBlockRegex = /```([a-zA-Z0-9_\-]+)?\s*(?:\r?\n)([\s\S]+?)```/g;
+        const blocks = [];
+        let bMatch;
+        while ((bMatch = codeBlockRegex.exec(finalText)) !== null) {
+          const lang = (bMatch[1] || '').trim().toLowerCase();
+          const code = bMatch[2].trim();
+          if (code.length > 25) {
+            blocks.push({ lang, code, index: bMatch.index, full: bMatch[0] });
+          }
+        }
 
-      if (codeBlockMatches.length > 0 && fileTargetMatch) {
-        const targetPath = fileTargetMatch[1].replace(/^[/"']+|[/"']+$/g, '');
-        const longestCode = codeBlockMatches.reduce((a, b) => (b[1].length > a.length ? b[1] : a), '');
-        if (longestCode && targetPath) {
-          console.log(`[Agent Loop] Intercepted code block for file "${targetPath}". Auto-writing to disk...`);
-          try {
-            await invoke('save_file', {
-              path: targetPath,
-              content: longestCode,
-              description: `Auto-saved generated code to ${targetPath}`
-            });
-            showToast(`✓ Written directly to ${targetPath}`, 'success', 3000);
-            window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: targetPath } }));
-            sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
-            
-            import('./file-tree.js').then(f => f.refreshFileTree());
-            const fileData = await invoke('read_file', { path: targetPath });
-            import('../editor/monaco.js').then(m => m.openFileInTab(fileData));
-            activeExecutionMemory.completedActions.push(`Created/updated file ${targetPath} with generated code.`);
-            
-            if (activeTask) {
-              updateTaskState(plan, activeTask.id, 'completed', `Successfully written code to ${targetPath}`);
+        if (blocks.length > 0) {
+          for (const block of blocks) {
+            let targetPath = null;
+
+            // Heuristic 1: Look in the first 3 lines of code for comment filename
+            const topLines = block.code.split('\n').slice(0, 3).join('\n');
+            const commentFileMatch = topLines.match(/(?:^|\n)\s*(?:\/\/|#|<!--|\/\*)\s*(?:filename|filepath|file)?\s*[:=]?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i);
+            if (commentFileMatch) {
+              targetPath = commentFileMatch[1];
             }
-            break;
-          } catch (err) {
-            console.error(`Failed to auto-write code to ${targetPath}:`, err);
+
+            // Heuristic 2: Look at markdown text directly preceding this code block
+            if (!targetPath) {
+              const textBefore = finalText.substring(Math.max(0, block.index - 250), block.index);
+              const headerMatch = textBefore.match(/(?:file|into|in|create|edit|update|for|to|here is|here's|path)\s*[:`"']*\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']*/i);
+              if (headerMatch) {
+                targetPath = headerMatch[1];
+              }
+            }
+
+            // Heuristic 3: User prompt explicitly specifies filename
+            if (!targetPath && initialUserPrompt) {
+              const promptFileMatch = initialUserPrompt.match(/\b(?:into|in|to|file|create|write|make|add|update)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i) ||
+                                      initialUserPrompt.match(/\b([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)\b/);
+              if (promptFileMatch) {
+                targetPath = promptFileMatch[1];
+              }
+            }
+
+            // Heuristic 4: Active orchestrated task files
+            if (!targetPath && activeTask?.files && activeTask.files[0]) {
+              targetPath = activeTask.files[0];
+            }
+
+            // Heuristic 5: Active editor tab path
+            if (!targetPath && state.editor?.activeTabId) {
+              const activeTab = state.editor.tabs?.find(t => t.id === state.editor.activeTabId);
+              if (activeTab && activeTab.path) {
+                targetPath = activeTab.path;
+              }
+            }
+
+            // Heuristic 6: Language-based fallback when prompt requests creating/writing code
+            if (!targetPath && initialUserPrompt && /\b(write|create|make|build|implement|code|generate)\b/i.test(initialUserPrompt)) {
+              if (block.lang === 'html') targetPath = 'index.html';
+              else if (block.lang === 'css') targetPath = 'style.css';
+              else if (block.lang === 'python' || block.lang === 'py') targetPath = 'main.py';
+              else if (block.lang === 'javascript' || block.lang === 'js') targetPath = 'index.js';
+              else if (block.lang === 'typescript' || block.lang === 'ts') targetPath = 'index.ts';
+              else if (block.lang === 'rust' || block.lang === 'rs') targetPath = 'src/main.rs';
+            }
+
+            if (targetPath) {
+              const cleanPath = targetPath.replace(/^[/"'\\s]+|[/"'\\s]+$/g, '');
+              console.log(`[Agent Interceptor] Writing extracted code block to disk: ${cleanPath}`);
+              try {
+                await invoke('save_file', {
+                  path: cleanPath,
+                  content: block.code,
+                  description: `Auto-applied generated code to ${cleanPath}`
+                });
+                showToast(`✓ Written directly to ${cleanPath}`, 'success', 3000);
+                window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: cleanPath } }));
+                sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
+
+                import('./file-tree.js').then(f => f.refreshFileTree());
+                const fileData = await invoke('read_file', { path: cleanPath });
+                import('../editor/monaco.js').then(m => m.openFileInTab(fileData));
+                activeExecutionMemory.completedActions.push(`Created/updated file ${cleanPath} with generated code.`);
+
+                if (activeTask) {
+                  updateTaskState(plan, activeTask.id, 'completed', `Successfully written code to ${cleanPath}`);
+                }
+
+                // Append visual badge on live card
+                if (liveCard?.card) {
+                  const banner = document.createElement('div');
+                  banner.className = 'file-written-banner';
+                  banner.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Auto-written directly to <strong>${cleanPath}</strong></span>`;
+                  liveCard.card.appendChild(banner);
+                }
+              } catch (err) {
+                console.error(`Failed to auto-write code to ${cleanPath}:`, err);
+              }
+            }
           }
         }
       }
@@ -3587,7 +3733,7 @@ async function executePlanPhases(plan, card) {
       // Bounded retry loop (up to 2 retries on fixable failures)
       while (nextTask.retries <= 2 && !taskSuccess && isLoopRunning) {
         try {
-          const taskPrompt = `Task: ${nextTask.title}\nObjective: ${nextTask.objective}\nTarget files: ${(nextTask.files || []).join(', ')}\nAcceptance criteria: ${nextTask.criteria}${lastErr ? `\n(Previous attempt failed: ${lastErr}. Fix the issue and verify before completing.)` : ''}`;
+          const taskPrompt = `Task: ${nextTask.title}\nObjective: ${nextTask.objective}\nTarget files: ${(nextTask.files || []).join(', ')}\nAcceptance criteria: ${nextTask.criteria}\nIMPORTANT DIRECTIVE: You MUST call write_file(path=\"...\", content=\"...\") tool directly to save all required code to disk. Do NOT return code in chat.${lastErr ? `\n(Previous attempt failed: ${lastErr}. Fix the issue and verify before completing.)` : ''}`;
 
           await runAgentLoop(taskPrompt, nextTask, plan);
 

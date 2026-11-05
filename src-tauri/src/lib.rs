@@ -182,15 +182,18 @@ fn search_workspace_advanced(
 /// One-shot inline code completion for the editor ghost-text feature.
 #[tauri::command]
 async fn complete_code(
-    provider: String,
-    api_key: String,
-    model: String,
+    provider: Option<String>,
+    api_key: Option<String>,
+    model: Option<String>,
     base_url: Option<String>,
     prefix: String,
     suffix: String,
     language: String,
 ) -> Result<serde_json::Value, String> {
-    let completion = ProviderService::complete_code(&provider, &api_key, &model, base_url, &prefix, &suffix, &language).await?;
+    let prov = provider.unwrap_or_else(|| "ollama".into());
+    let key = api_key.unwrap_or_default();
+    let mdl = model.unwrap_or_else(|| "llama3".into());
+    let completion = ProviderService::complete_code(&prov, &key, &mdl, base_url, &prefix, &suffix, &language).await?;
     Ok(serde_json::json!({ "completion": completion }))
 }
 
