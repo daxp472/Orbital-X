@@ -145,6 +145,7 @@ export function loadPersistedState() {
       if (savedTheme === 'orbit-dark' || savedTheme === 'dark') state.theme = 'theme-dark';
       else if (savedTheme === 'nebula-light' || savedTheme === 'light') state.theme = 'theme-light';
       else if (savedTheme === 'high-contrast' || savedTheme === 'hc') state.theme = 'theme-hc';
+      else if (savedTheme === 'midnight-blue') state.theme = 'midnight-blue';
       else state.theme = savedTheme;
     }
 
@@ -229,6 +230,12 @@ export function loadPersistedState() {
         state.settings.boilerplate = { ...state.settings.boilerplate, ...JSON.parse(savedBoilerplate) };
       } catch (e) { /* keep defaults */ }
     }
+    const savedTerminal = localStorage.getItem('orbital_terminal_settings');
+    if (savedTerminal) {
+      try {
+        state.settings.terminal = { ...(state.settings.terminal || {}), ...JSON.parse(savedTerminal) };
+      } catch (e) {}
+    }
   } catch (e) {
     console.warn("Could not load persisted state:", e);
   }
@@ -250,6 +257,7 @@ export function persistState() {
     localStorage.setItem('orbital_dev_mode_enabled', state.developerMode ? 'true' : 'false');
     localStorage.setItem('orbital_default_models', JSON.stringify(state.ai.defaultModels));
     localStorage.setItem('orbital_keys', btoa(JSON.stringify(state.ai.keys)));
+    localStorage.setItem('orbital_terminal_settings', JSON.stringify(state.settings.terminal || {}));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');
     localStorage.setItem('orbital_autosave_delay', (state.settings.autoSaveDelay || 1000).toString());
     localStorage.setItem('orbital_boilerplate', JSON.stringify(state.settings.boilerplate || { enabled: true, disabledLanguages: [] }));

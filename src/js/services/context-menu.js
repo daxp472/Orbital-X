@@ -17,6 +17,7 @@ export function dismissContextMenu() {
     activeMenu.remove();
     activeMenu = null;
   }
+  document.querySelectorAll('.orbital-context-menu, .tree-context-menu, #file-tree-context-menu').forEach(el => el.remove());
   if (outsideClickListener) {
     window.removeEventListener('pointerdown', outsideClickListener, true);
     outsideClickListener = null;
@@ -48,12 +49,12 @@ export function showUnifiedContextMenu(items, x, y) {
     
     const left = document.createElement('div');
     left.className = 'orbital-context-menu-label';
+    const ic = document.createElement('span');
+    ic.className = 'orbital-context-menu-icon';
     if (item.icon) {
-      const ic = document.createElement('span');
-      ic.className = 'orbital-context-menu-icon';
       ic.innerHTML = item.icon;
-      left.appendChild(ic);
     }
+    left.appendChild(ic);
     const text = document.createElement('span');
     text.textContent = item.label;
     left.appendChild(text);
@@ -452,19 +453,22 @@ function handleTreeContextMenu(nodeEl, x, y) {
         },
         {
           label: 'Copy Relative Path',
+          shortcut: 'Shift+Alt+C',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
           action: () => {
             navigator.clipboard.writeText(path);
             showToast('Copied relative path: ' + path, 'info', 1600);
           }
         },
         {
-          label: 'Copy Full Path',
+          label: 'Copy Path',
+          shortcut: 'Shift+Alt+P',
           icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
           action: () => {
             const root = state.workspace.rootPath || '';
             const full = root ? (root.replace(/\\/g, '/') + '/' + path.replace(/^\/+/, '')) : path;
             navigator.clipboard.writeText(full);
-            showToast('Copied full path', 'info', 1600);
+            showToast('Copied path', 'info', 1600);
           }
         },
         {
@@ -580,19 +584,22 @@ function handleTreeContextMenu(nodeEl, x, y) {
         },
         {
           label: 'Copy Relative Path',
+          shortcut: 'Shift+Alt+C',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
           action: () => {
             navigator.clipboard.writeText(path);
             showToast('Copied relative path: ' + path, 'info', 1600);
           }
         },
         {
-          label: 'Copy Full Path',
+          label: 'Copy Path',
+          shortcut: 'Shift+Alt+P',
           icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
           action: () => {
             const root = state.workspace.rootPath || '';
             const full = root ? (root.replace(/\\/g, '/') + '/' + path.replace(/^\/+/, '')) : path;
             navigator.clipboard.writeText(full);
-            showToast('Copied full path', 'info', 1600);
+            showToast('Copied path', 'info', 1600);
           }
         },
         {

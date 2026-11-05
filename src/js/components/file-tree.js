@@ -95,8 +95,14 @@ export function getFileSvgIcon(filename, isDir, isExpanded) {
   if (lower === '.gitignore' || lower === '.gitmodules' || lower === '.gitattributes') {
     return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="8" y="1" width="8" height="8" rx="1.5" transform="rotate(45 8 1)" fill="#ef4444"/><circle cx="8" cy="6.6" r="1.3" fill="#fff"/><circle cx="5.6" cy="9" r="1.3" fill="#fff"/><circle cx="10.4" cy="9" r="1.3" fill="#fff"/></svg>`;
   }
-  if (lower.endsWith('.lock') || lower === 'cargo.lock' || lower === 'package-lock.json') {
+  if (lower.endsWith('.lock') || lower === 'cargo.lock' || lower === 'package-lock.json' || lower === 'yarn.lock' || lower === 'pnpm-lock.yaml' || lower === 'gemfile.lock') {
     return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" class="tree-svg-icon"><rect x="3.5" y="6.5" width="9" height="7.5" rx="1.5" fill="#64748b"/><path d="M5.5 6.5V4.5a2.5 2.5 0 0 1 5 0v2" stroke="#94a3b8" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="10" r="1.2" fill="#fff"/></svg>`;
+  }
+  if (lower.startsWith('dockerfile') || lower.includes('docker-compose')) {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#38bdf8" stroke-width="1.2" class="tree-svg-icon"><rect x="2" y="6" width="12" height="7" rx="1.5"/><path d="M4 6V4h2v2M7 6V3h2v3M10 6V4h2v2"/></svg>`;
+  }
+  if (lower === 'makefile' || lower === 'gnumakefile') {
+    return `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="1.2" stroke-linecap="round" class="tree-svg-icon"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>`;
   }
 
   switch (ext) {
@@ -976,17 +982,24 @@ wireExplorerKeyboardShortcuts();
 // ---------------------------------------------------------------
 
 let currentDragSession = null; // { path: string, isDir: boolean, name: string, el: HTMLElement }
+let lastDragPayload = null;
 
 export function setDragSession(session) {
   currentDragSession = session;
+  if (session) {
+    lastDragPayload = { ...session };
+  }
 }
 
 export function getDragSession() {
-  return currentDragSession;
+  return currentDragSession || lastDragPayload;
 }
 
 export function cleanupDragSession() {
   currentDragSession = null;
+  setTimeout(() => {
+    lastDragPayload = null;
+  }, 350);
   document.querySelectorAll('.tree-node.dragging').forEach(el => el.classList.remove('dragging'));
   document.querySelectorAll('.tree-node.drop-into').forEach(el => el.classList.remove('drop-into'));
   document.getElementById('file-tree-container')?.classList.remove('drop-root');
@@ -1067,12 +1080,37 @@ export function wireTreeDragDrop() {
     e.preventDefault();
     e.stopPropagation();
 
-    const session = currentDragSession;
-    const srcPath = session?.path || e.dataTransfer.getData('application/orbital-path') || e.dataTransfer.getData('text/plain');
+    const session = currentDragSession || lastDragPayload;
+    let srcPath = session?.path || e.dataTransfer.getData('application/orbital-path') || e.dataTransfer.getData('text/plain');
     const isDir = session?.isDir ?? (e.dataTransfer.getData('application/orbital-is-dir') === 'true');
     const basename = session?.name || (srcPath ? srcPath.split(/[\\/]/).pop() : '');
 
     cleanupDragSession();
+
+    // Check if external OS files were dropped from Windows Explorer
+    if (!srcPath && e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      const row = e.target.closest('.tree-node');
+      let destDir = '';
+      if (row && row.dataset.path) {
+        destDir = row.dataset.isDir === 'true' ? row.dataset.path : row.dataset.path.split('/').slice(0, -1).join('/');
+      }
+      for (const file of e.dataTransfer.files) {
+        try {
+          const text = await file.text();
+          const targetRel = destDir ? `${destDir}/${file.name}` : file.name;
+          await invoke('save_file', {
+            path: targetRel,
+            content: text,
+            description: `Imported ${file.name} via explorer drop`
+          });
+          showToast(`Imported "${file.name}"`, 'success', 2200);
+        } catch (err) {
+          showToast(`Could not import "${file.name}": ${err}`, 'error', 3000);
+        }
+      }
+      await refreshFileTree();
+      return;
+    }
 
     if (!srcPath) return;
 

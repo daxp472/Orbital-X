@@ -962,7 +962,7 @@ function formatChatTimestamp(isoStr) {
   }
 }
 
-function openWelcomeScreen() {
+export function openWelcomeScreen() {
   const modal = document.getElementById('modal-welcome');
   if (!modal) return;
 

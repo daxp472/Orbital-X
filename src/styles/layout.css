@@ -955,6 +955,8 @@ body {
   top: calc(100% + 8px);
   right: 0;
   width: 290px;
+  max-width: calc(100vw - 24px);
+  box-sizing: border-box;
   background: rgba(18, 20, 29, 0.96);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);

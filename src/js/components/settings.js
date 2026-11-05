@@ -48,6 +48,10 @@ export function initSettings() {
       if (t.btn === 'stab-models') {
         import('./usage.js').then(m => m.loadAndRenderUsage(true));
       }
+      if (t.btn === 'stab-developer') {
+        loadDevOptionsIntoUI();
+        pollTelemetry();
+      }
     });
   });
 
@@ -975,12 +979,14 @@ function populateThemeDropdown() {
   const sel = document.getElementById('cfg-theme-select');
   if (!sel) return;
   sel.innerHTML = `
-    <option value="theme-dark">Dark (Default)</option>
-    <option value="theme-light">Light</option>
-    <option value="theme-hc">High Contrast</option>
+    <option value="theme-dark">Orbit Dark (Antigravity Charcoal)</option>
+    <option value="theme-light">Nebula Light (Clean Slate)</option>
+    <option value="theme-hc">High Contrast OLED</option>
+    <option value="midnight-blue">Midnight Blue (Deep Navy)</option>
   `;
   const current = (state.theme === 'nebula-light' || state.theme === 'theme-light' || state.theme === 'light') ? 'theme-light' :
-    (state.theme === 'theme-hc' || state.theme === 'hc' || state.theme === 'high-contrast') ? 'theme-hc' : 'theme-dark';
+    (state.theme === 'theme-hc' || state.theme === 'hc' || state.theme === 'high-contrast') ? 'theme-hc' :
+    (state.theme === 'midnight-blue') ? 'midnight-blue' : 'theme-dark';
   sel.value = current;
 }
 
@@ -990,6 +996,8 @@ export function applyTheme(themeName) {
     norm = 'theme-light';
   } else if (themeName === 'theme-hc' || themeName === 'hc' || themeName === 'high-contrast') {
     norm = 'theme-hc';
+  } else if (themeName === 'midnight-blue') {
+    norm = 'midnight-blue';
   } else {
     norm = 'theme-dark';
   }
@@ -1746,6 +1754,7 @@ function setupTerminalSettingsUI() {
     t.cursorStyle = val('cfg-term-cursor-style') || 'block';
     t.cursorBlink = document.getElementById('cfg-term-cursor-blink')?.checked !== false;
     import('./terminal.js').then(m => { if (m.applyTerminalAppearance) m.applyTerminalAppearance(); });
+    import('../state/store.js').then(s => s.persistState());
     markSettingsModified();
   };
   block.querySelectorAll('input, select').forEach(el => el.addEventListener('change', apply));
