@@ -919,10 +919,6 @@ async function handleSend() {
         effectivePrompt += ' (Instruction: You must use the write_file tool to write this file directly to disk. Do not output code into chat without saving to file.)';
       }
     }
-    const isFileWriteRequestDummy = /\b(write|create|save|put|add|generate|make)\b.*?\b(into|in|to|file)?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i.test(promptText);
-    if (isFileWriteRequest && !effectivePrompt.includes('write_file')) {
-      effectivePrompt += ' (Instruction: You must use the write_file tool to write this file directly to disk.)';
-    }
 
     if (isComplexRequest(promptText)) {
       await generateAndPresentPlan(promptText);
