@@ -355,6 +355,8 @@ export function initMonaco(containerElement) {
     wordWrap: s.wordWrap, wordWrapColumn: s.wordWrapColumn,
     renderLineHighlight: 'all', cursorBlinking: 'smooth', cursorSmoothCaretAnimation: 'on',
     smoothScrolling: true, bracketPairColorization: { enabled: true },
+    inlineSuggest: { enabled: true, mode: 'always' },
+    suggest: { preview: true },
     guides: { bracketPairs: true, indentation: true },
   });
 
@@ -569,55 +571,147 @@ export function rebindEditorCommands() {
 let inlineCompletionSeq = 0;
 let inlineCompletionsRegistered = false;
 
+// Local heuristic predictive completion fallback
+function getLocalSuggestion(prefix, suffix, lineContent, language) {
+  const trimmed = lineContent.trim();
+  if (!trimmed) return null;
+
+  // Bracket and quote closing
+  if (trimmed.endsWith('{') && !suffix.trim().startsWith('}')) return '\n  \n}';
+  if (trimmed.endsWith('(') && !suffix.trim().startsWith(')')) return ')';
+  if (trimmed.endsWith('[') && !suffix.trim().startsWith(']')) return ']';
+
+  // Language specific idioms
+  if (language === 'python') {
+    if (trimmed.startsWith('def ') && trimmed.endsWith(':')) return '\n    pass';
+    if (trimmed.startsWith('class ') && trimmed.endsWith(':')) return '\n    def __init__(self):\n        pass';
+    if (trimmed.startsWith('if __name__')) return ' == "__main__":\n    main()';
+    if (trimmed.startsWith('for ') && !trimmed.endsWith(':')) return ' in range():';
+  } else if (language === 'javascript' || language === 'typescript') {
+    if (trimmed.startsWith('function ') && !trimmed.includes('{')) return '() {\n  \n}';
+    if (trimmed.startsWith('const ') && trimmed.includes('=') && trimmed.includes('(') && !trimmed.includes('=>')) return ' => {\n  \n};';
+    if (trimmed === 'console.log') return '();';
+    if (trimmed.startsWith('export default function')) return '() {\n  \n}';
+  } else if (language === 'rust') {
+    if ((trimmed.startsWith('fn ') || trimmed.startsWith('pub fn ')) && !trimmed.includes('{')) return '() {\n    \n}';
+    if (trimmed.startsWith('let mut ') && !trimmed.includes('=')) return ' = ';
+  }
+
+  // Word token prefix matching from buffer
+  const lastWordMatch = lineContent.match(/([a-zA-Z0-9_$]{3,})$/);
+  if (lastWordMatch) {
+    const prefixWord = lastWordMatch[1];
+    const tokens = prefix.match(/\b[a-zA-Z0-9_$]{4,}\b/g) || [];
+    const match = tokens.find(t => t.startsWith(prefixWord) && t !== prefixWord);
+    if (match) {
+      return match.slice(prefixWord.length);
+    }
+  }
+
+  return null;
+}
+
 function registerInlineCompletions() {
   if (inlineCompletionsRegistered) return;
   inlineCompletionsRegistered = true;
 
   monaco.languages.registerInlineCompletionsProvider('*', {
-    async provideInlineCompletions(model, position) {
+    async provideInlineCompletions(model, position, context, token) {
       const cfg = state.settings.inlineComplete || {};
-      if (!cfg.enabled) return { items: [] };
+      if (cfg.enabled === false) return { items: [] };
 
-      // Only trigger after the user pauses for 600ms, and never on a blank line
+      // Grab current line up to cursor
       const lineContent = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
-      if (!lineContent.trim()) return { items: [] };
+      if (!lineContent.trim() && position.column === 1) return { items: [] };
 
+      // Responsive 180ms debounce (feels instant like Copilot without spamming backend)
       const mySeq = ++inlineCompletionSeq;
-      await new Promise(r => setTimeout(r, 600));
-      if (mySeq !== inlineCompletionSeq) return { items: [] }; // user kept typing
+      await new Promise(r => setTimeout(r, 180));
+      if (mySeq !== inlineCompletionSeq || token?.isCancellationRequested) return { items: [] };
 
       const offset = model.getOffsetAt(position);
       const full = model.getValue();
-      const prefix = full.slice(Math.max(0, offset - 200), offset);
+      const prefix = full.slice(Math.max(0, offset - 800), offset);
+      const suffix = full.slice(offset, Math.min(full.length, offset + 200));
+      const language = model.getLanguageId();
 
       const indicator = document.getElementById('sb-complete-indicator');
       if (indicator) indicator.style.display = '';
+
       try {
         const spec = state.ai.speculative || {};
-        let res;
+        let text = '';
+
         if (spec.enabled && spec.draftModel) {
-          res = await invoke('speculative_complete_code', {
-            draftModel: spec.draftModel,
-            verifierModel: spec.verifierModel || state.ai.model,
+          try {
+            const res = await invoke('speculative_complete_code', {
+              draftModel: spec.draftModel,
+              verifierModel: spec.verifierModel || state.ai.model || 'llama3',
+              baseUrl: state.ai.endpoint || 'http://localhost:11434',
+              prefix,
+              suffix,
+              language,
+              requestId: String(mySeq),
+            });
+            text = (res && (res.completion || res.final || res.draft)) || '';
+          } catch (_) {}
+        } else {
+          // Robust AI completion with timeout race against local predictive fallback
+          const aiPromise = invoke('complete_code', {
+            provider: state.ai.provider || 'ollama',
+            apiKey: state.ai.apiKey || '',
+            model: state.ai.model || 'llama3',
             baseUrl: state.ai.endpoint || 'http://localhost:11434',
             prefix,
-            suffix: full.slice(offset, offset + 60),
-            language: model.getLanguageId(),
-            requestId: String(mySeq),
+            suffix,
+            language,
           });
-        } else {
-          res = await invoke('complete_code', {
-            prefix,
-            suffix: full.slice(offset, offset + 60),
-            language: model.getLanguageId(),
-          });
+
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+          const res = await Promise.race([aiPromise, timeoutPromise]);
+          if (res && res.completion) {
+            text = res.completion;
+          }
         }
-        if (mySeq !== inlineCompletionSeq) return { items: [] };
-        let text = (res && (res.completion || res.final || res.draft)) || '';
-        text = text.trimEnd();
-        if (!text || text.length > 400) return { items: [] };
-        return { items: [{ insertText: text, range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column) }] };
-      } catch (e) {
+
+        // If backend was slow or empty, fall back to local syntax predictive engine
+        if (!text) {
+          text = getLocalSuggestion(prefix, suffix, lineContent, language) || '';
+        }
+
+        if (mySeq !== inlineCompletionSeq || token?.isCancellationRequested) return { items: [] };
+
+        // Clean up completion string: strip markdown fences and leading blank lines
+        text = text.replace(/^\`\`\`[a-zA-Z0-9_-]*\r?\n?/, '').replace(/\r?\n?\`\`\`$/, '');
+        text = text.replace(/^\s*\r?\n+/, '');
+
+        if (!text || text.length > 500) return { items: [] };
+
+        // Avoid duplicate overlap with characters directly after cursor
+        const afterCursor = model.getLineContent(position.lineNumber).substring(position.column - 1);
+        if (afterCursor && text.startsWith(afterCursor)) {
+          text = text.substring(afterCursor.length);
+        }
+        if (!text) return { items: [] };
+
+        return {
+          items: [
+            {
+              insertText: text,
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+            }
+          ]
+        };
+      } catch (err) {
+        const fallback = getLocalSuggestion(prefix, suffix, lineContent, language);
+        if (fallback) {
+          return {
+            items: [{
+              insertText: fallback,
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+            }]
+          };
+        }
         return { items: [] };
       } finally {
         if (indicator) indicator.style.display = 'none';

@@ -768,6 +768,17 @@
             <textarea class="composer-textarea" id="agent-input" placeholder="Ask Orbital X to edit, test, or explain..." rows="2" aria-label="Agent chat input"></textarea>
             <div class="composer-bottom-bar">
               <div style="display: flex; align-items: center; gap: 6px;">
+                <!-- Ask / Chat Segmented Mode Switcher -->
+                <div class="composer-mode-tabs" id="composer-mode-tabs">
+                  <button class="composer-mode-btn" id="btn-mode-ask" data-cmode="ask" type="button" title="Ask Mode: Read-only Q&A & code explanations (cannot edit or delete files)">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <span>Ask</span>
+                  </button>
+                  <button class="composer-mode-btn active" id="btn-mode-chat" data-cmode="chat" type="button" title="Chat / Agent Mode: Full AI software engineer (writes code, edits files, executes tools)">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                    <span>Chat</span>
+                  </button>
+                </div>
                 <!-- Model selector pill on bottom left -->
                 <div class="composer-model-pill" id="composer-model-selector" title="Click to change model">
                   <span style="color: var(--accent-cyan); font-weight: bold;">+</span>
@@ -804,12 +815,12 @@
                       </svg>
                       <span>Compact</span>
                     </button>
-                    <button class="context-popover-btn danger" id="popover-btn-clear" title="Clear conversation history">
+                    <button class="context-popover-btn danger" id="popover-btn-clear" title="Reset model context window tokens (keeps conversation history visible in chat)">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18"></line>
                         <line x1="6" y1="6" x2="18" y2="18"></line>
                       </svg>
-                      <span>Clear</span>
+                      <span>Reset Context</span>
                     </button>
                   </div>
                   <div class="context-popover-footer">

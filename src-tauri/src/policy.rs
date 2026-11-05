@@ -6,6 +6,7 @@ pub enum AgentMode {
     AgentPro,
     Dev,
     User,
+    Ask,
 }
 
 impl Default for AgentMode {
@@ -580,12 +581,72 @@ impl PolicyEngine {
                     },
                 }
             }
+            AgentMode::Ask => {
+                match tool_name {
+                    // Read and search tools are fully allowed in Ask mode so the model can inspect code
+                    "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "read_file_lines" | "read_multiple_files" | "find_symbol"
+                    | "get_project_structure" | "get_project_map" | "search_context"
+                    | "search_project_memory" | "list_memories" | "git_status" | "git_diff"
+                    | "web_search" | "fetch_page" | "list_skills" | "read_skill" => {
+                        PolicyDecision {
+                            allowed: true,
+                            requires_approval: false,
+                            risk: ToolRisk::Low,
+                            reason: "Read-only inspection permitted in Ask Mode".into(),
+                        }
+                    }
+                    // ALL filesystem writes, edits, deletions, and commands are strictly prohibited in Ask mode!
+                    "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "create_directory" | "rename_file" | "copy_file" | "delete_file"
+                    | "delete_directory" | "delete_folder" | "batch_delete_files" | "delete_path"
+                    | "undo_agent_change" | "save_project_memory" | "delete_project_memory"
+                    | "run_command" | "run_tests" | "run_build" | "run_linter" | "git_commit" | "git_push" => {
+                        PolicyDecision {
+                            allowed: false,
+                            requires_approval: false,
+                            risk: ToolRisk::High,
+                            reason: "Operation blocked: File modifications, deletions, and terminal commands are strictly prohibited in Ask Mode. Switch to Chat Mode to edit files.".into(),
+                        }
+                    }
+                    _ => PolicyDecision {
+                        allowed: false,
+                        requires_approval: false,
+                        risk: ToolRisk::High,
+                        reason: "Action blocked in Ask Mode. Switch to Chat Mode to execute tools.".into(),
+                    },
+                }
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn test_ask_mode_confinement() {
+        // Reads are allowed without approval in Ask Mode
+        let dec_read = PolicyEngine::evaluate(AgentMode::Ask, "read_file", "src/main.rs", false);
+        assert!(dec_read.allowed);
+        assert!(!dec_read.requires_approval);
+
+        let dec_list = PolicyEngine::evaluate(AgentMode::Ask, "list_files", "", false);
+        assert!(dec_list.allowed);
+
+        // Writes, patches, deletions, commands are strictly BLOCKED in Ask Mode!
+        let dec_write = PolicyEngine::evaluate(AgentMode::Ask, "write_file", "src/main.rs", false);
+        assert!(!dec_write.allowed);
+
+        let dec_patch = PolicyEngine::evaluate(AgentMode::Ask, "patch_file", "src/main.rs", false);
+        assert!(!dec_patch.allowed);
+
+        let dec_del = PolicyEngine::evaluate(AgentMode::Ask, "delete_file", "src/main.rs", false);
+        assert!(!dec_del.allowed);
+
+        let dec_cmd = PolicyEngine::evaluate(AgentMode::Ask, "run_command", "cargo test", false);
+        assert!(!dec_cmd.allowed);
+    }
+
     use super::*;
 
     #[test]
