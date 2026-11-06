@@ -16,7 +16,7 @@ import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
-import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden } from './services/notifications.js';
+import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden, getFilteredActivities, getNotificationPersona, setNotificationPersona } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
@@ -835,12 +835,35 @@ function showReportIssueOfflineModal() {
 // K2 — Activity Center
 // ---------------------------------------------------------------
 
+let currentActivityFilter = 'all';
+
 function initActivityCenter() {
   loadActivityHistory();
 
   const bell = document.getElementById('btn-activity-center');
   const panel = document.getElementById('activity-center');
   const backdrop = document.getElementById('activity-center-backdrop');
+  const personaSelect = document.getElementById('activity-persona-select');
+
+  if (personaSelect) {
+    personaSelect.value = getNotificationPersona();
+    personaSelect.addEventListener('change', (e) => {
+      setNotificationPersona(e.target.value);
+      renderActivityList(currentActivityFilter);
+      showToast(`Notification feed customized: ${personaSelect.options[personaSelect.selectedIndex]?.text.split('(')[0].trim()}`, 'info', 2000);
+    });
+  }
+
+  // Filter chips (Feature 6)
+  const chips = document.querySelectorAll('.activity-filter-chips .activity-chip');
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentActivityFilter = chip.dataset.filter || 'all';
+      renderActivityList(currentActivityFilter);
+    });
+  });
 
   const close = () => {
     panel.style.display = 'none';
@@ -851,42 +874,80 @@ function initActivityCenter() {
     if (open) { close(); return; }
     panel.style.display = 'flex';
     backdrop.style.display = 'block';
-    renderActivityList();
+    if (personaSelect) personaSelect.value = getNotificationPersona();
+    renderActivityList(currentActivityFilter);
     markAllActivityRead();
   });
   backdrop?.addEventListener('click', close);
   document.getElementById('activity-close')?.addEventListener('click', close);
   document.getElementById('activity-clear')?.addEventListener('click', () => {
     clearActivity();
-    renderActivityList();
+    renderActivityList(currentActivityFilter);
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && panel.style.display === 'flex') close();
   });
 }
 
-function renderActivityList() {
+function renderActivityList(filterType = 'all') {
   const list = document.getElementById('activity-list');
   if (!list) return;
-  const items = (window.__orbitalStateNotifications || []).slice();
+
+  const notifs = getFilteredActivities(filterType);
   list.innerHTML = '';
-  const notifs = (state.notifications || []);
+
+  const persona = getNotificationPersona();
+  const personaDesc = persona === 'milestones'
+    ? '🎯 Showing curated milestone summaries & task completions (Low noise: max 20)'
+    : (persona === 'balanced' ? '⚡ Showing balanced notifications & important file saves' : '🔍 Showing complete developer logs');
+
   if (notifs.length === 0) {
-    list.innerHTML = '<div class="pack-empty">No notifications yet.<br>Agent activity, saves, and git operations appear here.</div>';
+    list.innerHTML = `
+      <div style="font-size: 11px; color: var(--text-muted); padding: 4px 6px; margin-bottom: 6px;">${personaDesc}</div>
+      <div class="pack-empty">No notifications matching this filter.<br>Milestone achievements, agent plans, and task completions appear here.</div>
+    `;
     return;
   }
+
+  const headerHint = document.createElement('div');
+  headerHint.style.cssText = 'font-size: 10.5px; color: var(--text-muted); padding: 2px 4px 6px 4px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px;';
+  headerHint.innerHTML = `<span>${personaDesc}</span><span style="font-weight: 600; color: var(--accent-cyan);">${notifs.length} item${notifs.length === 1 ? '' : 's'}</span>`;
+  list.appendChild(headerHint);
+
   const ICONS = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
+
   for (const n of notifs) {
     const row = document.createElement('div');
     row.className = 'pack-card';
-    row.style.cssText = 'padding: 8px 10px; cursor: pointer;';
+    row.style.cssText = 'padding: 8px 10px; cursor: pointer; transition: all 0.12s ease;';
+
     const time = new Date(n.timestamp).toLocaleTimeString();
+    const countBadge = n.count && n.count > 1 ? `<span style="font-size: 9.5px; background: rgba(57, 197, 187, 0.18); color: var(--accent-cyan); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: 700;">×${n.count}</span>` : '';
+
+    let tagHtml = '';
+    if (n.category === 'milestone') {
+      tagHtml = '<span class="activity-tag-badge activity-tag-milestone">🎯 Milestone</span>';
+    } else if (n.category === 'task') {
+      tagHtml = '<span class="activity-tag-badge activity-tag-task">📋 Task</span>';
+    } else if (n.category === 'file') {
+      tagHtml = '<span class="activity-tag-badge activity-tag-file">📁 File</span>';
+    } else if (n.category === 'error' || n.type === 'error') {
+      tagHtml = '<span class="activity-tag-badge activity-tag-error">⚠️ Error</span>';
+    }
+
     row.innerHTML = `
-      <div class="pack-title-row">
-        <span class="pack-name" style="font-weight: 500; font-size: 11px;">${ICONS[n.type] || 'ℹ️'} ${escapeHtml(n.message)}</span>
+      <div class="pack-title-row" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+        <span class="pack-name" style="font-weight: 500; font-size: 11.5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+          ${ICONS[n.type] || 'ℹ️'} ${escapeHtml(n.message)} ${countBadge}
+        </span>
+        ${tagHtml}
       </div>
-      <div class="pack-meta">${time}${n.meta?.path ? ` · ${escapeHtml(n.meta.path)}` : ''}</div>
+      <div class="pack-meta" style="margin-top: 4px; font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+        <span>${time}</span>
+        ${n.meta?.path ? `<span style="font-family: var(--font-mono); color: var(--accent-cyan); text-decoration: underline;">Open ${escapeHtml(n.meta.path.split(/[/\\]/).pop())} ↗</span>` : ''}
+      </div>
     `;
+
     row.addEventListener('click', async () => {
       const path = n.meta?.path;
       if (path) {
@@ -1539,8 +1600,10 @@ function initProductionHardening() {
     window.__wasHidden = document.hidden;
   });
   window.addEventListener('orbital:agent-run-finished', (e) => {
+    const steps = e.detail?.steps || 0;
+    recordActivity(`🎯 Agent task run completed (${steps} steps finished)`, 'success', { category: 'milestone' });
     if (isWindowHidden()) {
-      notifyNative('Orbital X', `✅ Agent task completed (${e.detail?.steps || 0} steps)`);
+      notifyNative('Orbital X', `✅ Agent task completed (${steps} steps)`);
     }
   });
 }

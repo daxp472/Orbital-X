@@ -1,12 +1,12 @@
 // ==========================================================================
 // Orbital X — Notification & Activity Center (notifications.js)
 //
-// K1: premium toasts — typed icons, action buttons, auto-dismiss progress
-//     bar, hover-to-pause, max 5 stacked (newest on top).
-// K2: Activity Center — every notification lands in a persistent feed
-//     (max 50) with unread badge, exposed via the titlebar bell.
-// K3: native OS notification bridge — notifyNative() calls the Rust side
-//     for system toasts when the window is hidden/minimized.
+// K1: premium toasts — typed icons, action buttons, auto-dismiss progress bar.
+// K2: Activity Center — person-to-person customizable feed (Feature 6):
+//     Reduces hundreds of spammy notifications to a curated set of 15–20
+//     meaningful notifications (milestones, plan progress, task completions)
+//     while offering balanced and developer-level granularity presets.
+// K3: native OS notification bridge — notifyNative() calls the Rust side.
 // ==========================================================================
 
 import { state } from '../state/store.js';
@@ -21,41 +21,135 @@ const ICONS = {
 };
 
 // ---------------------------------------------------------------------------
-// K2 — activity feed
+// Person-to-Person Notification Persona / Preference (Feature 6)
+// 'milestones' = Curated High-Signal (15–20 entries max, summaries only)
+// 'balanced'   = Important changes, task progress, git commits
+// 'all'        = Granular developer log (every file touch & command)
+// ---------------------------------------------------------------------------
+
+const PERSONA_KEY = 'orbital_notification_persona';
+
+export function getNotificationPersona() {
+  try {
+    return localStorage.getItem(PERSONA_KEY) || 'milestones';
+  } catch (e) {
+    return 'milestones';
+  }
+}
+
+export function setNotificationPersona(persona) {
+  try {
+    localStorage.setItem(PERSONA_KEY, persona || 'milestones');
+  } catch (e) {}
+}
+
+/**
+ * Categorize notification to enable intelligent filtering and aggregation.
+ */
+export function determineCategory(message, type, meta = {}) {
+  if (meta.category) return meta.category;
+  if (type === 'error') return 'error';
+
+  const m = (message || '').toLowerCase();
+
+  // Milestone / Task Completion Indicators
+  if (
+    m.includes('completed') ||
+    m.includes('finished') ||
+    m.includes('plan approved') ||
+    m.includes('implementation') ||
+    m.includes('all tasks') ||
+    m.includes('milestone') ||
+    m.includes('tasks completed') ||
+    m.includes('run finished') ||
+    m.includes('evidence verified') ||
+    m.includes('tests passed') ||
+    m.includes('tests failed')
+  ) {
+    return 'milestone';
+  }
+
+  // Task Step Indicators
+  if (m.includes('task') || m.includes('step') || m.includes('stage') || m.includes('tool:')) {
+    return 'task';
+  }
+
+  // File Mutating Indicators
+  if (
+    m.includes('written directly') ||
+    m.includes('saved') ||
+    m.includes('modified') ||
+    m.includes('deleted') ||
+    m.includes('patched') ||
+    m.includes('file')
+  ) {
+    return 'file';
+  }
+
+  return 'system';
+}
+
+// ---------------------------------------------------------------------------
+// K2 — Activity Feed with Smart De-duplication and Curated Filtering
 // ---------------------------------------------------------------------------
 
 export function recordActivity(message, type = 'info', meta = {}) {
   state.notifications = state.notifications || [];
+
+  const category = determineCategory(message, type, meta);
+
+  // De-duplication: If identical message arrived within 15 seconds, collapse into a count badge
+  const now = Date.now();
+  const recent = state.notifications[0];
+  if (recent && recent.message === message && (now - new Date(recent.timestamp).getTime()) < 15000) {
+    recent.count = (recent.count || 1) + 1;
+    recent.timestamp = new Date().toISOString();
+    updateUnreadBadge();
+    try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) {}
+    return;
+  }
+
   state.notifications.unshift({
     id: `act_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
     message,
     type,
+    category,
     timestamp: new Date().toISOString(),
     read: false,
-    meta, // { path?, line?, command? } — used for click-to-navigate
+    count: 1,
+    meta, // { path?, line?, command? }
   });
-  if (state.notifications.length > 50) state.notifications = state.notifications.slice(0, 50);
+
+  // Keep a maximum buffer of 60 items in storage
+  if (state.notifications.length > 60) {
+    state.notifications = state.notifications.slice(0, 60);
+  }
+
   updateUnreadBadge();
-  try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) { /* quota */ }
+  try {
+    localStorage.setItem('orbital_activity', JSON.stringify(state.notifications));
+  } catch (e) {}
 }
 
 export function markAllActivityRead() {
   for (const n of state.notifications || []) n.read = true;
   updateUnreadBadge();
-  try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) { /* quota */ }
+  try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) {}
 }
 
 export function clearActivity() {
   state.notifications = [];
   updateUnreadBadge();
-  try { localStorage.removeItem('orbital_activity'); } catch (e) { /* quota */ }
+  try { localStorage.removeItem('orbital_activity'); } catch (e) {}
 }
 
 export function loadActivityHistory() {
   try {
     const raw = JSON.parse(localStorage.getItem('orbital_activity') || '[]');
-    if (Array.isArray(raw)) state.notifications = raw.slice(0, 50);
-  } catch (e) { /* keep empty */ }
+    if (Array.isArray(raw)) state.notifications = raw.slice(0, 60);
+  } catch (e) {
+    state.notifications = [];
+  }
   updateUnreadBadge();
 }
 
@@ -80,8 +174,41 @@ function updateUnreadBadge() {
   }
 }
 
+/**
+ * Filter notifications according to persona and category filter chip.
+ * When persona is 'milestones', curates to ~15-20 high-value notifications.
+ */
+export function getFilteredActivities(filterType = 'all', persona = null) {
+  const currentPersona = persona || getNotificationPersona();
+  const all = (state.notifications || []).slice();
+
+  let filtered = all;
+
+  // 1. Apply Persona Constraints
+  if (currentPersona === 'milestones') {
+    // Only show milestones, high-level task summaries, and critical errors
+    filtered = all.filter(n => n.category === 'milestone' || n.category === 'task' || n.category === 'error' || n.type === 'error');
+    // Limit to curated 15–20 essential items
+    filtered = filtered.slice(0, 20);
+  } else if (currentPersona === 'balanced') {
+    // Hide spammy single file reads, keep writes, tasks, and milestones
+    filtered = all.filter(n => !n.message.toLowerCase().startsWith('read file'));
+    filtered = filtered.slice(0, 35);
+  } else {
+    // 'all' developer mode
+    filtered = all.slice(0, 50);
+  }
+
+  // 2. Apply Specific Category Filter if selected
+  if (filterType && filterType !== 'all') {
+    filtered = filtered.filter(n => n.category === filterType || (filterType === 'error' && n.type === 'error'));
+  }
+
+  return filtered;
+}
+
 // ---------------------------------------------------------------------------
-// K1 — premium toasts
+// K1 — Premium Toasts with Smart Suppression in Milestone Persona
 // ---------------------------------------------------------------------------
 
 function ensureToastContainer() {
@@ -103,17 +230,29 @@ function ensureToastContainer() {
  * @param {'info'|'success'|'warning'|'error'} type
  * @param {number} durationMs  0 = sticky until closed
  * @param {Array<{label: string, onClick: Function, primary?: boolean}>} actions
+ * @param {object} meta
  */
-export function showToast(message, type = 'info', durationMs = 3000, actions = []) {
+export function showToast(message, type = 'info', durationMs = 3000, actions = [], meta = {}) {
   const container = ensureToastContainer();
   const validTypes = ['info', 'success', 'warning', 'error'];
   const safeType = validTypes.includes(type) ? type : 'info';
 
-  // K1: max 5 visible — oldest dismissed when a 6th arrives
+  // Always record into activity history with category
+  recordActivity(message, safeType, meta);
+
+  // Persona toast suppression:
+  // If user prefers 'milestones', suppress repetitive micro toasts (e.g. minor file reads)
+  const persona = getNotificationPersona();
+  const cat = determineCategory(message, safeType, meta);
+  if (persona === 'milestones' && cat === 'file' && !message.includes('Written directly') && safeType === 'info') {
+    return { dismiss: () => {} };
+  }
+
+  // Max 5 visible stacked toasts
   const existing = container.querySelectorAll('.toast-item:not(.toast-hide)');
   if (existing.length >= 5) {
     existing[existing.length - 1].classList.add('toast-hide');
-    setTimeout(() => existing[existing.length - 1].remove(), 280);
+    setTimeout(() => existing[existing.length - 1]?.remove(), 280);
   }
 
   const toast = document.createElement('div');
@@ -133,7 +272,6 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
 
   contentEl.appendChild(msgEl);
 
-  // K1: action buttons
   if (Array.isArray(actions) && actions.length > 0) {
     const row = document.createElement('div');
     row.className = 'toast-actions';
@@ -160,8 +298,6 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
   if (durationMs > 0) progress.style.animationDuration = `${durationMs}ms`;
 
   toast.append(iconEl, contentEl, closeBtn, progress);
-
-  // Newest on top
   container.insertBefore(toast, container.firstChild);
 
   requestAnimationFrame(() => toast.classList.add('toast-show'));
@@ -199,12 +335,11 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
   if (durationMs > 0) schedule();
   else progress.style.display = 'none';
 
-  recordActivity(message, safeType);
   return { dismiss };
 }
 
 // ---------------------------------------------------------------------------
-// K3 — native OS notification (via Rust), used when minimized/hidden
+// K3 — Native OS Notification Bridge
 // ---------------------------------------------------------------------------
 
 export async function notifyNative(title, body) {
@@ -212,12 +347,10 @@ export async function notifyNative(title, body) {
     const { invoke } = await import('./tauri.js');
     await invoke('notify_native', { title, body });
   } catch (e) {
-    // Browser preview / plugin unavailable — fall back to an in-app toast
     showToast(`${title} — ${body}`, 'info', 5000);
   }
 }
 
-/** True when the webview window is likely not visible to the user. */
 export function isWindowHidden() {
   return document.hidden || document.visibilityState === 'hidden';
 }
