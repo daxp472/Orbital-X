@@ -11,6 +11,8 @@ let hudModal = null;
 let canvas = null;
 let canvasCtx = null;
 let isHudOpen = false;
+let maxRecordedTps = 0;
+let lastActiveTps = 0;
 
 export function initTelemetryHUD() {
   injectStatusBarPill();
@@ -230,7 +232,13 @@ export async function pollTelemetry() {
 }
 
 function updateUI(data) {
-  const tpsFormatted = (data.tokensPerSecond || 0).toFixed(1);
+  const currentTps = Number(data.tokensPerSecond || 0);
+  if (currentTps > 0) {
+    lastActiveTps = currentTps;
+    if (currentTps > maxRecordedTps) maxRecordedTps = currentTps;
+  }
+  const displayTps = currentTps > 0 ? currentTps : lastActiveTps;
+  const tpsFormatted = displayTps.toFixed(1);
   const vramGb = ((data.vramUsedMb || 0) / 1024).toFixed(1);
   const vramTotalGb = ((data.vramTotalMb || 0) / 1024).toFixed(1);
   const cpuPercent = Math.round(data.cpuPercent || 0);
@@ -244,33 +252,26 @@ function updateUI(data) {
   const sbCpu = document.getElementById('sb-telemetry-cpu');
   const ramPercentVal = Math.round(data.ramPercent || 0);
 
-  if (sbTps) sbTps.textContent = `${tpsFormatted} tps`;
+  if (sbTps) {
+    if (currentTps > 0) {
+      sbTps.textContent = `${tpsFormatted} tps`;
+      sbTps.style.color = '#00e5ff';
+    } else if (lastActiveTps > 0) {
+      sbTps.textContent = `${lastActiveTps.toFixed(1)} tps (last)`;
+      sbTps.style.color = 'var(--text-secondary)';
+    } else {
+      sbTps.textContent = `0.0 tps`;
+      sbTps.style.color = 'var(--text-secondary)';
+    }
+  }
   if (sbRam) sbRam.textContent = `${ramGb}/${ramTotalGb} GB (${ramPercentVal}%)`;
   if (sbVram) sbVram.textContent = `${vramGb} GB VRAM`;
   if (sbCpu) sbCpu.textContent = `${cpuPercent}% CPU`;
 
-  // Developer Settings live RAM gauge sync
-  const devRamText = document.getElementById('dev-ram-stats-text');
-  const devRamBar = document.getElementById('dev-ram-progress-bar');
-  const devRamFree = document.getElementById('dev-ram-free-text');
-  const devRamTotal = document.getElementById('dev-ram-total-text');
-  const devCpu = document.getElementById('dev-metric-cpu');
-  const devVram = document.getElementById('dev-metric-vram');
-  const devVramSub = document.getElementById('dev-metric-vram-sub');
-  const devTps = document.getElementById('dev-metric-tps');
-
-  if (devRamText) devRamText.textContent = `${ramGb} / ${ramTotalGb} GB (${ramPercentVal}%)`;
-  if (devRamBar) devRamBar.style.width = `${Math.min(100, Math.max(3, ramPercentVal))}%`;
-  if (devRamFree) devRamFree.textContent = `Free: ${((data.ramFreeMb || 0)/1024).toFixed(1)} GB`;
-  if (devRamTotal) devRamTotal.textContent = `Total: ${ramTotalGb} GB`;
-  if (devCpu) devCpu.textContent = `${cpuPercent}%`;
-  if (devVram) devVram.textContent = `${vramGb} GB`;
-  if (devVramSub) devVramSub.textContent = `${Math.round(data.vramPercent || 0)}% of ${vramTotalGb} GB`;
-  if (devTps) devTps.textContent = `${tpsFormatted} tps`;
-
   // HUD Modal
   if (isHudOpen) {
     const elTps = document.getElementById('hud-val-tps');
+    const elSubTps = document.getElementById('hud-sub-tps');
     const elVram = document.getElementById('hud-val-vram');
     const elSubVram = document.getElementById('hud-sub-vram');
     const elCpu = document.getElementById('hud-val-cpu');
@@ -287,6 +288,18 @@ function updateUI(data) {
     const elModel = document.getElementById('hud-active-model');
 
     if (elTps) elTps.textContent = tpsFormatted;
+    if (elSubTps) {
+      if (currentTps > 0) {
+        elSubTps.textContent = 'Active token stream';
+        elSubTps.style.color = '#00e5ff';
+      } else if (maxRecordedTps > 0) {
+        elSubTps.textContent = `Idle • Peak: ${maxRecordedTps.toFixed(1)} tps`;
+        elSubTps.style.color = 'var(--text-secondary)';
+      } else {
+        elSubTps.textContent = 'Idle (ready)';
+        elSubTps.style.color = 'var(--text-secondary)';
+      }
+    }
     if (elVram) elVram.textContent = `${vramGb} GB`;
     if (elSubVram) elSubVram.textContent = `${Math.round(data.vramPercent || 0)}% of ${vramTotalGb} GB`;
     if (elCpu) elCpu.textContent = `${cpuPercent}%`;
@@ -301,12 +314,12 @@ function updateUI(data) {
 
     // Push into history buffer
     historyBuffer.push({
-      tps: data.tokensPerSecond || 0,
+      tps: displayTps,
       vramPercent: data.vramPercent || 0,
       cpuPercent: cpuPercent,
       time: Date.now(),
     });
-    if (historyBuffer.len > 60) historyBuffer.shift();
+    if (historyBuffer.length > 60) historyBuffer.shift();
 
     renderCanvasGraph();
   }

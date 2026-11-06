@@ -77,6 +77,18 @@ export function initAgent() {
       clearContextWindow();
     });
 
+    // Quick Starter Cards delegation
+    document.getElementById('agent-timeline')?.addEventListener('click', (e) => {
+      const card = e.target.closest('.chat-starter-card');
+      if (!card) return;
+      const prompt = card.dataset.prompt;
+      if (prompt && inputElem) {
+        inputElem.value = prompt;
+        inputElem.focus();
+        inputElem.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+
     // Ask vs Chat Mode Switcher
     document.getElementById('btn-mode-ask')?.addEventListener('click', () => switchComposerMode('ask'));
     document.getElementById('btn-mode-chat')?.addEventListener('click', () => switchComposerMode('chat'));

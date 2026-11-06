@@ -51,7 +51,6 @@ export function initSettings() {
       }
       if (t.btn === 'stab-developer') {
         loadDevOptionsIntoUI();
-        import('./telemetry-hud.js').then(m => m.pollTelemetry?.());
       }
     });
   });
@@ -111,11 +110,8 @@ export function initSettings() {
   // Terminal appearance settings (Part E4)
   setupTerminalSettingsUI();
 
-  // Theme Select inside settings
-  populateThemeDropdown();
-  document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
-    applyTheme(e.target.value);
-  });
+  // Appearance & Personalization Settings
+  setupAppearanceSettings();
 
   // Default mode dropdown inside settings
   document.getElementById('cfg-default-mode')?.addEventListener('change', (e) => {
@@ -348,15 +344,30 @@ async function loadOllamaModelsList() {
   let models = [];
   let running = new Map();
   try {
-    models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+    let rawModels = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+    if (typeof rawModels === 'string') {
+      try { rawModels = JSON.parse(rawModels); } catch (_) { rawModels = []; }
+    }
+    models = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
   } catch (e) {
     listEl.innerHTML = `<div style="font-size: 11px; color: var(--accent-orange);">Ollama not reachable at ${state.ai.endpoint}.</div>`;
     return;
   }
   try {
-    const ps = await invoke('ollama_running_models', { endpoint: state.ai.endpoint });
-    for (const m of (ps?.models || [])) {
-      running.set(m.name || m.model, m);
+    let rawPs = await invoke('ollama_running_models', { endpoint: state.ai.endpoint });
+    if (typeof rawPs === 'string') {
+      try { rawPs = JSON.parse(rawPs); } catch (_) { rawPs = {}; }
+    }
+    const psModels = Array.isArray(rawPs?.models) ? rawPs.models : (Array.isArray(rawPs) ? rawPs : []);
+    for (const m of psModels) {
+      if (!m) continue;
+      const key = typeof m === 'string' ? m : (m.name || m.model);
+      if (key) {
+        running.set(key, typeof m === 'object' ? m : { name: key });
+        if (key.includes(':')) {
+          running.set(key.split(':')[0], typeof m === 'object' ? m : { name: key });
+        }
+      }
     }
   } catch (e) { /* /api/ps unavailable on older Ollama — non-fatal */ }
 
@@ -1022,10 +1033,226 @@ export function applyTheme(themeName) {
 }
 
 export function cycleTheme() {
-  const themes = ['theme-dark', 'theme-light', 'theme-hc'];
+  const themes = ['theme-dark', 'midnight-blue', 'theme-light', 'theme-hc'];
   const currentIndex = themes.indexOf(state.theme);
   const nextTheme = themes[(currentIndex + 1) % themes.length];
   applyTheme(nextTheme);
+}
+
+export function setupAppearanceSettings() {
+  populateThemeDropdown();
+
+  // 1. Theme Change
+  document.getElementById('cfg-theme-select')?.addEventListener('change', (e) => {
+    applyTheme(e.target.value);
+  });
+
+  // 2. Accent Color Swatches
+  const savedAccent = localStorage.getItem('orbital_accent_color') || '#00e5ff';
+  applyAccentColor(savedAccent);
+
+  const swatchContainer = document.getElementById('cfg-accent-swatches');
+  if (swatchContainer) {
+    const swatches = swatchContainer.querySelectorAll('.accent-swatch-btn');
+    swatches.forEach(btn => {
+      if (btn.dataset.color.toLowerCase() === savedAccent.toLowerCase()) {
+        btn.classList.add('active');
+        const label = document.getElementById('cfg-accent-color-label');
+        if (label) label.textContent = `${btn.dataset.name} (${btn.dataset.color})`;
+      } else {
+        btn.classList.remove('active');
+      }
+
+      btn.addEventListener('click', () => {
+        swatches.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const col = btn.dataset.color;
+        const name = btn.dataset.name;
+        applyAccentColor(col);
+        const label = document.getElementById('cfg-accent-color-label');
+        if (label) label.textContent = `${name} (${col})`;
+        localStorage.setItem('orbital_accent_color', col);
+      });
+    });
+  }
+
+  // 3. Editor Font Family & Typography
+  import('../editor/monaco.js').then(m => {
+    const s = state.settings?.editor || {};
+    const selFontFamily = document.getElementById('cfg-font-family');
+    if (selFontFamily && s.fontFamily) {
+      selFontFamily.value = s.fontFamily;
+    }
+    selFontFamily?.addEventListener('change', (e) => {
+      s.fontFamily = e.target.value;
+      m.applyEditorSettings?.();
+    });
+
+    // 4. Line Height
+    const selLineHeight = document.getElementById('cfg-line-height');
+    if (selLineHeight && s.lineHeight) {
+      selLineHeight.value = String(s.lineHeight);
+    }
+    selLineHeight?.addEventListener('change', (e) => {
+      s.lineHeight = Number(e.target.value) || 22;
+      m.applyEditorSettings?.();
+    });
+
+    // 5. Font Size + Slider Sync
+    const inputFs = document.getElementById('cfg-font-size');
+    const sliderFs = document.getElementById('cfg-font-size-slider');
+    const labelFs = document.getElementById('cfg-font-size-val');
+    const currentFs = Number(s.fontSize) || 13;
+    if (inputFs) inputFs.value = currentFs;
+    if (sliderFs) sliderFs.value = currentFs;
+    if (labelFs) labelFs.textContent = `${currentFs}px`;
+
+    const syncFs = (val) => {
+      const parsed = Math.min(24, Math.max(10, parseInt(val, 10) || 13));
+      if (inputFs) inputFs.value = parsed;
+      if (sliderFs) sliderFs.value = parsed;
+      if (labelFs) labelFs.textContent = `${parsed}px`;
+      s.fontSize = parsed;
+      m.updateFontSize?.(parsed);
+    };
+    inputFs?.addEventListener('input', (e) => syncFs(e.target.value));
+    sliderFs?.addEventListener('input', (e) => syncFs(e.target.value));
+
+    // 6. Font Ligatures
+    const chkLigatures = document.getElementById('cfg-font-ligatures');
+    if (chkLigatures) {
+      chkLigatures.checked = s.fontLigatures !== false;
+      chkLigatures.addEventListener('change', () => {
+        s.fontLigatures = chkLigatures.checked;
+        m.applyEditorSettings?.();
+      });
+    }
+
+    // 7. Cursor Style
+    const selCursorStyle = document.getElementById('cfg-cursor-style');
+    if (selCursorStyle && s.cursorStyle) {
+      selCursorStyle.value = s.cursorStyle;
+    }
+    selCursorStyle?.addEventListener('change', (e) => {
+      s.cursorStyle = e.target.value;
+      m.applyEditorSettings?.();
+    });
+
+    // 8. Cursor Blinking
+    const selCursorBlink = document.getElementById('cfg-cursor-blinking');
+    if (selCursorBlink && s.cursorBlinking) {
+      selCursorBlink.value = s.cursorBlinking;
+    }
+    selCursorBlink?.addEventListener('change', (e) => {
+      s.cursorBlinking = e.target.value;
+      m.applyEditorSettings?.();
+    });
+
+    // 9. Cursor Smooth Caret
+    const chkSmooth = document.getElementById('cfg-cursor-smooth');
+    if (chkSmooth) {
+      chkSmooth.checked = s.cursorSmoothCaretAnimation !== false;
+      chkSmooth.addEventListener('change', () => {
+        s.cursorSmoothCaretAnimation = chkSmooth.checked;
+        m.applyEditorSettings?.();
+      });
+    }
+
+    // 10. Minimap
+    const chkMinimap = document.getElementById('cfg-editor-minimap');
+    if (chkMinimap) {
+      chkMinimap.checked = s.minimap !== false;
+      chkMinimap.addEventListener('change', () => {
+        s.minimap = chkMinimap.checked;
+        m.applyEditorSettings?.();
+      });
+    }
+
+    // 11. Bracket Pair Colorization
+    const chkBracket = document.getElementById('cfg-bracket-colorization');
+    if (chkBracket) {
+      chkBracket.checked = s.bracketPairColorization !== false;
+      chkBracket.addEventListener('change', () => {
+        s.bracketPairColorization = chkBracket.checked;
+        m.applyEditorSettings?.();
+      });
+    }
+
+    // 12. Word Wrap
+    const chkWrap = document.getElementById('cfg-editor-wordwrap');
+    if (chkWrap) {
+      chkWrap.checked = s.wordWrap !== 'off';
+      chkWrap.addEventListener('change', () => {
+        s.wordWrap = chkWrap.checked ? 'on' : 'off';
+        m.applyEditorSettings?.();
+      });
+    }
+
+    // 13. Sticky Scroll
+    const chkSticky = document.getElementById('cfg-sticky-scroll');
+    if (chkSticky) {
+      chkSticky.checked = s.stickyScroll !== false;
+      chkSticky.addEventListener('change', () => {
+        s.stickyScroll = chkSticky.checked;
+        m.applyEditorSettings?.();
+      });
+    }
+  });
+
+  // 14. Glassmorphism / Frosted Blur
+  const selGlass = document.getElementById('cfg-glass-blur');
+  const savedGlass = localStorage.getItem('orbital_glass_blur') || 'frosted';
+  if (selGlass) {
+    selGlass.value = savedGlass;
+    applyGlassBlur(savedGlass);
+    selGlass.addEventListener('change', (e) => {
+      applyGlassBlur(e.target.value);
+      localStorage.setItem('orbital_glass_blur', e.target.value);
+    });
+  }
+
+  // 15. UI Density
+  const selDensity = document.getElementById('cfg-ui-density');
+  const savedDensity = localStorage.getItem('orbital_ui_density') || 'comfortable';
+  if (selDensity) {
+    selDensity.value = savedDensity;
+    applyUiDensity(savedDensity);
+    selDensity.addEventListener('change', (e) => {
+      applyUiDensity(e.target.value);
+      localStorage.setItem('orbital_ui_density', e.target.value);
+    });
+  }
+}
+
+export function applyAccentColor(hex) {
+  if (!hex) return;
+  document.documentElement.style.setProperty('--accent-cyan', hex);
+  document.documentElement.style.setProperty('--accent-primary', hex);
+  document.documentElement.style.setProperty('--accent-focus', hex);
+}
+
+export function applyGlassBlur(level) {
+  if (level === 'none') {
+    document.documentElement.style.setProperty('--glass-blur-sm', 'none');
+    document.documentElement.style.setProperty('--glass-blur-md', 'none');
+    document.documentElement.style.setProperty('--glass-blur-lg', 'none');
+  } else if (level === 'subtle') {
+    document.documentElement.style.setProperty('--glass-blur-sm', 'blur(6px)');
+    document.documentElement.style.setProperty('--glass-blur-md', 'blur(10px)');
+    document.documentElement.style.setProperty('--glass-blur-lg', 'blur(16px)');
+  } else {
+    document.documentElement.style.setProperty('--glass-blur-sm', 'blur(12px)');
+    document.documentElement.style.setProperty('--glass-blur-md', 'blur(20px)');
+    document.documentElement.style.setProperty('--glass-blur-lg', 'blur(32px)');
+  }
+}
+
+export function applyUiDensity(density) {
+  if (density === 'compact') {
+    document.body.classList.add('density-compact');
+  } else {
+    document.body.classList.remove('density-compact');
+  }
 }
 
 async function testConnection(provider) {
@@ -1942,8 +2169,12 @@ function setupAgentEngineSettings() {
         } catch (e) {}
       }
 
-      invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(models => {
-        const list = models || [];
+      invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(rawModels => {
+        let list = rawModels;
+        if (typeof list === 'string') {
+          try { list = JSON.parse(list); } catch (_) { list = []; }
+        }
+        list = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
         const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
         selDraft.innerHTML = opts;
         selVerifier.innerHTML = opts;
@@ -1995,8 +2226,13 @@ function setupAgentEngineSettings() {
     const selExplain = block.querySelector('#cfg-routing-explain');
     const selFast = block.querySelector('#cfg-routing-fast');
 
-    invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(models => {
-      const opts = (models || []).map(m => `<option value="${m}">${m}</option>`).join('');
+    invoke('get_ollama_models', { endpoint: state.ai.endpoint }).then(rawModels => {
+      let list = rawModels;
+      if (typeof list === 'string') {
+        try { list = JSON.parse(list); } catch (_) { list = []; }
+      }
+      list = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
+      const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
       selCode.innerHTML = opts; selExplain.innerHTML = opts; selFast.innerHTML = opts;
       const r = state.ai.smartRouting || {};
       if (r.codeModel) selCode.value = r.codeModel;
@@ -2112,17 +2348,7 @@ function setupDeveloperOptions() {
       }
     });
 
-    // 5. Refresh Live System RAM & Telemetry
-    document.getElementById('btn-dev-refresh-ram')?.addEventListener('click', async () => {
-      try {
-        await pollTelemetry();
-        showToast('✓ Live RAM and system telemetry refreshed', 'success', 2000);
-      } catch (e) {
-        showToast('Telemetry refresh failed: ' + e, 'error', 3000);
-      }
-    });
-
-    // 6. Test Core IPC Ping
+    // 5. Test Core IPC Ping
     document.getElementById('btn-dev-test-ipc')?.addEventListener('click', async () => {
       const badge = document.getElementById('dev-ipc-latency-badge');
       if (badge) badge.textContent = 'Testing IPC ping…';
@@ -2267,7 +2493,4 @@ function loadDevOptionsIntoUI() {
   if (agentDebugDev) {
     agentDebugDev.checked = !!state.ai?.debugMode;
   }
-
-  // Poll live telemetry so RAM stats appear immediately on open
-  import('./telemetry-hud.js').then(m => m.pollTelemetry?.());
 }

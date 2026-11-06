@@ -129,14 +129,6 @@
           </svg>
         </button>
 
-        <!-- Quick Global Search Icon -->
-        <button class="icon-btn" id="btn-global-search" title="Search in Files (Ctrl+Shift+F)" aria-label="Search">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-        </button>
-
         <!-- Activity Center -->
         <button class="icon-btn" id="btn-activity-center" title="Activity Center" aria-label="Activity Center">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -700,14 +692,50 @@
 
         <div id="agent-checkpoints-view" style="display: none; flex-direction: column; gap: 6px; flex: 1; min-height: 0; overflow-y: auto; padding: 10px;"></div>
         <div class="agent-timeline" id="agent-timeline">
-          <div class="timeline-card assistant-msg">
-            <div class="timeline-card-header">
-              <span>Orbital Agent</span>
-              <span style="font-size: 10px; color: var(--text-muted);">Ready</span>
+          <!-- Antigravity / Cursor Sleek Hero Starter Card -->
+          <div class="chat-welcome-hero" id="chat-welcome-hero">
+            <div class="chat-hero-header">
+              <div class="chat-hero-icon-wrap">
+                <img src="/logo.png" alt="Orbital X" class="chat-hero-logo" />
+                <span class="chat-hero-sparkle">✦</span>
+              </div>
+              <div class="chat-hero-title">Orbital X AI Assistant</div>
+              <div class="chat-hero-caption">Autonomous software engineer, architect &amp; codebase companion.</div>
             </div>
-            <div class="timeline-card-body">
-              Orbital X is connected and ready. You are in <strong>Dev Mode</strong>.
-              Routine inspections run smoothly; file edits and commands will prompt you with an Approval Card.
+
+            <!-- Quick Action Starters Grid -->
+            <div class="chat-starters-grid">
+              <div class="chat-starter-card" data-prompt="Explain the architecture, entrypoints, and state flows of this workspace.">
+                <div class="starter-icon" style="color: var(--accent-cyan);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 8 12 12 16 16 12 12 8"></polygon></svg></div>
+                <div class="starter-content">
+                  <div class="starter-title">Explore Architecture</div>
+                  <div class="starter-desc">Analyze project entrypoints and components</div>
+                </div>
+              </div>
+
+              <div class="chat-starter-card" data-prompt="/plan Build a new feature for this workspace: ">
+                <div class="starter-icon" style="color: var(--accent-purple);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+                <div class="starter-content">
+                  <div class="starter-title">Implementation Plan</div>
+                  <div class="starter-desc">Design step-by-step engineering plan</div>
+                </div>
+              </div>
+
+              <div class="chat-starter-card" data-prompt="Run project tests, verify the workspace build, and report any diagnostics.">
+                <div class="starter-icon" style="color: var(--accent-green);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+                <div class="starter-content">
+                  <div class="starter-title">Verify &amp; Test</div>
+                  <div class="starter-desc">Check compilation and test coverage</div>
+                </div>
+              </div>
+
+              <div class="chat-starter-card" data-prompt="Review recent code diffs and suggest refactoring improvements for performance and clarity.">
+                <div class="starter-icon" style="color: var(--accent-orange);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+                <div class="starter-content">
+                  <div class="starter-title">Smart Refactor</div>
+                  <div class="starter-desc">Optimize code quality &amp; performance</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1251,34 +1279,227 @@
         </div>
 
         <!-- 3. APPEARANCE PANE -->
-        <div id="spane-appearance" class="settings-pane" style="display: none; flex-direction: column;">
-          <div class="settings-section-title">Appearance</div>
-          <div class="settings-section-desc">Personalize colors, contrast, editor typography, and layout.</div>
-
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label class="form-label">Color Theme</label>
-            <select class="select-input" id="cfg-theme-select">
-              <option value="orbit-dark">Orbit Dark (Antigravity / VS Code Charcoal)</option>
-              <option value="nebula-light">Nebula Light (Clean Accessible Slate)</option>
-              <option value="midnight-blue">Midnight Blue (Cosmic Deep Navy)</option>
-            </select>
+        <div id="spane-appearance" class="settings-pane" style="display: none; flex-direction: column; gap: 18px;">
+          <div>
+            <div class="settings-section-title">Appearance & Customization</div>
+            <div class="settings-section-desc">Personalize color themes, accent palette, editor typography, cursor effects, and layout density.</div>
           </div>
 
-          <div class="form-group" style="margin-bottom: 16px;">
-            <label class="form-label">Editor Font Size (px)</label>
-            <input type="number" class="input-text" id="cfg-font-size" value="13" min="10" max="24" />
-          </div>
-
-          <div class="settings-setting-row">
-            <div class="settings-setting-info">
-              <span class="settings-setting-label">Editor Minimap</span>
-              <span class="settings-setting-caption">Display high-level code minimap overview on the right edge of editor.</span>
+          <!-- Section A: Theme & Accent Palette -->
+          <div class="settings-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a10 10 0 0 1 0 20z" fill="currentColor"></path></svg>
+              Theme &amp; Accent Palette
             </div>
-            <div>
-              <label class="settings-toggle-switch">
-                <input type="checkbox" id="cfg-editor-minimap" checked>
-                <span class="settings-toggle-slider"></span>
+
+            <div class="form-group" style="margin-bottom: 14px;">
+              <label class="form-label">Color Theme</label>
+              <select class="select-input" id="cfg-theme-select">
+                <option value="theme-dark">Orbit Dark (Antigravity &amp; VS Code Charcoal)</option>
+                <option value="midnight-blue">Midnight Navy (Deep Cosmic GitHub Dark)</option>
+                <option value="theme-light">Nebula Light (Clean Accessible Slate)</option>
+                <option value="theme-hc">High Contrast OLED</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 4px;">
+              <label class="form-label" style="display: flex; justify-content: space-between;">
+                <span>IDE Accent Glow Color</span>
+                <span id="cfg-accent-color-label" style="font-family: monospace; font-size: 11px; color: var(--accent-cyan);">Cyan (#00e5ff)</span>
               </label>
+              <div class="appearance-accent-swatches" id="cfg-accent-swatches" style="display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap;">
+                <button type="button" class="accent-swatch-btn active" data-color="#00e5ff" data-name="Electric Cyan" style="--swatch-color: #00e5ff;" title="Electric Cyan"></button>
+                <button type="button" class="accent-swatch-btn" data-color="#10b981" data-name="Apple Emerald" style="--swatch-color: #10b981;" title="Apple Emerald"></button>
+                <button type="button" class="accent-swatch-btn" data-color="#a855f7" data-name="Cosmic Purple" style="--swatch-color: #a855f7;" title="Cosmic Purple"></button>
+                <button type="button" class="accent-swatch-btn" data-color="#f59e0b" data-name="Sunset Gold" style="--swatch-color: #f59e0b;" title="Sunset Gold"></button>
+                <button type="button" class="accent-swatch-btn" data-color="#f43f5e" data-name="Rose Pink" style="--swatch-color: #f43f5e;" title="Rose Pink"></button>
+                <button type="button" class="accent-swatch-btn" data-color="#3b82f6" data-name="Cobalt Blue" style="--swatch-color: #3b82f6;" title="Cobalt Blue"></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section B: Editor Typography -->
+          <div class="settings-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+              Editor Typography &amp; Fonts
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Font Family</label>
+                <select class="select-input" id="cfg-font-family">
+                  <option value="'JetBrains Mono', 'Fira Code', monospace" selected>JetBrains Mono (Recommended)</option>
+                  <option value="'Fira Code', 'JetBrains Mono', monospace">Fira Code</option>
+                  <option value="'Cascadia Code', Consolas, monospace">Cascadia Code</option>
+                  <option value="'SF Mono', Monaco, Menlo, monospace">SF Mono / Menlo</option>
+                  <option value="Consolas, 'Courier New', monospace">Consolas / System Monospace</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Line Spacing (Line Height)</label>
+                <select class="select-input" id="cfg-line-height">
+                  <option value="19">Compact (1.35x)</option>
+                  <option value="22" selected>Standard (1.5x)</option>
+                  <option value="25">Relaxed (1.65x)</option>
+                  <option value="28">Spacious (1.8x)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin-bottom: 0;">Editor Font Size</label>
+                <span id="cfg-font-size-val" style="font-family: monospace; font-size: 11px; color: var(--accent-cyan);">13px</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <input type="range" id="cfg-font-size-slider" min="10" max="24" step="1" value="13" style="flex: 1; accent-color: var(--accent-cyan);" />
+                <input type="number" class="input-text" id="cfg-font-size" value="13" min="10" max="24" style="width: 60px; text-align: center;" />
+              </div>
+            </div>
+
+            <div class="settings-setting-row" style="padding-top: 4px;">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Font Ligatures</span>
+                <span class="settings-setting-caption">Render programming ligatures (&rarr;, &ne;, &le;, ===, =&gt;).</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-font-ligatures" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section C: Cursor & Caret Experience -->
+          <div class="settings-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7.07 17 2.51-7.39L21 11.07z"></path></svg>
+              Cursor &amp; Caret Motion
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Cursor Style</label>
+                <select class="select-input" id="cfg-cursor-style">
+                  <option value="line" selected>Line (Smooth Thin Bar)</option>
+                  <option value="block">Block (Terminal Solid)</option>
+                  <option value="underline">Underline</option>
+                  <option value="line-thin">Hairline (Ultra Thin)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Cursor Blinking</label>
+                <select class="select-input" id="cfg-cursor-blinking">
+                  <option value="smooth" selected>Smooth Breathe</option>
+                  <option value="blink">Standard Blink</option>
+                  <option value="phase">Gentle Phase</option>
+                  <option value="solid">Solid (No Blink)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-setting-row" style="padding-top: 4px;">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Smooth Caret Animation</span>
+                <span class="settings-setting-caption">Interpolate cursor movements smoothly between keystrokes.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-cursor-smooth" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section D: Editor Overviews & Guides -->
+          <div class="settings-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+              Editor Overviews &amp; Guides
+            </div>
+
+            <div class="settings-setting-row" style="margin-bottom: 8px;">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Code Minimap</span>
+                <span class="settings-setting-caption">Display high-level code minimap overview on the right edge of editor.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-editor-minimap" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-setting-row" style="margin-bottom: 8px;">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Bracket Pair Colorization</span>
+                <span class="settings-setting-caption">Colorize matching brackets ({ }, [ ], ( )) for visual pair matching.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-bracket-colorization" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-setting-row" style="margin-bottom: 8px;">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Word Wrap</span>
+                <span class="settings-setting-caption">Wrap lines that exceed the editor viewport width automatically.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-editor-wordwrap" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-setting-row">
+              <div class="settings-setting-info">
+                <span class="settings-setting-label">Sticky Scroll Headers</span>
+                <span class="settings-setting-caption">Keep current class, function, or scope header pinned at top while scrolling.</span>
+              </div>
+              <div>
+                <label class="settings-toggle-switch">
+                  <input type="checkbox" id="cfg-sticky-scroll" checked>
+                  <span class="settings-toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section E: Interface Styling & Blur -->
+          <div class="settings-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 14px;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              Glassmorphism &amp; Layout Density
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Glassmorphic Blur</label>
+                <select class="select-input" id="cfg-glass-blur">
+                  <option value="frosted" selected>Frosted Glass (Apple macOS blur)</option>
+                  <option value="subtle">Subtle Translucency</option>
+                  <option value="none">Solid Opaque (Zero blur)</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">UI Density</label>
+                <select class="select-input" id="cfg-ui-density">
+                  <option value="compact">Compact (Maximum code area)</option>
+                  <option value="comfortable" selected>Comfortable (Balanced spacing)</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
@@ -1392,7 +1613,7 @@
         <div id="spane-developer" class="settings-pane" style="display: none; flex-direction: column; gap: 16px;">
           <div>
             <div class="settings-section-title">Developer &amp; Diagnostic Suite</div>
-            <div class="settings-section-desc">System telemetry, live RAM tracker, kernel security simulation, IPC diagnostics, and low-level runtime inspection tools.</div>
+            <div class="settings-section-desc">Kernel security simulation, IPC diagnostics, and low-level runtime inspection tools.</div>
           </div>
 
           <!-- Section 1: Developer Mode Master Toggle -->
@@ -1429,59 +1650,6 @@
             </div>
           </div>
 
-          <!-- Section 2: Live System RAM & Hardware Telemetry (Item 2 & 7) -->
-          <div class="dev-card">
-            <div class="dev-card-header">
-              <div class="dev-card-title-wrap">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-                <div>
-                  <div class="dev-card-title">Live System Telemetry &amp; RAM Tracker</div>
-                  <div class="dev-card-caption">Real-time hardware metrics pulled directly from OS via Rust sysinfo.</div>
-                </div>
-              </div>
-              <button class="btn btn-secondary btn-sm" id="btn-dev-refresh-ram" style="display: inline-flex; align-items: center; gap: 5px; font-size: 11px;">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                <span>Refresh Live</span>
-              </button>
-            </div>
-
-            <!-- RAM Visual Bar -->
-            <div style="margin-top: 14px;">
-              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
-                <span style="font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
-                  <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-cyan);"></span>
-                  System Memory (RAM)
-                </span>
-                <span id="dev-ram-stats-text" style="font-family: var(--font-code, monospace); color: var(--accent-cyan); font-weight: 600;">0.0 / 0.0 GB (0%)</span>
-              </div>
-              <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.08); border-radius: 4px; overflow: hidden; position: relative;">
-                <div id="dev-ram-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #39c5bb, #2997ff); border-radius: 4px; transition: width 0.4s ease;"></div>
-              </div>
-              <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-top: 4px; font-family: monospace;">
-                <span id="dev-ram-free-text">Free: -- GB</span>
-                <span id="dev-ram-total-text">Total: -- GB</span>
-              </div>
-            </div>
-
-            <!-- Hardware Grid -->
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px;">
-              <div class="dev-metric-box">
-                <span class="dev-metric-label">CPU Compute</span>
-                <span class="dev-metric-val" id="dev-metric-cpu">0%</span>
-                <span class="dev-metric-sub">Global CPU Load</span>
-              </div>
-              <div class="dev-metric-box">
-                <span class="dev-metric-label">VRAM Allocation</span>
-                <span class="dev-metric-val" id="dev-metric-vram">0.0 GB</span>
-                <span class="dev-metric-sub" id="dev-metric-vram-sub">0% allocated</span>
-              </div>
-              <div class="dev-metric-box">
-                <span class="dev-metric-label">Stream Speed</span>
-                <span class="dev-metric-val" id="dev-metric-tps">0.0 tps</span>
-                <span class="dev-metric-sub">Tokens / Second</span>
-              </div>
-            </div>
-          </div>
 
           <!-- Section 3: Core Runtime & IPC Diagnostics -->
           <div class="dev-card">

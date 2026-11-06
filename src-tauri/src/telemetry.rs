@@ -58,6 +58,12 @@ pub fn record_tokens_generated(count: usize) {
     }
 }
 
+pub fn set_measured_tps(tps: f32) {
+    if tps > 0.0 {
+        LAST_KNOWN_TPS.store((tps * 10.0) as usize, Ordering::Relaxed);
+    }
+}
+
 pub fn get_current_tps() -> f32 {
     let now = Instant::now();
     let mut guard = match TOKEN_COUNTER.lock() {
@@ -65,14 +71,16 @@ pub fn get_current_tps() -> f32 {
         Err(poisoned) => poisoned.into_inner(),
     };
     if let Some(records) = guard.as_mut() {
-        let cutoff = now.checked_sub(Duration::from_secs(3)).unwrap_or(now);
+        let cutoff = now.checked_sub(Duration::from_secs(4)).unwrap_or(now);
         records.retain(|r| r.at >= cutoff);
-        if records.is_empty() {
-            LAST_KNOWN_TPS.store(0, Ordering::Relaxed);
-            return 0.0;
+        if records.len() >= 2 {
+            let first = records.first().unwrap();
+            let total_tokens: usize = records.iter().map(|r| r.count).sum();
+            let elapsed_secs = now.duration_since(first.at).as_secs_f32().max(0.1);
+            let tps = (total_tokens as f32) / elapsed_secs;
+            LAST_KNOWN_TPS.store((tps * 10.0) as usize, Ordering::Relaxed);
+            return tps;
         }
-    } else {
-        return 0.0;
     }
     (LAST_KNOWN_TPS.load(Ordering::Relaxed) as f32) / 10.0
 }
@@ -167,18 +175,39 @@ fn detect_primary_gpu_info() -> (String, u64) {
 }
 
 async fn query_ollama_running_memory(url: Option<String>) -> (String, u64) {
-    let endpoint = format!("{}/api/ps", url.unwrap_or_else(|| "http://localhost:11434".into()).trim_end_matches('/'));
+    let raw = url.unwrap_or_default();
+    let trimmed = raw.trim();
+    let base = if trimmed.is_empty() {
+        "http://127.0.0.1:11434".to_string()
+    } else {
+        let with_s = if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+            format!("http://{}", trimmed)
+        } else {
+            trimmed.to_string()
+        };
+        with_s.replace("localhost", "127.0.0.1").trim_end_matches('/').to_string()
+    };
+    let endpoint = format!("{}/api/ps", base);
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(600))
+        .timeout(Duration::from_millis(2500))
         .build();
 
     if let Ok(c) = client {
-        if let Ok(resp) = c.get(&endpoint).send().await {
-            if resp.status().is_success() {
-                if let Ok(json) = resp.json::<serde_json::Value>().await {
+        let resp = match c.get(&endpoint).send().await {
+            Ok(r) if r.status().is_success() => Ok(r),
+            _ => {
+                c.get("http://127.0.0.1:11434/api/ps").send().await
+            }
+        };
+
+        if let Ok(r) = resp {
+            if r.status().is_success() {
+                if let Ok(json) = r.json::<serde_json::Value>().await {
                     if let Some(arr) = json.get("models").and_then(|m| m.as_array()) {
                         if let Some(first) = arr.first() {
-                            let name = first.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                            let name = first.get("name").and_then(|n| n.as_str())
+                                .or_else(|| first.get("model").and_then(|n| n.as_str()))
+                                .unwrap_or("").to_string();
                             let vram_bytes = first
                                 .get("size_vram")
                                 .and_then(|v| v.as_u64())

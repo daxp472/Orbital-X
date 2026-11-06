@@ -141,6 +141,10 @@ const DEFAULT_EDITOR_SETTINGS = {
   fontLigatures: true,
   lineHeight: 22,
   letterSpacing: 0,
+  cursorStyle: 'line',
+  cursorBlinking: 'smooth',
+  cursorSmoothCaretAnimation: true,
+  bracketPairColorization: true,
   formatOnSave: false,
   largeFileBannerShown: false,
 };
@@ -178,6 +182,10 @@ export function applyEditorSettings() {
     fontLigatures: !!s.fontLigatures,
     lineHeight: Number(s.lineHeight) || 22,
     letterSpacing: Number(s.letterSpacing) || 0,
+    cursorStyle: s.cursorStyle || 'line',
+    cursorBlinking: s.cursorBlinking || 'smooth',
+    cursorSmoothCaretAnimation: s.cursorSmoothCaretAnimation !== false ? 'on' : 'off',
+    bracketPairColorization: { enabled: s.bracketPairColorization !== false },
   };
 
   // G5: workspace settings (.orbital/settings.json) override globals for the

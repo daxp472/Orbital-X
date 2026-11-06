@@ -31,7 +31,7 @@ export const state = {
   ai: {
     provider: 'ollama', // 'ollama' | 'anthropic' | 'openai' | 'gemini'
     model: 'llama3',
-    endpoint: 'http://localhost:11434',
+    endpoint: 'http://127.0.0.1:11434',
     // Custom OpenAI-compatible base URL (LM Studio, llama.cpp server, vLLM…).
     // Empty = official OpenAI API.
     openaiBaseUrl: '',
@@ -159,7 +159,11 @@ export function loadPersistedState() {
     if (savedModel) state.ai.model = savedModel;
 
     const savedEndpoint = localStorage.getItem('orbital_endpoint');
-    if (savedEndpoint) state.ai.endpoint = savedEndpoint;
+    if (savedEndpoint) {
+      state.ai.endpoint = savedEndpoint.replace('localhost', '127.0.0.1');
+    } else {
+      state.ai.endpoint = 'http://127.0.0.1:11434';
+    }
 
     const savedOpenaiBaseUrl = localStorage.getItem('orbital_openai_base_url');
     if (savedOpenaiBaseUrl !== null) state.ai.openaiBaseUrl = savedOpenaiBaseUrl;

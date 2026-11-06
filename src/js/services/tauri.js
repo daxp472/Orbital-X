@@ -169,6 +169,34 @@ async function getInvoke() {
         return null;
       case 'save_chat_sessions':
         return true;
+      case 'get_ollama_models':
+        return ['llama3.2:3b', 'qwen3-coder:latest', 'qwen3:latest'];
+      case 'auto_detect_draft_model':
+        return 'llama3.2:3b';
+      case 'get_live_telemetry':
+        return {
+          cpuPercent: 12.0,
+          ramTotalMb: 16384,
+          ramUsedMb: 8192,
+          ramFreeMb: 8192,
+          ramPercent: 50.0,
+          vramTotalMb: 8192,
+          vramUsedMb: 2048,
+          vramFreeMb: 6144,
+          vramPercent: 25.0,
+          activeModelVramMb: 2048,
+          activeModelName: 'qwen3:latest',
+          tokensPerSecond: 38.5,
+          gpuName: 'NVIDIA GeForce RTX',
+          timestampMs: Date.now()
+        };
+      case 'test_provider_connection':
+        return {
+          success: true,
+          provider: 'Ollama (Local)',
+          message: 'Connected to Ollama! Found 3 local models.',
+          models_available: ['llama3.2:3b', 'qwen3-coder:latest', 'qwen3:latest']
+        };
       case 'ollama_pull_model':
         return { success: true, status: 'success' };
       case 'ollama_delete_model':

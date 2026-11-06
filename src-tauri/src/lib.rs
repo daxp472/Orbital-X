@@ -1394,15 +1394,23 @@ async fn run_git_command(args: Vec<String>, state: State<'_, AppState>) -> Resul
 
 #[tauri::command]
 async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, String> {
-    let url = endpoint.unwrap_or_else(|| "http://localhost:11434".into());
-    let tags_endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
+    let base = ollama_base(endpoint);
+    let tags_endpoint = format!("{}/api/tags", base);
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client.get(&tags_endpoint).send().await.map_err(|e| e.to_string())?;
+    // Attempt primary URL, with fallback to 127.0.0.1 if custom failed
+    let resp = match client.get(&tags_endpoint).send().await {
+        Ok(r) if r.status().is_success() => r,
+        _ => {
+            let fallback_endpoint = "http://127.0.0.1:11434/api/tags";
+            client.get(fallback_endpoint).send().await.map_err(|e| format!("Could not reach Ollama at {} or {}: {}", tags_endpoint, fallback_endpoint, e))?
+        }
+    };
+
     if !resp.status().is_success() {
         return Err(format!("HTTP error {}", resp.status()));
     }
@@ -1414,6 +1422,18 @@ async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, Stri
         for m in arr {
             if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
                 models.push(name.to_string());
+            } else if let Some(model) = m.get("model").and_then(|n| n.as_str()) {
+                models.push(model.to_string());
+            } else if let Some(s) = m.as_str() {
+                models.push(s.to_string());
+            }
+        }
+    } else if let Some(arr) = json.as_array() {
+        for m in arr {
+            if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
+                models.push(name.to_string());
+            } else if let Some(s) = m.as_str() {
+                models.push(s.to_string());
             }
         }
     }
@@ -1460,7 +1480,19 @@ fn save_chat_sessions(sessions: serde_json::Value) -> Result<(), String> {
 // ============================================================================
 
 fn ollama_base(endpoint: Option<String>) -> String {
-    endpoint.unwrap_or_else(|| "http://localhost:11434".into())
+    let raw = endpoint.unwrap_or_default();
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return "http://127.0.0.1:11434".into();
+    }
+    let with_scheme = if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        format!("http://{}", trimmed)
+    } else {
+        trimmed.to_string()
+    };
+    // On Windows, 'localhost' often resolves to IPv6 ::1 where Ollama does not listen, causing 40s TCP timeouts
+    let normalized = with_scheme.replace("localhost", "127.0.0.1");
+    normalized.trim_end_matches('/').to_string()
 }
 
 /// Streams `ollama pull` progress over the channel: NDJSON lines from
@@ -1685,17 +1717,20 @@ async fn ollama_model_info(name: String, endpoint: Option<String>) -> Result<ser
 /// Models currently loaded in memory/VRAM (GET /api/ps).
 #[tauri::command]
 async fn ollama_running_models(endpoint: Option<String>) -> Result<serde_json::Value, String> {
-    let url = format!("{}/api/ps", ollama_base(endpoint).trim_end_matches('/'));
+    let base = ollama_base(endpoint);
+    let url = format!("{}/api/ps", base);
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(8))
         .build()
         .map_err(|e| e.to_string())?;
 
-    let resp = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Could not query Ollama running models: {}", e))?;
+    let resp = match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => r,
+        _ => {
+            let fallback_url = "http://127.0.0.1:11434/api/ps";
+            client.get(fallback_url).send().await.map_err(|e| format!("Could not query Ollama running models: {}", e))?
+        }
+    };
 
     if !resp.status().is_success() {
         return Err(format!("HTTP error {}", resp.status()));
@@ -1708,12 +1743,17 @@ async fn ollama_running_models(endpoint: Option<String>) -> Result<serde_json::V
         .map(|arr| {
             arr.iter()
                 .map(|m| {
+                    let name = m.get("name").and_then(|n| n.as_str())
+                        .or_else(|| m.get("model").and_then(|n| n.as_str()))
+                        .unwrap_or("");
+                    let model_val = m.get("model").and_then(|n| n.as_str()).unwrap_or(name);
                     serde_json::json!({
-                        "name": m.get("name").and_then(|n| n.as_str()),
-                        "model": m.get("model").and_then(|n| n.as_str()),
+                        "name": name,
+                        "model": model_val,
                         "size_bytes": m.get("size").and_then(|s| s.as_u64()),
-                        "size_vram_bytes": m.get("size_vram").and_then(|s| s.as_u64()),
+                        "size_vram_bytes": m.get("size_vram").and_then(|s| s.as_u64()).or_else(|| m.get("size").and_then(|s| s.as_u64())),
                         "expires_at": m.get("expires_at").and_then(|s| s.as_str()),
+                        "context_length": m.get("context_length").and_then(|c| c.as_u64()),
                     })
                 })
                 .collect()

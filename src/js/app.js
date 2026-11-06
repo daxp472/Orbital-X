@@ -185,6 +185,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 1. Load state
   loadPersistedState();
   applyTheme(state.theme);
+  const savedAccent = localStorage.getItem('orbital_accent_color');
+  if (savedAccent) {
+    document.documentElement.style.setProperty('--accent-cyan', savedAccent);
+    document.documentElement.style.setProperty('--accent-primary', savedAccent);
+    document.documentElement.style.setProperty('--accent-focus', savedAccent);
+  }
+  if (localStorage.getItem('orbital_ui_density') === 'compact') {
+    document.body.classList.add('density-compact');
+  }
+  if (localStorage.getItem('orbital_glass_blur') === 'none') {
+    document.documentElement.style.setProperty('--glass-blur-sm', 'none');
+    document.documentElement.style.setProperty('--glass-blur-md', 'none');
+    document.documentElement.style.setProperty('--glass-blur-lg', 'none');
+  }
   switchMode(state.agentMode);
 
   // Set initial model display on composer pill & statusbar

@@ -88,10 +88,26 @@ impl ProviderService {
 
         match provider.to_lowercase().as_str() {
             "ollama" => {
-                let url = base_url.unwrap_or_else(|| "http://localhost:11434".into());
-                let tags_endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
+                let raw = base_url.unwrap_or_default();
+                let trimmed = raw.trim();
+                let base = if trimmed.is_empty() {
+                    "http://127.0.0.1:11434".to_string()
+                } else {
+                    let with_s = if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+                        format!("http://{}", trimmed)
+                    } else {
+                        trimmed.to_string()
+                    };
+                    with_s.replace("localhost", "127.0.0.1").trim_end_matches('/').to_string()
+                };
+                let tags_endpoint = format!("{}/api/tags", base);
 
-                match client.get(&tags_endpoint).send().await {
+                let resp_res = match client.get(&tags_endpoint).send().await {
+                    Ok(r) if r.status().is_success() => Ok(r),
+                    _ => client.get("http://127.0.0.1:11434/api/tags").send().await,
+                };
+
+                match resp_res {
                     Ok(resp) => {
                         if resp.status().is_success() {
                             let json: serde_json::Value = resp.json().await.unwrap_or_default();
@@ -100,6 +116,10 @@ impl ProviderService {
                                 for m in list {
                                     if let Some(name) = m.get("name").and_then(|n| n.as_str()) {
                                         models.push(name.to_string());
+                                    } else if let Some(model) = m.get("model").and_then(|n| n.as_str()) {
+                                        models.push(model.to_string());
+                                    } else if let Some(s) = m.as_str() {
+                                        models.push(s.to_string());
                                     }
                                 }
                             }
@@ -121,7 +141,7 @@ impl ProviderService {
                     Err(e) => ConnectionTestResult {
                         success: false,
                         provider: "Ollama (Local)".into(),
-                        message: format!("Could not reach Ollama at {}. Is Ollama running? Error: {}", url, e),
+                        message: format!("Could not reach Ollama at {}. Is Ollama running? Error: {}", base, e),
                         models_available: vec![],
                     },
                 }
@@ -1340,6 +1360,11 @@ pub async fn stream_ollama_turn(
     response.tool_calls = tool_calls;
     if response.usage.is_none() {
         response.usage = Some(estimate_usage(&messages, &content));
+    }
+    if let Some(m) = &response.metrics {
+        if let Some(tps) = m.tokens_per_second {
+            crate::telemetry::set_measured_tps(tps as f32);
+        }
     }
     Ok(response)
 }

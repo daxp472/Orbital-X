@@ -329,14 +329,29 @@ async function loadProviderModels(provider) {
     // Query Ollama local models via Tauri (+ running state from /api/ps)
     let runningModels = new Map();
     try {
-      const ps = await invoke('ollama_running_models', { endpoint: state.ai.endpoint });
-      for (const m of (ps?.models || [])) {
-        runningModels.set(m.name || m.model, m);
+      let rawPs = await invoke('ollama_running_models', { endpoint: state.ai.endpoint });
+      if (typeof rawPs === 'string') {
+        try { rawPs = JSON.parse(rawPs); } catch (_) { rawPs = {}; }
+      }
+      const psModels = Array.isArray(rawPs?.models) ? rawPs.models : (Array.isArray(rawPs) ? rawPs : []);
+      for (const m of psModels) {
+        if (!m) continue;
+        const key = typeof m === 'string' ? m : (m.name || m.model);
+        if (key) {
+          runningModels.set(key, typeof m === 'object' ? m : { name: key });
+          if (key.includes(':')) {
+            runningModels.set(key.split(':')[0], typeof m === 'object' ? m : { name: key });
+          }
+        }
       }
     } catch (e) { /* /api/ps unavailable on older Ollama — badges simply omitted */ }
 
     try {
-      const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+      let rawModels = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+      if (typeof rawModels === 'string') {
+        try { rawModels = JSON.parse(rawModels); } catch (_) { rawModels = []; }
+      }
+      const models = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
       detectedContainer.innerHTML = '';
 
       if (!models || models.length === 0) {
