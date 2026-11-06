@@ -3299,3 +3299,166 @@ body.density-compact .agent-composer {
   transform: translateY(-1px);
 }
 
+/* ==========================================================================
+   Review Changed Files Modal & File List (Feature 8)
+   ========================================================================== */
+.review-changes-modal {
+  border-radius: var(--radius-lg, 12px);
+  overflow: hidden;
+  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border-color);
+  background: var(--bg-card);
+}
+
+.review-changes-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(57, 197, 187, 0.12);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(57, 197, 187, 0.28);
+}
+
+.review-changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review-change-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--trans-fast, 0.12s ease);
+  gap: 16px;
+}
+
+.review-change-row:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-focus, var(--accent-cyan));
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.review-change-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.review-change-icon {
+  font-size: 15px;
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.review-change-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary-bright);
+  white-space: nowrap;
+}
+
+.review-change-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: auto;
+  text-align: right;
+  min-width: 0;
+}
+
+.review-change-path {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: right;
+}
+
+.review-change-row:hover .review-change-path {
+  color: var(--text-secondary);
+}
+
+.review-change-empty {
+  text-align: center;
+  padding: 36px 16px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ==========================================================================
+   Activity Center Persona Customization Chips (Feature 6)
+   ========================================================================== */
+.activity-chip {
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 500;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full, 12px);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.activity-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary-bright);
+  border-color: var(--accent-cyan);
+}
+
+.activity-chip.active {
+  background: rgba(57, 197, 187, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.activity-tag-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+}
+
+.activity-tag-milestone {
+  background: rgba(188, 140, 255, 0.18);
+  color: var(--accent-purple, #bc8cff);
+  border: 1px solid rgba(188, 140, 255, 0.35);
+}
+
+.activity-tag-task {
+  background: rgba(57, 197, 187, 0.16);
+  color: var(--accent-cyan, #39c5bb);
+  border: 1px solid rgba(57, 197, 187, 0.3);
+}
+
+.activity-tag-file {
+  background: rgba(41, 151, 255, 0.14);
+  color: var(--accent-blue, #2997ff);
+  border: 1px solid rgba(41, 151, 255, 0.28);
+}
+
+.activity-tag-error {
+  background: rgba(255, 69, 58, 0.16);
+  color: var(--accent-red, #ff453a);
+  border: 1px solid rgba(255, 69, 58, 0.3);
+}
+
