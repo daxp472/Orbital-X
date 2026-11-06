@@ -1166,3 +1166,33 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--scrollbar-thumb-hover);
 }
+
+/* ==========================================================================
+   Zen Mode (Distraction-Free Fullscreen Coding — Ctrl+K Z)
+   ========================================================================== */
+body.zen-mode .activity-rail,
+body.zen-mode #sidebar-container,
+body.zen-mode #agent-sidebar,
+body.zen-mode .agent-sidebar,
+body.zen-mode #bottom-panel,
+body.zen-mode .bottom-panel,
+body.zen-mode .statusbar,
+body.zen-mode .resizer,
+body.zen-mode .panel-resizer,
+body.zen-mode .resizer-y,
+body.zen-mode .editor-sidebar-resizer {
+  display: none !important;
+}
+
+body.zen-mode .main-container {
+  width: 100vw !important;
+  height: calc(100vh - var(--titlebar-height, 36px)) !important;
+}
+
+body.zen-mode .editor-area,
+body.zen-mode .editor-container,
+body.zen-mode .editor-split-container {
+  flex: 1 1 100% !important;
+  width: 100% !important;
+  max-width: 100vw !important;
+}

@@ -1769,19 +1769,19 @@ kbd {
   width: 920px;
   max-width: 95vw;
   height: 84vh;
-  background: rgba(27, 30, 40, 0.95);
+  background: var(--bg-card);
   backdrop-filter: var(--glass-blur-lg);
   -webkit-backdrop-filter: var(--glass-blur-lg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-color);
   border-radius: var(--radius-lg, 14px);
   overflow: hidden;
-  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--border-subtle);
   animation: scaleUpModal 0.24s var(--ease-spring);
 }
 
 .settings-sidebar {
   width: 220px;
-  background: rgba(20, 23, 30, 0.7);
+  background: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
