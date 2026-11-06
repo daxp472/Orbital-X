@@ -7,7 +7,7 @@
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
 
-export const CURRENT_VERSION = '2.3.3';
+export const CURRENT_VERSION = '2.3.4';
 
 function escapeHtml(str) {
   return String(str ?? '')
@@ -234,6 +234,16 @@ export function showUpdateModal(latest, downloadUrl, changelog, isAlreadyUpToDat
 
       modal.querySelector('#update-later-btn')?.addEventListener('click', close);
       modal.querySelector('#update-restart-btn')?.addEventListener('click', async () => {
+        if (downloadedPath === 'browser-preview-download-fallback' || (!window.__TAURI_INTERNALS__ && !window.__TAURI__)) {
+          showToast('In browser preview: opening release download page...', 'info', 3000);
+          try {
+            await invoke('open_url', { url: targetUrl });
+          } catch (_) {
+            window.open(targetUrl, '_blank');
+          }
+          close();
+          return;
+        }
         showToast('Restarting Orbital X to install update...', 'info', 4000);
         try {
           await invoke('install_update', { installerPath: downloadedPath });

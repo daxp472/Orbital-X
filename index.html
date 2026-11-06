@@ -955,7 +955,7 @@
 
   <!-- Modal: Settings Dialog (Antigravity Two-Column Layout) -->
   <div class="modal-backdrop" id="modal-settings" style="display: none;">
-    <div class="settings-modal-container">
+    <div class="settings-modal-container" role="dialog" aria-modal="true" aria-label="Settings">
       <!-- Left Sidebar -->
       <div class="settings-sidebar">
         <div class="settings-sidebar-header">Settings</div>
@@ -1775,7 +1775,7 @@
 
   <!-- Welcome / Recent Workspaces modal (M1, O1) -->
   <div class="modal-backdrop" id="modal-welcome" style="display: none;">
-    <div class="modal-container" style="width: 780px; max-width: 95vw; padding: 0; display: flex; overflow: hidden; max-height: 85vh; position: relative; border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,0.65);">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Welcome to Orbital X" style="width: 780px; max-width: 95vw; padding: 0; display: flex; overflow: hidden; max-height: 85vh; position: relative; border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,0.65);">
       <button class="icon-btn" id="welcome-modal-close" title="Close Welcome Screen (Esc)" style="position: absolute; top: 12px; right: 14px; font-size: 16px; color: var(--text-muted); cursor: pointer; background: transparent; border: none; z-index: 10;">✕</button>
 
       <!-- Left Column: Workspaces & Actions -->
@@ -1855,7 +1855,7 @@
 
   <!-- Modal: First-Run Onboarding Wizard -->
   <div class="modal-backdrop" id="modal-onboarding" style="display: none;">
-    <div class="modal-container" style="max-width: 580px;">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Guided Setup" style="max-width: 580px;">
       <div class="modal-header">
         <span>Orbital X — Guided Setup</span>
         <button class="icon-btn" id="btn-skip-onboarding">✕</button>
@@ -1870,7 +1870,7 @@
 
   <!-- Modal: Diff Review & Acceptance Dialog -->
   <div class="modal-backdrop" id="modal-diff-review" style="display: none;">
-    <div class="modal-container" style="max-width: 820px; height: 75vh;">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Review Proposed File Changes" style="max-width: 820px; height: 75vh;">
       <div class="modal-header">
         <span id="diff-modal-title">Review Proposed File Changes</span>
         <button class="icon-btn" id="btn-close-diff-modal">✕</button>
@@ -1890,7 +1890,7 @@
 
   <!-- Modal: Token Usage Dashboard -->
   <div class="modal-backdrop" id="modal-usage-dashboard" style="display: none;">
-    <div class="modal-container" style="max-width: 760px;">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Token Usage and Analytics" style="max-width: 760px;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-weight: 600; font-size: 14px;">Token Usage & Analytics</span>
@@ -1910,7 +1910,7 @@
 
   <!-- Modal: Global Keyboard Shortcuts Help Overlay -->
   <div class="modal-backdrop" id="modal-shortcuts-help" style="display: none;">
-    <div class="modal-container" style="max-width: 620px; max-height: 82vh;">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts" style="max-width: 620px; max-height: 82vh;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 16px;">⌨️</span>
@@ -2014,7 +2014,7 @@
 
   <!-- Modal: Help & Support (Report Issue + Shortcuts) -->
   <div class="modal-backdrop" id="modal-help" style="display: none;">
-    <div class="modal-container" style="max-width: 560px; max-height: 80vh;">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-label="Help and Support" style="max-width: 560px; max-height: 80vh;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
@@ -2046,7 +2046,7 @@
 
   <!-- Modal: About Orbital X -->
   <div class="modal-backdrop" id="modal-about" style="display: none;">
-    <div class="modal-container about-modal-container" style="max-width: 520px;">
+    <div class="modal-container about-modal-container" role="dialog" aria-modal="true" aria-label="About Orbital X" style="max-width: 520px;">
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <img src="/logo.png" alt="Orbital X" style="width: 20px; height: 20px; border-radius: 50%;" />
@@ -2059,7 +2059,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.3.3 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.3.4 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 
