@@ -6,7 +6,7 @@ import { state, persistState, notify, setActiveModel, subscribe } from '../state
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
 import { showConfirmDialog } from '../services/dialogs.js';
-import { showToast } from '../services/notifications.js';
+import { showToast, getNotificationPersona, setNotificationPersona } from '../services/notifications.js';
 
 export function initSettings() {
   const modal = document.getElementById('modal-settings');
@@ -20,6 +20,22 @@ export function initSettings() {
   if (openBtn) openBtn.addEventListener('click', openSettings);
   if (closeBtn) closeBtn.addEventListener('click', closeSettings);
   if (saveBtn) saveBtn.addEventListener('click', saveAndClose);
+
+  // Notification Persona & Activity Center Trigger (Feature 6)
+  const notifPersonaSelect = document.getElementById('settings-notification-persona');
+  if (notifPersonaSelect) {
+    notifPersonaSelect.addEventListener('change', (e) => {
+      setNotificationPersona(e.target.value);
+      const activitySelect = document.getElementById('activity-persona-select');
+      if (activitySelect) activitySelect.value = e.target.value;
+      showToast('Notification alert style updated', 'info', 2000);
+    });
+  }
+
+  document.getElementById('btn-settings-open-activity')?.addEventListener('click', () => {
+    closeSettings();
+    document.getElementById('btn-activity-center')?.click();
+  });
 
   // Antigravity Sidebar Tab switching
   setupShortcutsTab();
@@ -896,6 +912,12 @@ export function openSettings() {
   const autoSaveDelayInput = document.getElementById('cfg-auto-save-delay');
   if (autoSaveDelayInput) {
     autoSaveDelayInput.value = state.settings?.autoSaveDelay ?? 1000;
+  }
+
+  // Notification Persona (Feature 6)
+  const notifPersonaSelect = document.getElementById('settings-notification-persona');
+  if (notifPersonaSelect) {
+    notifPersonaSelect.value = getNotificationPersona();
   }
 
   // Load live token usage directly
