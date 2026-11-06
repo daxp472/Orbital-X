@@ -219,7 +219,30 @@ async function getInvoke() {
         // In browser fallback, simulate reload
         console.log('[IPC Mock] reload - would reload in Tauri');
         return { success: true };
+      case 'check_latest_release':
+        try {
+          const resp = await fetch('https://api.github.com/repos/daxp472/Orbital-X/releases/latest');
+          if (resp.ok) {
+            const data = await resp.json();
+            const assets = data.assets || [];
+            const exeAsset = assets.find(a => a.name?.endsWith('.exe') && a.name?.includes('setup')) || assets.find(a => a.name?.endsWith('.exe'));
+            return {
+              tag: data.tag_name,
+              changelog: data.body,
+              asset_url: exeAsset?.browser_download_url || data.html_url,
+              download_url: data.html_url
+            };
+          }
+        } catch (_) {}
+        return null;
+      case 'download_update':
+        return 'browser-preview-download-fallback';
+      case 'install_update':
+        return { success: true };
       case 'open_url':
+        if (args?.url && typeof window !== 'undefined') {
+          window.open(args.url, '_blank');
+        }
         return { success: true };
       default:
         return { success: true };

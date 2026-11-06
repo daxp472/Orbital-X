@@ -1723,3 +1723,30 @@ function openWhatsNewModal() {
   modal.querySelector('#whatsnew-got').addEventListener('click', close);
   modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
 }
+
+// Accessible Modal Focus Trap (WCAG 2.1 / A11Y compliance)
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const activeModal = document.querySelector('.modal-backdrop:not([style*="display: none"]):not([style*="display:none"]), .command-palette-backdrop');
+  if (!activeModal) return;
+
+  const focusable = Array.from(activeModal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement);
+
+  if (!focusable.length) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+
+  if (e.shiftKey) {
+    if (document.activeElement === first || !activeModal.contains(document.activeElement)) {
+      e.preventDefault();
+      last.focus();
+    }
+  } else {
+    if (document.activeElement === last || !activeModal.contains(document.activeElement)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+});
