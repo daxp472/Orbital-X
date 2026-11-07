@@ -232,6 +232,12 @@ impl TerminalService {
 
         let mut child = cmd.spawn().map_err(|e| format!("Failed to spawn process: {}", e))?;
 
+        // Enterprise-grade isolation: bind child process to OS Job Object sandbox with resource caps
+        let sandbox = crate::isolation::PlatformJobSandbox::new(crate::isolation::SandboxResourceLimits::default()).ok();
+        if let Some(ref sb) = sandbox {
+            let _ = sb.assign_tokio_child(&child);
+        }
+
         let stdout = child.stdout.take();
         let stderr = child.stderr.take();
 
