@@ -623,29 +623,49 @@ function initWindowControls() {
   };
 
   document.getElementById('win-close')?.addEventListener('click', async () => {
-    const win = await getWin();
-    if (win?.close) {
-      await win.close();
-    } else {
-      console.log("Window close clicked");
+    try {
+      await invoke('window_close');
+    } catch {
+      const win = await getWin();
+      if (win?.close) {
+        await win.close();
+      } else {
+        window.close();
+      }
     }
   });
 
   document.getElementById('win-minimize')?.addEventListener('click', async () => {
-    const win = await getWin();
-    if (win?.minimize) {
-      await win.minimize();
-    } else {
-      console.log("Window minimize clicked");
+    try {
+      await invoke('window_minimize');
+    } catch {
+      const win = await getWin();
+      if (win?.minimize) {
+        await win.minimize();
+      }
     }
   });
 
   document.getElementById('win-maximize')?.addEventListener('click', async () => {
-    const win = await getWin();
-    if (win?.toggleMaximize) {
-      await win.toggleMaximize();
-    } else {
-      console.log("Window maximize clicked");
+    try {
+      await invoke('window_toggle_maximize');
+    } catch {
+      const win = await getWin();
+      if (win?.toggleMaximize) {
+        await win.toggleMaximize();
+      }
+    }
+  });
+
+  // Global F11 key shortcut for full-screen toggle
+  window.addEventListener('keydown', async (e) => {
+    if (e.key === 'F11') {
+      e.preventDefault();
+      try {
+        await invoke('window_toggle_fullscreen');
+      } catch (err) {
+        console.warn('Fullscreen toggle error:', err);
+      }
     }
   });
 }

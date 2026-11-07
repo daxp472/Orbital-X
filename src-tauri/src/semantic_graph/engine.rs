@@ -3,8 +3,7 @@ use super::indexer::GraphIndexer;
 use super::types::{FocusedContextSlice, SymbolSummary};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use tokio::sync::RwLock as TokioRwLock;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphStats {
@@ -17,14 +16,14 @@ pub struct GraphStats {
 #[derive(Clone)]
 pub struct SemanticGraphEngine {
     workspace_root: PathBuf,
-    graph: Arc<TokioRwLock<SemanticCodeGraph>>,
+    graph: Arc<RwLock<SemanticCodeGraph>>,
     is_indexing: Arc<AtomicBool>,
 }
 
 impl SemanticGraphEngine {
     pub fn new(workspace_root: PathBuf) -> Self {
         let is_indexing = Arc::new(AtomicBool::new(false));
-        let graph = Arc::new(TokioRwLock::new(SemanticCodeGraph::new()));
+        let graph = Arc::new(RwLock::new(SemanticCodeGraph::new()));
 
         Self {
             workspace_root,
@@ -33,55 +32,70 @@ impl SemanticGraphEngine {
         }
     }
 
-    /// Spawns background indexing for the active workspace.
+    /// Spawns background indexing for the active workspace on a dedicated background thread.
+    /// This runs completely decoupled from any async reactor runtime so it is safe to invoke
+    /// from synchronous Tauri command contexts without triggering runtime panics.
     pub fn start_background_indexing(&self) {
         let ws = self.workspace_root.clone();
         let graph_arc = self.graph.clone();
         let indexing_flag = self.is_indexing.clone();
 
-        tokio::spawn(async move {
-            indexing_flag.store(true, Ordering::SeqCst);
-            // Run compute-intensive parsing on a blocking thread
-            let built = tokio::task::spawn_blocking(move || {
-                GraphIndexer::build_workspace_graph(&ws)
-            }).await.unwrap_or_default();
-
-            {
-                let mut lock = graph_arc.write().await;
-                *lock = built;
-            }
-            indexing_flag.store(false, Ordering::SeqCst);
-        });
+        let _ = std::thread::Builder::new()
+            .name("semantic-graph-indexer".into())
+            .spawn(move || {
+                indexing_flag.store(true, Ordering::SeqCst);
+                let built = GraphIndexer::build_workspace_graph(&ws);
+                if let Ok(mut lock) = graph_arc.write() {
+                    *lock = built;
+                }
+                indexing_flag.store(false, Ordering::SeqCst);
+            });
     }
 
     /// Incrementally updates a modified file in the semantic graph.
-    pub async fn on_file_changed(&self, rel_path: &str) {
-        let mut lock = self.graph.write().await;
-        GraphIndexer::update_file(&mut lock, &self.workspace_root, rel_path);
+    pub fn on_file_changed(&self, rel_path: &str) {
+        if let Ok(mut lock) = self.graph.write() {
+            GraphIndexer::update_file(&mut lock, &self.workspace_root, rel_path);
+        }
     }
 
-    pub async fn query_callers(&self, target_symbol: &str) -> Vec<SymbolSummary> {
-        let lock = self.graph.read().await;
+    pub fn query_callers(&self, target_symbol: &str) -> Vec<SymbolSummary> {
+        let lock = match self.graph.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         lock.find_callers(target_symbol)
     }
 
-    pub async fn query_callees(&self, source_symbol: &str) -> Vec<SymbolSummary> {
-        let lock = self.graph.read().await;
+    pub fn query_callees(&self, source_symbol: &str) -> Vec<SymbolSummary> {
+        let lock = match self.graph.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         lock.find_callees(source_symbol)
     }
 
-    pub async fn query_dependencies(&self, root_symbol: &str, max_depth: usize) -> Vec<SymbolSummary> {
-        let lock = self.graph.read().await;
+    pub fn query_dependencies(&self, root_symbol: &str, max_depth: usize) -> Vec<SymbolSummary> {
+        let lock = match self.graph.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         lock.find_dependencies(root_symbol, max_depth)
     }
 
-    pub async fn get_focused_context(&self, target_symbol: &str) -> Option<FocusedContextSlice> {
-        let lock = self.graph.read().await;
+    pub fn get_focused_context(&self, target_symbol: &str) -> Option<FocusedContextSlice> {
+        let lock = match self.graph.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         lock.extract_focused_context(target_symbol)
     }
 
-    pub async fn get_stats(&self) -> GraphStats {
-        let lock = self.graph.read().await;
+    pub fn get_stats(&self) -> GraphStats {
+        let lock = match self.graph.read() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         GraphStats {
             total_symbols: lock.total_symbols(),
             total_edges: lock.total_edges(),

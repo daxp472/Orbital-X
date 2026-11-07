@@ -109,14 +109,20 @@ async fn graph_get_callers(
     target: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let engine_opt = {
+        let guard = state.semantic_graph.lock().ok();
+        guard.and_then(|g| g.as_ref().cloned())
+    };
+    if let Some(engine) = engine_opt {
+        return Ok(engine.query_callers(&target));
+    }
     let host_ws = {
         let ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.get_root()
     };
     let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
     let engine = semantic_graph::SemanticGraphEngine::new(root);
-    // Fast indexing for queried target if background worker has not run
-    Ok(engine.query_callers(&target).await)
+    Ok(engine.query_callers(&target))
 }
 
 #[tauri::command]
@@ -124,13 +130,20 @@ async fn graph_get_callees(
     source: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let engine_opt = {
+        let guard = state.semantic_graph.lock().ok();
+        guard.and_then(|g| g.as_ref().cloned())
+    };
+    if let Some(engine) = engine_opt {
+        return Ok(engine.query_callees(&source));
+    }
     let host_ws = {
         let ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.get_root()
     };
     let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
     let engine = semantic_graph::SemanticGraphEngine::new(root);
-    Ok(engine.query_callees(&source).await)
+    Ok(engine.query_callees(&source))
 }
 
 #[tauri::command]
@@ -139,13 +152,20 @@ async fn graph_get_dependencies(
     max_depth: Option<usize>,
     state: State<'_, AppState>,
 ) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let engine_opt = {
+        let guard = state.semantic_graph.lock().ok();
+        guard.and_then(|g| g.as_ref().cloned())
+    };
+    if let Some(engine) = engine_opt {
+        return Ok(engine.query_dependencies(&symbol, max_depth.unwrap_or(2)));
+    }
     let host_ws = {
         let ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.get_root()
     };
     let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
     let engine = semantic_graph::SemanticGraphEngine::new(root);
-    Ok(engine.query_dependencies(&symbol, max_depth.unwrap_or(2)).await)
+    Ok(engine.query_dependencies(&symbol, max_depth.unwrap_or(2)))
 }
 
 #[tauri::command]
@@ -153,13 +173,20 @@ async fn graph_get_focused_context(
     symbol: String,
     state: State<'_, AppState>,
 ) -> Result<Option<semantic_graph::FocusedContextSlice>, String> {
+    let engine_opt = {
+        let guard = state.semantic_graph.lock().ok();
+        guard.and_then(|g| g.as_ref().cloned())
+    };
+    if let Some(engine) = engine_opt {
+        return Ok(engine.get_focused_context(&symbol));
+    }
     let host_ws = {
         let ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.get_root()
     };
     let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
     let engine = semantic_graph::SemanticGraphEngine::new(root);
-    Ok(engine.get_focused_context(&symbol).await)
+    Ok(engine.get_focused_context(&symbol))
 }
 
 #[tauri::command]
@@ -172,7 +199,7 @@ async fn graph_get_stats(
     };
 
     if let Some(engine) = engine_opt {
-        return Ok(engine.get_stats().await);
+        return Ok(engine.get_stats());
     }
 
     Ok(semantic_graph::GraphStats {
@@ -1081,28 +1108,46 @@ async fn execute_tool(
         "query_code_graph" => {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
             let query_type = arguments.get("query_type").and_then(|v| v.as_str()).unwrap_or("callers");
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
+            let engine_opt = {
+                let guard = state.semantic_graph.lock().ok();
+                guard.and_then(|g| g.as_ref().cloned())
             };
-            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
-            let engine = semantic_graph::SemanticGraphEngine::new(root);
+            let engine = match engine_opt {
+                Some(e) => e,
+                None => {
+                    let host_ws = {
+                        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                        ws.get_root()
+                    };
+                    let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+                    semantic_graph::SemanticGraphEngine::new(root)
+                }
+            };
             match query_type {
-                "callers" => Ok(serde_json::to_value(engine.query_callers(symbol).await).unwrap_or_default()),
-                "callees" => Ok(serde_json::to_value(engine.query_callees(symbol).await).unwrap_or_default()),
-                "dependencies" => Ok(serde_json::to_value(engine.query_dependencies(symbol, 2).await).unwrap_or_default()),
+                "callers" => Ok(serde_json::to_value(engine.query_callers(symbol)).unwrap_or_default()),
+                "callees" => Ok(serde_json::to_value(engine.query_callees(symbol)).unwrap_or_default()),
+                "dependencies" => Ok(serde_json::to_value(engine.query_dependencies(symbol, 2)).unwrap_or_default()),
                 _ => Err(format!("Unknown query_type '{}', expected callers, callees, or dependencies", query_type)),
             }
         }
         "get_focused_context" => {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
+            let engine_opt = {
+                let guard = state.semantic_graph.lock().ok();
+                guard.and_then(|g| g.as_ref().cloned())
             };
-            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
-            let engine = semantic_graph::SemanticGraphEngine::new(root);
-            let ctx = engine.get_focused_context(symbol).await;
+            let engine = match engine_opt {
+                Some(e) => e,
+                None => {
+                    let host_ws = {
+                        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                        ws.get_root()
+                    };
+                    let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+                    semantic_graph::SemanticGraphEngine::new(root)
+                }
+            };
+            let ctx = engine.get_focused_context(symbol);
             Ok(serde_json::to_value(ctx).unwrap_or(serde_json::json!({ "found": false })))
         }
         "workspace_info" => {
@@ -2453,6 +2498,49 @@ fn reload(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn window_close(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn window_minimize(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.minimize().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let is_max = win.is_maximized().map_err(|e| e.to_string())?;
+        if is_max {
+            win.unmaximize().map_err(|e| e.to_string())?;
+            Ok(false)
+        } else {
+            win.maximize().map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
+#[tauri::command]
+fn window_toggle_fullscreen(app: AppHandle) -> Result<bool, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let is_fs = win.is_fullscreen().map_err(|e| e.to_string())?;
+        win.set_fullscreen(!is_fs).map_err(|e| e.to_string())?;
+        Ok(!is_fs)
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
 /// K3: native OS notification through the Tauri notification plugin.
 #[tauri::command]
 fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), String> {
@@ -2628,6 +2716,10 @@ pub fn run() {
             open_url,
             open_dev_tools,
             reload,
+            window_close,
+            window_minimize,
+            window_toggle_maximize,
+            window_toggle_fullscreen,
 
             set_workspace,
             isolation_execute_command,

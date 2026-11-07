@@ -221,7 +221,9 @@ mod win32_job {
         fn drop(&mut self) {
             if !self.job_handle.is_null() && self.job_handle != INVALID_HANDLE_VALUE {
                 unsafe {
-                    let _ = TerminateJobObject(self.job_handle, 1);
+                    if self.limits.kill_on_close {
+                        let _ = TerminateJobObject(self.job_handle, 1);
+                    }
                     CloseHandle(self.job_handle);
                 }
             }

@@ -195,11 +195,17 @@ function getMenuItems(menuId) {
           shortcut: 'Alt+F4',
           action: async () => {
             try {
-              if (window.__TAURI__?.window?.getCurrentWindow) {
-                await window.__TAURI__.window.getCurrentWindow().close();
-              }
+              await invoke('window_close');
             } catch (e) {
-              window.close();
+              try {
+                if (window.__TAURI__?.window?.getCurrentWindow) {
+                  await window.__TAURI__.window.getCurrentWindow().close();
+                } else {
+                  window.close();
+                }
+              } catch {
+                window.close();
+              }
             }
           }
         }
@@ -360,6 +366,18 @@ function getMenuItems(menuId) {
           shortcut: 'Ctrl+\\',
           action: () => {
             import('../editor/monaco.js').then(m => m.toggleSplitEditor());
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Toggle Full Screen',
+          shortcut: 'F11',
+          action: async () => {
+            try {
+              await invoke('window_toggle_fullscreen');
+            } catch (e) {
+              console.warn('Failed to toggle fullscreen:', e);
+            }
           }
         }
       ];
