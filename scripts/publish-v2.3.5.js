@@ -78,7 +78,7 @@ async function main() {
       },
       body: JSON.stringify({
         tag_name: TAG_NAME,
-        target_commitish: 'claude/forge',
+        target_commitish: 'main',
         name: RELEASE_TITLE,
         body: bodyContent,
         draft: false,
