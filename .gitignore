@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-ssr/
 release/*.exe
+release/Orbital x 2/
 
 # Tauri & Rust build artifacts
 target/
