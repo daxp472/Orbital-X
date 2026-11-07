@@ -139,3 +139,4 @@ mod tests {
         assert!(prompt2.strict_instructions.contains("RECURSIVE HALLUCINATION LOOP DETECTED"));
     }
 }
+

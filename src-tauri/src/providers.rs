@@ -5,6 +5,8 @@ pub struct ChatMessage {
     pub role: String, // "system", "user", "assistant", "tool"
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_calls: Option<Vec<ToolCall>>,
@@ -1024,6 +1026,13 @@ pub fn build_ollama_payload(
                     "role": m.role,
                     "content": m.content
                 });
+                if let Some(imgs) = &m.images {
+                    let img_vals: Vec<serde_json::Value> = imgs
+                        .iter()
+                        .map(|s| serde_json::Value::String(s.clone()))
+                        .collect();
+                    msg_obj["images"] = serde_json::Value::Array(img_vals);
+                }
                 if let Some(calls) = &m.tool_calls {
                     let tc_json: Vec<serde_json::Value> = calls
                         .iter()

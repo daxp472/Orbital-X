@@ -7,7 +7,7 @@
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
 
-export const CURRENT_VERSION = '2.3.4';
+export const CURRENT_VERSION = '2.3.5';
 
 function escapeHtml(str) {
   return String(str ?? '')

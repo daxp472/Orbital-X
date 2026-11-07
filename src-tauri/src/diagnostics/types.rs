@@ -64,3 +64,4 @@ pub struct LoopDetectionVerdict {
     pub loop_count: usize,
     pub recommended_action: String,
 }
+

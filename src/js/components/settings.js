@@ -40,34 +40,11 @@ export function initSettings() {
   // Antigravity Sidebar Tab switching
   setupShortcutsTab();
 
-  const tabs = [
-    { btn: 'stab-general', pane: 'spane-general' },
-    { btn: 'stab-models', pane: 'spane-models' },
-    { btn: 'stab-appearance', pane: 'spane-appearance' },
-    { btn: 'stab-agent', pane: 'spane-agent' },
-    { btn: 'stab-terminal', pane: 'spane-terminal' },
-    { btn: 'stab-importexport', pane: 'spane-importexport' },
-    { btn: 'stab-developer', pane: 'spane-developer' },
-    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
-  ];
-
-  tabs.forEach(t => {
-    document.getElementById(t.btn)?.addEventListener('click', () => {
-      tabs.forEach(o => {
-        document.getElementById(o.btn)?.classList.remove('active');
-        const p = document.getElementById(o.pane);
-        if (p) p.style.display = 'none';
-      });
-      document.getElementById(t.btn)?.classList.add('active');
-      const targetPane = document.getElementById(t.pane);
-      if (targetPane) targetPane.style.display = 'flex';
-
-      if (t.btn === 'stab-models') {
-        import('./usage.js').then(m => m.loadAndRenderUsage(true));
-      }
-      if (t.btn === 'stab-developer') {
-        loadDevOptionsIntoUI();
-      }
+  const sidebar = document.querySelector('.settings-sidebar');
+  sidebar?.querySelectorAll('.settings-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pane = btn.getAttribute('data-pane') || btn.dataset.pane;
+      if (pane) switchSettingsTab(pane);
     });
   });
 
@@ -364,7 +341,8 @@ async function loadOllamaModelsList() {
     if (typeof rawModels === 'string') {
       try { rawModels = JSON.parse(rawModels); } catch (_) { rawModels = []; }
     }
-    models = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
+    const rawList = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
+    models = rawList.map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
   } catch (e) {
     listEl.innerHTML = `<div style="font-size: 11px; color: var(--accent-orange);">Ollama not reachable at ${state.ai.endpoint}.</div>`;
     return;
@@ -483,148 +461,53 @@ async function loadOllamaModelsList() {
   }
 }
 
-function setupShortcutsTab() {
+export function switchSettingsTab(paneId) {
   const sidebar = document.querySelector('.settings-sidebar');
-  const contentPane = document.querySelector('.settings-content-pane');
-  if (!sidebar || !contentPane) return;
+  const content = document.querySelector('.settings-content-pane');
+  if (!sidebar || !content) return;
 
-  const allTabs = [
-    { btn: 'stab-general', pane: 'spane-general' },
-    { btn: 'stab-models', pane: 'spane-models' },
-    { btn: 'stab-appearance', pane: 'spane-appearance' },
-    { btn: 'stab-shortcuts', pane: 'spane-shortcuts' },
-    { btn: 'stab-agent', pane: 'spane-agent' },
-    { btn: 'stab-terminal', pane: 'spane-terminal' },
-    { btn: 'stab-importexport', pane: 'spane-importexport' },
-    { btn: 'stab-developer', pane: 'spane-developer' },
-  ];
+  const targetPane = document.getElementById(paneId);
+  if (!targetPane) return;
 
-  if (!document.getElementById('stab-shortcuts')) {
-    const navItem = document.createElement('div');
-    navItem.className = 'settings-nav-item';
-    navItem.id = 'stab-shortcuts';
-    navItem.setAttribute('data-pane', 'spane-shortcuts');
-    navItem.innerHTML = `<span>⌨️</span> Shortcuts`;
-
-    const refNav = document.getElementById('stab-appearance');
-    if (refNav && refNav.nextSibling) {
-      sidebar.insertBefore(navItem, refNav.nextSibling);
-    } else {
-      const impNav = document.getElementById('stab-importexport');
-      if (impNav) {
-        sidebar.insertBefore(navItem, impNav);
-      } else {
-        sidebar.appendChild(navItem);
-      }
-    }
-
-    navItem.addEventListener('click', () => {
-      allTabs.forEach(o => {
-        document.getElementById(o.btn)?.classList.remove('active');
-        const p = document.getElementById(o.pane);
-        if (p) p.style.display = 'none';
-      });
-      navItem.classList.add('active');
-      const targetPane = document.getElementById('spane-shortcuts');
-      if (targetPane) {
-        targetPane.style.display = 'flex';
-        buildEditableShortcutsTable();
-      }
-    });
+  // Clear any existing search query so pane rows aren't hidden
+  const searchInput = document.getElementById('settings-search-input');
+  if (searchInput && searchInput.value) {
+    searchInput.value = '';
+    const countEl = document.getElementById('settings-search-count');
+    if (countEl) countEl.style.display = 'none';
   }
 
-  if (!document.getElementById('spane-shortcuts')) {
-    const pane = document.createElement('div');
-    pane.id = 'spane-shortcuts';
-    pane.className = 'settings-pane';
-    pane.style.display = 'none';
-    pane.style.flexDirection = 'column';
-    pane.innerHTML = `
-      <div class="settings-section-title">Keyboard Shortcuts</div>
-      <div class="settings-section-desc">Quick reference of all keyboard shortcuts used in Orbital X.</div>
-      <div class="settings-shortcuts-wrapper" style="margin-top: 6px;">
-        <table class="settings-shortcuts-table">
-          <thead>
-            <tr>
-              <th style="width: 55%; text-align: left;">Action</th>
-              <th style="width: 45%; text-align: right;">Shortcut</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Send Message</td>
-              <td><kbd>Enter</kbd></td>
-            </tr>
-            <tr>
-              <td>New Line</td>
-              <td><kbd>Shift</kbd> + <kbd>Enter</kbd></td>
-            </tr>
-            <tr>
-              <td>Clear Chat</td>
-              <td><kbd>Ctrl</kbd> + <kbd>L</kbd></td>
-            </tr>
-            <tr>
-              <td>Open File</td>
-              <td><kbd>Ctrl</kbd> + <kbd>P</kbd></td>
-            </tr>
-            <tr>
-              <td>Find</td>
-              <td><kbd>Ctrl</kbd> + <kbd>F</kbd></td>
-            </tr>
-            <tr>
-              <td>Go to Line</td>
-              <td><kbd>Ctrl</kbd> + <kbd>G</kbd></td>
-            </tr>
-            <tr>
-              <td>Go to Definition</td>
-              <td><kbd>F12</kbd></td>
-            </tr>
-            <tr>
-              <td>Select All Occurrences</td>
-              <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>L</kbd></td>
-            </tr>
-            <tr>
-              <td>Zoom In / Out / Reset</td>
-              <td><kbd>Ctrl</kbd> + <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd></td>
-            </tr>
-            <tr>
-              <td>Save</td>
-              <td><kbd>Ctrl</kbd> + <kbd>S</kbd></td>
-            </tr>
-            <tr>
-              <td>Toggle Terminal</td>
-              <td><kbd>Ctrl</kbd> + <kbd>\`</kbd></td>
-            </tr>
-            <tr>
-              <td>Toggle Primary Sidebar</td>
-              <td><kbd>Ctrl</kbd> + <kbd>B</kbd></td>
-            </tr>
-            <tr>
-              <td>Open Folder / Workspace</td>
-              <td><kbd>Ctrl</kbd> + <kbd>O</kbd></td>
-            </tr>
-            <tr>
-              <td>Open Settings</td>
-              <td><kbd>Ctrl</kbd> + <kbd>,</kbd></td>
-            </tr>
-            <tr><td>Command Palette</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> / <kbd>F1</kbd></td></tr>
-            <tr><td>Close Editor Tab</td><td><kbd>Ctrl</kbd> + <kbd>W</kbd></td></tr>
-            <tr><td>Toggle Split Editor</td><td><kbd>Ctrl</kbd> + <kbd>\\</kbd></td></tr>
-            <tr><td>Fold / Unfold Region</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>[</kbd> / <kbd>]</kbd></td></tr>
-            <tr><td>Fold All / Unfold All</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> then <kbd>Ctrl</kbd>+<kbd>0</kbd> / <kbd>J</kbd></td></tr>
-            <tr><td>Fold by Level 1–5</td><td><kbd>Ctrl</kbd>+<kbd>K</kbd> then <kbd>Ctrl</kbd>+<kbd>1…5</kbd></td></tr>
-            <tr><td>Add Cursor Above / Below</td><td><kbd>Shift</kbd>+<kbd>Alt</kbd> / <kbd>Ctrl</kbd>+<kbd>Alt</kbd> + <kbd>↑/↓</kbd></td></tr>
-            <tr><td>Cursor at End of Selected Lines</td><td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td></tr>
-            <tr><td>Column Selection</td><td><kbd>Shift</kbd> + <kbd>Alt</kbd> + drag</td></tr>
-            <tr><td>Go to Symbol in File</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td></tr>
-            <tr><td>Go to Symbol in Workspace</td><td><kbd>Ctrl</kbd> + <kbd>T</kbd></td></tr>
-            <tr><td>Format Document</td><td><kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd></td></tr>
-            <tr><td>Toggle Word Wrap</td><td><kbd>Alt</kbd> + <kbd>Z</kbd></td></tr>
-          </tbody>
-        </table>
-      </div>
-    `;
-    contentPane.appendChild(pane);
+  // Deactivate all nav items and activate target
+  sidebar.querySelectorAll('.settings-nav-item').forEach(btn => {
+    const isTarget = (btn.getAttribute('data-pane') === paneId || btn.dataset.pane === paneId);
+    btn.classList.toggle('active', isTarget);
+  });
+
+  // Hide all panes, show selected pane and restore all row visibility
+  content.querySelectorAll('.settings-pane').forEach(pane => {
+    const isMatch = pane.id === paneId;
+    pane.style.display = isMatch ? 'flex' : 'none';
+    if (isMatch) {
+      pane.querySelectorAll('.settings-setting-row, .form-group, .settings-card, .dev-card').forEach(r => {
+        r.style.display = '';
+      });
+    }
+  });
+
+  // Trigger pane-specific loads
+  if (paneId === 'spane-models') {
+    import('./usage.js').then(m => m.loadAndRenderUsage(true));
+  } else if (paneId === 'spane-developer') {
+    loadDevOptionsIntoUI();
+  } else if (paneId === 'spane-shortcuts') {
+    buildEditableShortcutsTable();
+  }
+}
+
+function setupShortcutsTab() {
+  const host = document.getElementById('spane-shortcuts');
+  if (host && !host.querySelector('.settings-shortcuts-wrapper table') && !host.querySelector('#shortcuts-search-input')) {
+    buildEditableShortcutsTable();
   }
 }
 
@@ -862,6 +745,11 @@ export function openSettings() {
   setupShortcutsTab();
   setupOllamaManagerUI();
   setupEditorSettingsUI();
+
+  // Activate currently active tab or general, restoring row visibility
+  const activeBtn = document.querySelector('.settings-nav-item.active');
+  const activePaneId = activeBtn ? (activeBtn.getAttribute('data-pane') || activeBtn.dataset.pane) : 'spane-general';
+  switchSettingsTab(activePaneId || 'spane-general');
 
   // Workspace label
   const wsName = document.getElementById('settings-active-workspace-name');
@@ -1456,11 +1344,16 @@ function filterSettings(term) {
   clearHighlights(document.querySelector('.settings-content-pane') || document.body);
 
   if (!term) {
-    countEl.style.display = 'none';
+    if (countEl) countEl.style.display = 'none';
     // Restore normal single-tab view: show only the active tab's pane
     const activeBtn = document.querySelector('.settings-nav-item.active');
     const activePane = activeBtn ? document.getElementById(activeBtn.dataset.pane || activeBtn.getAttribute('data-pane')) : null;
-    panes.forEach(p => { p.style.display = (p === activePane) ? 'flex' : 'none'; });
+    panes.forEach(p => {
+      p.style.display = (p === activePane) ? 'flex' : 'none';
+      p.querySelectorAll('.settings-setting-row, .form-group, .settings-card, .dev-card').forEach(r => {
+        r.style.display = '';
+      });
+    });
     return;
   }
 
@@ -2182,9 +2075,11 @@ function setupAgentEngineSettings() {
         updateModelDescription(selDraft.value);
       }
 
-      async function runAutoSet(models) {
+      async function runAutoSet(raw) {
         try {
-          const detected = await invoke('auto_detect_draft_model', { availableModels: models });
+          const list = (Array.isArray(raw?.models) ? raw.models : (Array.isArray(raw) ? raw : []))
+            .map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
+          const detected = await invoke('auto_detect_draft_model', { availableModels: list });
           if (detected) {
             selDraft.value = detected;
             saveSpeculativeState();
@@ -2197,7 +2092,8 @@ function setupAgentEngineSettings() {
         if (typeof list === 'string') {
           try { list = JSON.parse(list); } catch (_) { list = []; }
         }
-        list = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
+        const rawList = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
+        list = rawList.map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
         const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
         selDraft.innerHTML = opts;
         selVerifier.innerHTML = opts;
@@ -2254,7 +2150,8 @@ function setupAgentEngineSettings() {
       if (typeof list === 'string') {
         try { list = JSON.parse(list); } catch (_) { list = []; }
       }
-      list = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
+      const rawList = Array.isArray(list?.models) ? list.models : (Array.isArray(list) ? list : []);
+      list = rawList.map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
       const opts = list.map(m => `<option value="${m}">${m}</option>`).join('');
       selCode.innerHTML = opts; selExplain.innerHTML = opts; selFast.innerHTML = opts;
       const r = state.ai.smartRouting || {};
@@ -2433,7 +2330,7 @@ function setupDeveloperOptions() {
     document.getElementById('btn-dev-copy-diag')?.addEventListener('click', async () => {
       const diag = {
         product: 'Orbital X',
-        version: '2.3.3',
+        version: '2.3.5',
         userAgent: navigator.userAgent,
         agentMode: appState.agentMode,
         theme: appState.theme,

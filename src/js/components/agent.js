@@ -152,6 +152,15 @@ export function initAgent() {
     handleSend();
   });
 
+  document.getElementById('chip-tag-graph')?.addEventListener('click', () => {
+    const cur = inputElem.value.trim();
+    if (!cur.includes('@graph')) {
+      inputElem.value = cur ? `@graph ${cur}` : '@graph Query semantic symbols and cross-file dependencies';
+    }
+    updateTokenEstimate(inputElem.value);
+    inputElem.focus();
+  });
+
   document.getElementById('chip-review')?.addEventListener('click', () => {
     document.getElementById('btn-review-changes')?.click();
   });
@@ -3934,10 +3943,69 @@ export async function refreshCheckpointsView() {
   if (!host) return;
   host.innerHTML = '<div class="pack-empty">Loading checkpoints…</div>';
   try {
+    let vfsDiffs = [];
+    try {
+      vfsDiffs = await invoke('vfs_get_diffs');
+    } catch (_) {}
+
     const checkpoints = await invoke('list_checkpoints');
     host.innerHTML = '';
+
+    // Render Pillar 4: VFS Shadow Overlay Card if there are in-memory staged edits
+    if (Array.isArray(vfsDiffs) && vfsDiffs.length > 0) {
+      const vfsCard = document.createElement('div');
+      vfsCard.className = 'pack-card';
+      vfsCard.style.cssText = 'padding: 10px 12px; border: 1px solid var(--accent-cyan); background: rgba(0, 229, 255, 0.05); border-radius: var(--radius-sm); margin-bottom: 10px;';
+      vfsCard.innerHTML = `
+        <div class="pack-title-row" style="display: flex; justify-content: space-between; align-items: center;">
+          <strong style="color: var(--accent-cyan); font-size: 11.5px; display: flex; align-items: center; gap: 5px;">
+            <span>🪞</span> VFS Shadow Tree Buffer
+          </strong>
+          <span class="pack-type-badge" style="background: rgba(0, 229, 255, 0.15); color: var(--accent-cyan); font-weight: 600;">${vfsDiffs.length} uncommitted</span>
+        </div>
+        <div class="pack-meta" style="margin-top: 4px; font-size: 11px; color: var(--text-secondary);">
+          Copy-on-write isolation active. ${vfsDiffs.length} file${vfsDiffs.length === 1 ? '' : 's'} staged in-memory without touching host disk.
+        </div>
+        <div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">
+          <button class="btn btn-primary btn-sm btn-vfs-commit" style="font-size: 10px; padding: 2px 8px;">Commit to Disk</button>
+          <button class="btn btn-secondary btn-sm btn-vfs-review" style="font-size: 10px; padding: 2px 8px;">Review Diff</button>
+          <button class="btn btn-secondary btn-sm btn-vfs-discard" style="font-size: 10px; padding: 2px 8px; color: var(--accent-red);">Discard</button>
+        </div>
+      `;
+
+      vfsCard.querySelector('.btn-vfs-commit')?.addEventListener('click', async () => {
+        try {
+          const res = await invoke('vfs_commit');
+          showToast(res && res.message ? res.message : '✓ Committed shadow changes to disk', 'success', 2500);
+          refreshCheckpointsView();
+        } catch (e) {
+          showToast('Commit error: ' + e, 'error', 3000);
+        }
+      });
+
+      vfsCard.querySelector('.btn-vfs-review')?.addEventListener('click', () => {
+        document.getElementById('btn-review-changes')?.click();
+      });
+
+      vfsCard.querySelector('.btn-vfs-discard')?.addEventListener('click', async () => {
+        if (await showConfirmDialog('Discard Staged Changes', 'Discard all in-memory shadow edits? Changes that have not been committed will be lost.', 'Discard', true)) {
+          try {
+            await invoke('vfs_discard');
+            showToast('Shadow tree edits discarded', 'info', 2000);
+            refreshCheckpointsView();
+          } catch (e) {
+            showToast('Discard error: ' + e, 'error', 3000);
+          }
+        }
+      });
+
+      host.appendChild(vfsCard);
+    }
+
     if (!checkpoints || checkpoints.length === 0) {
-      host.innerHTML = '<div class="pack-empty">No checkpoints yet.<br>Every agent write, patch, or delete creates one (last 20 kept).</div>';
+      if (!vfsDiffs || vfsDiffs.length === 0) {
+        host.innerHTML = '<div class="pack-empty">No checkpoints yet.<br>Every agent write, patch, or delete creates one (last 20 kept).</div>';
+      }
       return;
     }
     const newestFirst = [...checkpoints].reverse();

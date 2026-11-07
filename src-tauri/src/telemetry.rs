@@ -18,6 +18,7 @@ pub struct HardwareTelemetry {
     pub active_model_vram_mb: u64,
     pub active_model_name: String,
     pub tokens_per_second: f32,
+    pub last_known_tps: f32,
     pub gpu_name: String,
     pub timestamp_ms: u64,
 }
@@ -71,17 +72,27 @@ pub fn get_current_tps() -> f32 {
         Err(poisoned) => poisoned.into_inner(),
     };
     if let Some(records) = guard.as_mut() {
-        let cutoff = now.checked_sub(Duration::from_secs(4)).unwrap_or(now);
+        let cutoff = now.checked_sub(Duration::from_millis(2500)).unwrap_or(now);
         records.retain(|r| r.at >= cutoff);
         if records.len() >= 2 {
             let first = records.first().unwrap();
             let total_tokens: usize = records.iter().map(|r| r.count).sum();
             let elapsed_secs = now.duration_since(first.at).as_secs_f32().max(0.1);
             let tps = (total_tokens as f32) / elapsed_secs;
-            LAST_KNOWN_TPS.store((tps * 10.0) as usize, Ordering::Relaxed);
-            return tps;
+            let rounded = (tps * 10.0).round() / 10.0;
+            LAST_KNOWN_TPS.store((rounded * 10.0) as usize, Ordering::Relaxed);
+            return rounded;
+        } else if records.len() == 1 {
+            let tps = (LAST_KNOWN_TPS.load(Ordering::Relaxed) as f32) / 10.0;
+            if tps > 0.0 {
+                return tps;
+            }
         }
     }
+    0.0
+}
+
+pub fn get_last_known_tps() -> f32 {
     (LAST_KNOWN_TPS.load(Ordering::Relaxed) as f32) / 10.0
 }
 
@@ -123,6 +134,7 @@ pub async fn sample_hardware_telemetry(ollama_url: Option<String>) -> HardwareTe
     };
 
     let tps = get_current_tps();
+    let last_known = get_last_known_tps();
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
     HardwareTelemetry {
@@ -138,6 +150,7 @@ pub async fn sample_hardware_telemetry(ollama_url: Option<String>) -> HardwareTe
         active_model_vram_mb,
         active_model_name,
         tokens_per_second: tps,
+        last_known_tps: last_known,
         gpu_name,
         timestamp_ms: now_ms,
     }
@@ -249,6 +262,7 @@ mod tests {
             active_model_vram_mb: 3200,
             active_model_name: "qwen2.5-coder:7b".into(),
             tokens_per_second: 42.5,
+            last_known_tps: 42.5,
             gpu_name: "NVIDIA GeForce RTX".into(),
             timestamp_ms: 1730628000000,
         };

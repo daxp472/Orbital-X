@@ -66,7 +66,9 @@ function setupComposerSpeculativeToggle() {
 
     if (state.ai.speculative.enabled && (!state.ai.speculative.draftModel || !state.ai.speculative.verifierModel)) {
       try {
-        const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+        const raw = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+        const models = (Array.isArray(raw?.models) ? raw.models : (Array.isArray(raw) ? raw : []))
+          .map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
         if (models && models.length > 0) {
           const autoDraft = await invoke('auto_detect_draft_model', { availableModels: models });
           if (autoDraft) state.ai.speculative.draftModel = autoDraft;
@@ -297,7 +299,9 @@ async function loadProviderModels(provider) {
         state.ai.speculative.enabled = mpToggle.checked;
         if (state.ai.speculative.enabled && (!state.ai.speculative.draftModel || !state.ai.speculative.verifierModel)) {
           try {
-            const models = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+            const raw = await invoke('get_ollama_models', { endpoint: state.ai.endpoint });
+            const models = (Array.isArray(raw?.models) ? raw.models : (Array.isArray(raw) ? raw : []))
+              .map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
             if (models && models.length > 0) {
               const autoDraft = await invoke('auto_detect_draft_model', { availableModels: models });
               if (autoDraft) state.ai.speculative.draftModel = autoDraft;
@@ -351,7 +355,8 @@ async function loadProviderModels(provider) {
       if (typeof rawModels === 'string') {
         try { rawModels = JSON.parse(rawModels); } catch (_) { rawModels = []; }
       }
-      const models = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
+      const rawList = Array.isArray(rawModels?.models) ? rawModels.models : (Array.isArray(rawModels) ? rawModels : []);
+      const models = rawList.map(m => (typeof m === 'string' ? m : (m?.name || m?.model || ''))).filter(Boolean);
       detectedContainer.innerHTML = '';
 
       if (!models || models.length === 0) {

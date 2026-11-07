@@ -233,12 +233,13 @@ export async function pollTelemetry() {
 
 function updateUI(data) {
   const currentTps = Number(data.tokensPerSecond || 0);
+  const lastTps = Number(data.lastKnownTps || lastActiveTps || 0);
   if (currentTps > 0) {
     lastActiveTps = currentTps;
     if (currentTps > maxRecordedTps) maxRecordedTps = currentTps;
   }
-  const displayTps = currentTps > 0 ? currentTps : lastActiveTps;
-  const tpsFormatted = displayTps.toFixed(1);
+  const displayTps = currentTps;
+  const tpsFormatted = currentTps.toFixed(1);
   const vramGb = ((data.vramUsedMb || 0) / 1024).toFixed(1);
   const vramTotalGb = ((data.vramTotalMb || 0) / 1024).toFixed(1);
   const cpuPercent = Math.round(data.cpuPercent || 0);
@@ -256,8 +257,8 @@ function updateUI(data) {
     if (currentTps > 0) {
       sbTps.textContent = `${tpsFormatted} tps`;
       sbTps.style.color = '#00e5ff';
-    } else if (lastActiveTps > 0) {
-      sbTps.textContent = `${lastActiveTps.toFixed(1)} tps (last)`;
+    } else if (lastTps > 0) {
+      sbTps.textContent = `0.0 tps (last ${lastTps.toFixed(1)})`;
       sbTps.style.color = 'var(--text-secondary)';
     } else {
       sbTps.textContent = `0.0 tps`;
@@ -287,13 +288,13 @@ function updateUI(data) {
     const elGpuName = document.getElementById('hud-gpu-name');
     const elModel = document.getElementById('hud-active-model');
 
-    if (elTps) elTps.textContent = tpsFormatted;
+    if (elTps) elTps.textContent = currentTps > 0 ? tpsFormatted : '0.0';
     if (elSubTps) {
       if (currentTps > 0) {
-        elSubTps.textContent = 'Active token stream';
+        elSubTps.textContent = `Active token stream (${tpsFormatted} tps)`;
         elSubTps.style.color = '#00e5ff';
-      } else if (maxRecordedTps > 0) {
-        elSubTps.textContent = `Idle • Peak: ${maxRecordedTps.toFixed(1)} tps`;
+      } else if (lastTps > 0) {
+        elSubTps.textContent = `Idle • Last: ${lastTps.toFixed(1)} tps (Peak: ${maxRecordedTps.toFixed(1)})`;
         elSubTps.style.color = 'var(--text-secondary)';
       } else {
         elSubTps.textContent = 'Idle (ready)';
