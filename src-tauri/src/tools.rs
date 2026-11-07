@@ -3,6 +3,120 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "vfs_shadow_write",
+                "description": "Stage a file mutation completely inside the in-memory shadow Virtual File System. Zero risk of corrupting disk or breaking undo/redo history before user review.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative workspace file path to stage"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Full new content for the file"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vfs_get_diffs",
+                "description": "Inspect unified git-style diffs and line hunk ranges for all uncommitted shadow edits against the disk baseline.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vfs_create_checkpoint",
+                "description": "Create an in-memory rollback checkpoint before attempting high-risk refactoring or multiple file edits.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Reason or milestone description for this checkpoint"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vfs_commit",
+                "description": "Atomically commit all validated staged shadow mutations to physical disk, automatically creating an emergency rollback backup in .orbital/vfs_backups/.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "run_compiler_diagnostics",
+                "description": "Execute local project compiler/linter check (cargo check, npx tsc, etc.) to detect syntax, type, and borrow checker errors. If failures are detected, returns strict repair boundaries and pinpoint error locations to prevent hallucination loops.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "timeout_secs": {
+                            "type": "integer",
+                            "description": "Optional execution timeout in seconds (default 30)"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "query_code_graph",
+                "description": "Query the codebase semantic graph to find callers, callees, or dependencies for any function, method, struct, or class without reading whole files blindly. Shrinks context consumption drastically.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Target symbol name (e.g. 'AuthService', 'login', 'execute_command')"
+                        },
+                        "query_type": {
+                            "type": "string",
+                            "enum": ["callers", "callees", "dependencies"],
+                            "description": "Type of graph traversal: 'callers' (who calls this), 'callees' (who this calls), or 'dependencies' (functional tree)"
+                        }
+                    },
+                    "required": ["symbol", "query_type"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_focused_context",
+                "description": "Extract an ultra-compact focused semantic context slice for a symbol, containing its signature, callers, callees, and dependencies. Always prefer this over raw read_file for exploring architecture.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "symbol": {
+                            "type": "string",
+                            "description": "Target symbol name to extract focused context for"
+                        }
+                    },
+                    "required": ["symbol"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "workspace_info",
                 "description": "Get metadata about the current workspace: root path, total files, detected programming languages. Call this first when starting a new task to orient yourself.",
                 "parameters": {

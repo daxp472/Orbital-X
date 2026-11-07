@@ -381,6 +381,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Reads and searches are fully autonomous in Pro Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"
@@ -399,6 +400,7 @@ impl PolicyEngine {
                     }
                     // File writes, patches, directory creation are autonomous in Pro Mode
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
                     | "undo_agent_change" | "save_project_memory" | "delete_project_memory"
                     | "create_directory" | "rename_file" | "copy_file" => {
                         PolicyDecision {
@@ -464,6 +466,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Reads, searches, and task status updates are automatic in Dev Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff" | "git_log"
@@ -479,6 +482,7 @@ impl PolicyEngine {
                     }
                     // File edits require approval card in Dev Mode
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
                     | "undo_agent_change" | "rename_file" | "copy_file" | "create_directory" => {
                         PolicyDecision {
                             allowed: true,
@@ -546,6 +550,7 @@ impl PolicyEngine {
                     }
                     // File edits and deletions require confirmation
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
                     | "create_directory" | "rename_file" | "copy_file" | "delete_file" | "delete_directory"
                     | "delete_folder" | "batch_delete_files" | "delete_path" => {
                         PolicyDecision {
@@ -585,6 +590,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Read and search tools are fully allowed in Ask mode so the model can inspect code
                     "workspace_info" | "list_files" | "search_files" | "read_file"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"

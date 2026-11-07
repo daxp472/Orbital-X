@@ -1,4 +1,10 @@
+#![recursion_limit = "512"]
+
 pub mod boilerplate;
+pub mod diagnostics;
+pub mod isolation;
+pub mod semantic_graph;
+pub mod vfs;
 mod extensions;
 mod memory;
 mod policy;
@@ -18,7 +24,7 @@ use providers::{
     ProviderService,
 };
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager, State, Emitter};
@@ -34,6 +40,10 @@ pub struct AppState {
     /// Cancellation tokens for cancellable long-running operations (agent
     /// turns, model pulls), keyed by an id supplied by the frontend.
     pub active_ops: Mutex<HashMap<String, CancellationToken>>,
+    pub isolation_engine: Mutex<Option<isolation::IsolationEngine>>,
+    pub semantic_graph: Mutex<Option<semantic_graph::SemanticGraphEngine>>,
+    pub diagnostics_service: Mutex<Option<diagnostics::DiagnosticService>>,
+    pub vfs: Mutex<Option<vfs::VfsEngine>>,
 }
 
 fn cancelled_response() -> ProviderResponse {
@@ -76,7 +86,309 @@ fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a
 #[tauri::command]
 fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
     let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-    ws.set_root(&path)
+    let meta = ws.set_root(&path)?;
+    if let Ok(mut iso) = state.isolation_engine.lock() {
+        *iso = isolation::IsolationEngine::new(PathBuf::from(&path)).ok();
+    }
+    if let Ok(mut g) = state.semantic_graph.lock() {
+        let engine = semantic_graph::SemanticGraphEngine::new(PathBuf::from(&path));
+        engine.start_background_indexing();
+        *g = Some(engine);
+    }
+    if let Ok(mut diag) = state.diagnostics_service.lock() {
+        *diag = Some(diagnostics::DiagnosticService::new(PathBuf::from(&path)));
+    }
+    if let Ok(mut vfs_guard) = state.vfs.lock() {
+        *vfs_guard = Some(vfs::VfsEngine::new(PathBuf::from(&path)));
+    }
+    Ok(meta)
+}
+
+#[tauri::command]
+async fn graph_get_callers(
+    target: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = semantic_graph::SemanticGraphEngine::new(root);
+    // Fast indexing for queried target if background worker has not run
+    Ok(engine.query_callers(&target).await)
+}
+
+#[tauri::command]
+async fn graph_get_callees(
+    source: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = semantic_graph::SemanticGraphEngine::new(root);
+    Ok(engine.query_callees(&source).await)
+}
+
+#[tauri::command]
+async fn graph_get_dependencies(
+    symbol: String,
+    max_depth: Option<usize>,
+    state: State<'_, AppState>,
+) -> Result<Vec<semantic_graph::SymbolSummary>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = semantic_graph::SemanticGraphEngine::new(root);
+    Ok(engine.query_dependencies(&symbol, max_depth.unwrap_or(2)).await)
+}
+
+#[tauri::command]
+async fn graph_get_focused_context(
+    symbol: String,
+    state: State<'_, AppState>,
+) -> Result<Option<semantic_graph::FocusedContextSlice>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = semantic_graph::SemanticGraphEngine::new(root);
+    Ok(engine.get_focused_context(&symbol).await)
+}
+
+#[tauri::command]
+async fn graph_get_stats(
+    state: State<'_, AppState>,
+) -> Result<semantic_graph::GraphStats, String> {
+    let engine_opt = {
+        let guard = state.semantic_graph.lock().ok();
+        guard.and_then(|g| g.as_ref().cloned())
+    };
+
+    if let Some(engine) = engine_opt {
+        return Ok(engine.get_stats().await);
+    }
+
+    Ok(semantic_graph::GraphStats {
+        total_symbols: 0,
+        total_edges: 0,
+        total_files: 0,
+        is_indexing: false,
+    })
+}
+
+#[tauri::command]
+async fn isolation_execute_command(
+    command: String,
+    timeout_secs: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<isolation::IsolatedCommandResult, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = isolation::IsolationEngine::new(root)?;
+    engine.execute_sandboxed_command(&command, None, timeout_secs.unwrap_or(30)).await
+}
+
+#[tauri::command]
+async fn isolation_stage_write(
+    path: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = isolation::IsolationEngine::new(root)?;
+    engine.stage_write(std::path::Path::new(&path), content.as_bytes()).await
+}
+
+#[tauri::command]
+async fn isolation_validate_staged(
+    state: State<'_, AppState>,
+) -> Result<isolation::ValidationReport, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = isolation::IsolationEngine::new(root)?;
+    Ok(engine.validate_staged().await)
+}
+
+#[tauri::command]
+async fn diagnostics_run_compiler_check(
+    timeout_secs: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<Vec<diagnostics::CompilerDiagnostic>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let svc = diagnostics::DiagnosticService::new(root);
+    svc.run_compiler_check(timeout_secs.unwrap_or(30)).await
+}
+
+#[tauri::command]
+async fn diagnostics_evaluate_healing(
+    timeout_secs: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<Option<diagnostics::HealingPrompt>, String> {
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let svc = diagnostics::DiagnosticService::new(root);
+    svc.evaluate_and_heal(timeout_secs.unwrap_or(30)).await
+}
+
+#[tauri::command]
+async fn vfs_read_file(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = match vfs_opt {
+        Some(e) => e,
+        None => {
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
+            vfs::VfsEngine::new(root)
+        }
+    };
+    engine.read_file(Path::new(&path)).await
+}
+
+#[tauri::command]
+async fn vfs_write_file(
+    path: String,
+    content: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = match vfs_opt {
+        Some(e) => e,
+        None => {
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
+            vfs::VfsEngine::new(root)
+        }
+    };
+    engine.write_file(Path::new(&path), &content).await
+}
+
+#[tauri::command]
+async fn vfs_delete_file(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = match vfs_opt {
+        Some(e) => e,
+        None => {
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
+            vfs::VfsEngine::new(root)
+        }
+    };
+    engine.delete_file(Path::new(&path)).await
+}
+
+#[tauri::command]
+async fn vfs_get_all_diffs(
+    state: State<'_, AppState>,
+) -> Result<Vec<vfs::VfsFileDiff>, String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    if let Some(engine) = vfs_opt {
+        Ok(engine.get_all_diffs().await)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
+async fn vfs_create_checkpoint(
+    description: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<vfs::VfsCheckpoint, String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    Ok(engine.create_checkpoint(&description.unwrap_or_else(|| "Agent checkpoint".into())).await)
+}
+
+#[tauri::command]
+async fn vfs_rollback_checkpoint(
+    checkpoint_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    engine.rollback_checkpoint(&checkpoint_id).await
+}
+
+#[tauri::command]
+async fn vfs_commit_transaction(
+    state: State<'_, AppState>,
+) -> Result<vfs::VfsCommitSummary, String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    engine.commit_transaction().await
+}
+
+#[tauri::command]
+async fn vfs_discard_changes(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let vfs_opt = {
+        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    if let Some(engine) = vfs_opt {
+        engine.discard_changes().await;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -703,6 +1015,96 @@ async fn execute_tool(
     }
 
     match name.as_str() {
+        "vfs_shadow_write" => {
+            let path_str = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
+            let content = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
+            let vfs_opt = {
+                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = match vfs_opt {
+                Some(e) => e,
+                None => {
+                    let host_ws = {
+                        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                        ws.get_root()
+                    };
+                    let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+                    vfs::VfsEngine::new(root)
+                }
+            };
+            engine.write_file(Path::new(path_str), content).await?;
+            Ok(serde_json::json!({ "staged": true, "path": path_str }))
+        }
+        "vfs_get_diffs" => {
+            let vfs_opt = {
+                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            if let Some(engine) = vfs_opt {
+                let diffs = engine.get_all_diffs().await;
+                Ok(serde_json::to_value(diffs).unwrap_or_default())
+            } else {
+                Ok(serde_json::json!([]))
+            }
+        }
+        "vfs_create_checkpoint" => {
+            let desc = arguments.get("description").and_then(|v| v.as_str()).unwrap_or("Agent checkpoint");
+            let vfs_opt = {
+                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = vfs_opt.ok_or_else(|| "No workspace open".to_string())?;
+            let ckpt = engine.create_checkpoint(desc).await;
+            Ok(serde_json::to_value(ckpt).unwrap_or_default())
+        }
+        "vfs_commit" => {
+            let vfs_opt = {
+                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = vfs_opt.ok_or_else(|| "No workspace open".to_string())?;
+            let summary = engine.commit_transaction().await?;
+            Ok(serde_json::to_value(summary).unwrap_or_default())
+        }
+        "run_compiler_diagnostics" => {
+            let timeout = arguments.get("timeout_secs").and_then(|v| v.as_u64()).unwrap_or(30);
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+            let svc = diagnostics::DiagnosticService::new(root);
+            let healing = svc.evaluate_and_heal(timeout).await?;
+            Ok(serde_json::to_value(healing).unwrap_or(serde_json::json!({ "clean": true })))
+        }
+        "query_code_graph" => {
+            let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+            let query_type = arguments.get("query_type").and_then(|v| v.as_str()).unwrap_or("callers");
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+            let engine = semantic_graph::SemanticGraphEngine::new(root);
+            match query_type {
+                "callers" => Ok(serde_json::to_value(engine.query_callers(symbol).await).unwrap_or_default()),
+                "callees" => Ok(serde_json::to_value(engine.query_callees(symbol).await).unwrap_or_default()),
+                "dependencies" => Ok(serde_json::to_value(engine.query_dependencies(symbol, 2).await).unwrap_or_default()),
+                _ => Err(format!("Unknown query_type '{}', expected callers, callees, or dependencies", query_type)),
+            }
+        }
+        "get_focused_context" => {
+            let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
+            let host_ws = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.get_root()
+            };
+            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
+            let engine = semantic_graph::SemanticGraphEngine::new(root);
+            let ctx = engine.get_focused_context(symbol).await;
+            Ok(serde_json::to_value(ctx).unwrap_or(serde_json::json!({ "found": false })))
+        }
         "workspace_info" => {
             let ws = state.workspace.lock().map_err(|e| e.to_string())?;
             match ws.get_root() {
@@ -2192,6 +2594,10 @@ pub fn run() {
         active_mode: Mutex::new(AgentMode::Dev),
         terminal_mgr: InteractiveTerminalManager::new(),
         active_ops: Mutex::new(HashMap::new()),
+        isolation_engine: Mutex::new(None),
+        semantic_graph: Mutex::new(None),
+        diagnostics_service: Mutex::new(None),
+        vfs: Mutex::new(None),
     };
 
     // P1: catch Rust panics into ~/.orbital/orbital.log so a crash leaves a trace
@@ -2224,6 +2630,24 @@ pub fn run() {
             reload,
 
             set_workspace,
+            isolation_execute_command,
+            isolation_stage_write,
+            isolation_validate_staged,
+            diagnostics_run_compiler_check,
+            diagnostics_evaluate_healing,
+            vfs_read_file,
+            vfs_write_file,
+            vfs_delete_file,
+            vfs_get_all_diffs,
+            vfs_create_checkpoint,
+            vfs_rollback_checkpoint,
+            vfs_commit_transaction,
+            vfs_discard_changes,
+            graph_get_callers,
+            graph_get_callees,
+            graph_get_dependencies,
+            graph_get_focused_context,
+            graph_get_stats,
             get_workspace_meta,
             get_file_tree,
             read_file,

@@ -30,6 +30,19 @@ function getGitHubToken() {
   return null;
 }
 
+async function fetchWithRetry(url, options = {}, retries = 5, delay = 2000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+      return res;
+    } catch (err) {
+      console.warn(`Attempt ${attempt}/${retries} failed for ${url}: ${err.message}`);
+      if (attempt === retries) throw err;
+      await new Promise(r => setTimeout(r, delay * attempt));
+    }
+  }
+}
+
 async function main() {
   const token = getGitHubToken();
   if (!token) {
@@ -42,7 +55,7 @@ async function main() {
 
   // 1. Check if release already exists
   console.log(`Checking if release ${TAG_NAME} already exists...`);
-  const listRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
+  const listRes = await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
     headers: {
       'Authorization': `token ${token}`,
       'Accept': 'application/vnd.github+json',
@@ -55,7 +68,7 @@ async function main() {
 
   if (!release) {
     console.log(`Creating release ${TAG_NAME}...`);
-    const createRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
+    const createRes = await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases`, {
       method: 'POST',
       headers: {
         'Authorization': `token ${token}`,
@@ -82,7 +95,7 @@ async function main() {
   } else {
     console.log(`Release ${TAG_NAME} already exists: ${release.html_url}`);
     // Update body & title
-    const patchRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`, {
+    const patchRes = await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`, {
       method: 'PATCH',
       headers: {
         'Authorization': `token ${token}`,
@@ -123,7 +136,7 @@ async function main() {
     }
 
     // Refresh release details to get latest assets list
-    const getRelRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`, {
+    const getRelRes = await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`, {
       headers: {
         'Authorization': `token ${token}`,
         'Accept': 'application/vnd.github+json',
@@ -132,11 +145,16 @@ async function main() {
     });
     const currentRel = await getRelRes.json();
 
-    // Delete existing asset if present
+    // Check if asset is already uploaded with the exact same size
     const existingAsset = (currentRel.assets || []).find(a => a.name === asset.name);
+    const localSize = fs.statSync(asset.path).size;
     if (existingAsset) {
+      if (existingAsset.size === localSize && existingAsset.state === 'uploaded') {
+        console.log(`Asset ${asset.name} is already uploaded with matching size (${(localSize / 1024 / 1024).toFixed(1)} MB). Skipping.`);
+        continue;
+      }
       console.log(`Deleting existing asset ${asset.name} (id: ${existingAsset.id})...`);
-      await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingAsset.id}`, {
+      await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingAsset.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `token ${token}`,
@@ -146,11 +164,11 @@ async function main() {
       });
     }
 
-    console.log(`Uploading ${asset.name} (${(fs.statSync(asset.path).size / 1024 / 1024).toFixed(1)} MB)...`);
+    console.log(`Uploading ${asset.name} (${(localSize / 1024 / 1024).toFixed(1)} MB)...`);
     const fileData = fs.readFileSync(asset.path);
     const uploadUrl = `https://uploads.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}/assets?name=${encodeURIComponent(asset.name)}`;
 
-    const upRes = await fetch(uploadUrl, {
+    const upRes = await fetchWithRetry(uploadUrl, {
       method: 'POST',
       headers: {
         'Authorization': `token ${token}`,
@@ -175,3 +193,4 @@ main().catch(err => {
   console.error('Fatal release error:', err);
   process.exit(1);
 });
+
