@@ -496,6 +496,7 @@ function setupShortcutsTab() {
     { btn: 'stab-agent', pane: 'spane-agent' },
     { btn: 'stab-terminal', pane: 'spane-terminal' },
     { btn: 'stab-importexport', pane: 'spane-importexport' },
+    { btn: 'stab-developer', pane: 'spane-developer' },
   ];
 
   if (!document.getElementById('stab-shortcuts')) {
