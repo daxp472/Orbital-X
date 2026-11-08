@@ -628,6 +628,19 @@ body.theme-light .settings-sidebar,
   background: var(--bg-activity);
   border-top: 1px solid var(--border-subtle);
 }
+.terminal-prompt-label {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.95;
+  letter-spacing: -0.2px;
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .terminal-inline-prompt .terminal-input {
   flex: 1;
   background: transparent;

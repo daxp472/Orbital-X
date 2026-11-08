@@ -30,3 +30,4 @@ Orbital X v2.3.5 brings enterprise architectural isolation, real-time semantic c
 ### Downloads
 - **Windows Setup**: `Orbital.X_2.3.5_x64-setup.exe` / `Orbital X_2.3.5_x64-setup.exe` (7.15 MB)
 - **Standalone Binary**: `orbital-x.exe` (21.6 MB)
+

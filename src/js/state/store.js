@@ -86,7 +86,7 @@ export const state = {
   terminal: {
     profiles: [],
     splitMode: false,
-    defaultShell: 'powershell',
+    defaultShell: 'cmd',
   },
 
   // Bottom panel state

@@ -62,15 +62,19 @@ impl InteractiveTerminalManager {
         shell_override: Option<String>,
     ) -> Result<InteractiveSessionInfo, String> {
         let session_id = session_id_opt.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-        let session_name = name.unwrap_or_else(|| "powershell".to_string());
-        let effective_cwd = cwd.unwrap_or_else(|| {
-            dirs::home_dir()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| ".".into())
-        });
+        #[cfg(target_os = "windows")]
+        let default_shell_name = "cmd".to_string();
+        #[cfg(not(target_os = "windows"))]
+        let default_shell_name = "sh".to_string();
+        let session_name = name.unwrap_or(default_shell_name);
+
+        let effective_cwd = match cwd {
+            Some(ref c) if !c.trim().is_empty() => c.clone(),
+            _ => std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
+        };
 
         #[cfg(target_os = "windows")]
-        let shell_cmd = shell_override.unwrap_or_else(|| "powershell.exe".to_string());
+        let shell_cmd = shell_override.unwrap_or_else(|| "cmd.exe".to_string());
         #[cfg(not(target_os = "windows"))]
         let shell_cmd = shell_override.unwrap_or_else(|| "sh".to_string());
 

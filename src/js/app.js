@@ -25,7 +25,7 @@ import { initMenubar } from './components/menubar.js';
 import { initTelemetryHUD } from './components/telemetry-hud.js';
 import { initReviewChangesBar } from './services/changed-files.js';
 import { initTimeTravel } from './components/time-travel.js';
-import { checkForUpdatesManually, CURRENT_VERSION } from './components/updater.js';
+import { checkForUpdatesManually, checkOnStartupOrWorkspace, CURRENT_VERSION } from './components/updater.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
 
 window.showToast = showToast;
@@ -111,17 +111,11 @@ export async function enterWorkspace(rootPath) {
     rememberWorkspaceTrust(meta.root_path, true);
     updateTrustIndicator();
 
-    // Update terminal session CWD to match new workspace
-    const activeTerm = getActiveSession();
-    if (activeTerm) {
-      activeTerm.cwd = meta.root_path;
-      for (const pane of ['A', 'B']) {
-        const pl = document.getElementById(`terminal-prompt-label-${pane}`);
-        if (pl) pl.textContent = `PS ${meta.root_path}>`;
-      }
-      renderPanes();
-      executeTerminalCommand(`cd "${meta.root_path}"`).catch(() => {});
-    }
+    // Update terminal sessions to automatically match the active workspace directory
+    import('./components/terminal.js').then(m => m.onWorkspaceOpened(meta.root_path)).catch(console.warn);
+
+    // Check for updates on workspace open (throttled per session)
+    checkOnStartupOrWorkspace().catch(() => {});
 
     // Load file tree passing cached meta (avoids duplicate set_workspace IPC)
     await loadWorkspace(meta.root_path, meta);
@@ -1631,24 +1625,9 @@ function initProductionHardening() {
 
 // CURRENT_VERSION is imported from updater.js
 
-// P3 — update check with modal UI
+// P3 — update check on application startup
 function initUpdateCheck() {
-  const DISMISS_KEY = 'orbital_update_dismissed_at';
-  try {
-    const dismissed = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
-    if (Date.now() - dismissed < 7 * 24 * 3600 * 1000) return;
-  } catch (e) { /* check anyway */ }
-
-  invoke('check_latest_release').then((res) => {
-    const latest = (res?.tag || '').replace(/^v/, '');
-    if (!latest) return;
-    const isNewer = latest.split('.').map(Number).some((n, i) => n > (latest.split('.').map(Number)[i] || 0)) &&
-      latest !== CURRENT_VERSION;
-    if (!isNewer) return;
-
-    // Show update modal instead of banner
-    showUpdateModal(latest, res?.download_url || '', res?.changelog || '');
-  }).catch(() => { /* offline — silent */ });
+  checkOnStartupOrWorkspace().catch(() => {});
 }
 
 // Show update available modal

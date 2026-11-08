@@ -501,6 +501,8 @@ export function switchSettingsTab(paneId) {
     loadDevOptionsIntoUI();
   } else if (paneId === 'spane-shortcuts') {
     buildEditableShortcutsTable();
+  } else if (paneId === 'spane-updates') {
+    import('./updater.js').then(m => m.renderUpdatesPane());
   }
 }
 
@@ -739,16 +741,16 @@ function applyFromUI() {
   });
 }
 
-export function openSettings() {
+export function openSettings(targetPaneId) {
   const modal = document.getElementById('modal-settings');
   if (!modal) return;
   setupShortcutsTab();
   setupOllamaManagerUI();
   setupEditorSettingsUI();
 
-  // Activate currently active tab or general, restoring row visibility
+  // Activate target tab or currently active tab or general, restoring row visibility
   const activeBtn = document.querySelector('.settings-nav-item.active');
-  const activePaneId = activeBtn ? (activeBtn.getAttribute('data-pane') || activeBtn.dataset.pane) : 'spane-general';
+  const activePaneId = targetPaneId || (activeBtn ? (activeBtn.getAttribute('data-pane') || activeBtn.dataset.pane) : 'spane-general');
   switchSettingsTab(activePaneId || 'spane-general');
 
   // Workspace label
@@ -1907,12 +1909,12 @@ function setupTerminalSettingsUI() {
   const shellSel = document.getElementById('cfg-shell-type');
   if (shellSel && !shellSel.dataset.wired) {
     shellSel.dataset.wired = '1';
-    const map = { powershell: 'powershell', cmd: 'cmd', bash: 'gitbash' };
-    const rev = { powershell: 'powershell', cmd: 'cmd', gitbash: 'bash', wsl: 'bash', sh: 'bash' };
-    shellSel.value = map[state.terminal?.defaultShell] || 'powershell';
+    const map = { cmd: 'cmd', powershell: 'powershell', bash: 'gitbash' };
+    const rev = { cmd: 'cmd', powershell: 'powershell', gitbash: 'bash', wsl: 'bash', sh: 'bash' };
+    shellSel.value = map[state.terminal?.defaultShell] || 'cmd';
     shellSel.addEventListener('change', async () => {
       state.terminal = state.terminal || {};
-      state.terminal.defaultShell = map[shellSel.value] || 'powershell';
+      state.terminal.defaultShell = map[shellSel.value] || 'cmd';
       const term = await import('./terminal.js');
       if (term.persistTerminalSettings) term.persistTerminalSettings();
     });

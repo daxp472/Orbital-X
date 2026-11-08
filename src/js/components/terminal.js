@@ -68,7 +68,13 @@ function loadTerminalSettings() {
     const savedTerm = JSON.parse(localStorage.getItem('orbital_terminal_settings') || 'null');
     if (savedTerm) state.settings.terminal = { ...state.settings.terminal, ...savedTerm };
     const savedMeta = JSON.parse(localStorage.getItem('orbital_terminal_meta') || 'null');
-    if (savedMeta) state.terminal = { ...state.terminal, ...savedMeta };
+    if (savedMeta) {
+      state.terminal = { ...state.terminal, ...savedMeta };
+    }
+    // Windows default shell migration: ensure default is 'cmd' unless explicitly customized
+    if (isWindows() && (!state.terminal.defaultShell || state.terminal.defaultShell === 'powershell')) {
+      state.terminal.defaultShell = 'cmd';
+    }
   } catch (e) { /* defaults */ }
 }
 
@@ -295,13 +301,16 @@ class TerminalSession {
     return this.shell.split(/[\\/]/).pop() || 'shell';
   }
 
-  // VS Code / Antigravity show the *folder* name as the terminal tab title,
-  // not the shell name — e.g. "Test" instead of "2: Command Prompt".
+  // Clean VS Code style title: e.g. "cmd · Orbital X" or "pwsh · Orbital X"
   tabTitle() {
+    const isCmd = /cmd\.exe|cmd$/i.test(this.shell);
+    const isPwsh = /powershell/i.test(this.shell);
+    const isBash = /bash/i.test(this.shell);
+    const typeLabel = isCmd ? 'cmd' : isPwsh ? 'pwsh' : isBash ? 'bash' : this.profileName();
     const cwd = (this.cwd || state.workspace.rootPath || '').replace(/[\\/]+$/, '');
     const parts = cwd.split(/[\\/]/).filter(Boolean);
     const folder = parts[parts.length - 1] || '';
-    return folder || this.profileName();
+    return folder ? `${typeLabel} · ${folder}` : typeLabel;
   }
 
   async startBackendShell() {
@@ -510,7 +519,7 @@ function buildTerminalDom() {
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-A"></div>
         <div class="terminal-output-scroll" id="terminal-stdout-A"></div>
         <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-A">
-          <span id="terminal-prompt-label-A" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS&gt;</span>
+          <span id="terminal-prompt-label-A" class="terminal-prompt-label">cmd&gt;</span>
           <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-A" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
           <button class="terminal-inline-run" id="btn-run-terminal-command-A" title="Run (Enter)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -525,7 +534,7 @@ function buildTerminalDom() {
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-B"></div>
         <div class="terminal-output-scroll" id="terminal-stdout-B"></div>
         <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-B">
-          <span id="terminal-prompt-label-B" style="color: var(--accent-cyan); font-family: var(--font-mono); font-size: 12px; font-weight: bold; white-space: nowrap;">PS&gt;</span>
+          <span id="terminal-prompt-label-B" class="terminal-prompt-label">cmd&gt;</span>
           <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-B" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
           <button class="terminal-inline-run" id="btn-run-terminal-command-B" title="Run (Enter)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -912,13 +921,58 @@ function updatePromptDisplay() {
     const isBash = /bash|sh/i.test(active.shell || '');
     // Full working-directory path in the prompt — exactly like VS Code / Antigravity
     if (isCmd) {
-      promptLabel.textContent = cwd ? `${cwd}>` : 'CMD>';
+      promptLabel.textContent = cwd ? `${cwd}>` : 'cmd>';
     } else if (isBash) {
       promptLabel.textContent = cwd ? `${cwd}$` : '$';
     } else {
-      promptLabel.textContent = cwd ? `PS ${cwd}>` : 'PS>';
+      promptLabel.textContent = cwd ? `${cwd}>` : 'PS>';
     }
   }
+}
+
+/**
+ * Invoked whenever a workspace is opened or switched.
+ * Automatically synchronizes the terminal's working directory to the workspace root.
+ * Virgin sessions (unmodified by user commands) restart at the workspace root cleanly.
+ * Active sessions with history navigate via `cd /d` (for cmd) to preserve work.
+ */
+export async function onWorkspaceOpened(workspacePath) {
+  if (!workspacePath) return;
+  state.workspace.rootPath = workspacePath;
+
+  for (const session of terminalInstances) {
+    session.cwd = workspacePath;
+    if (session.history.length === 0) {
+      session.buffer = '';
+      if (session.isBackendConnected) {
+        await session.closeBackendShell();
+      }
+      await session.startBackendShell();
+    } else if (session.isBackendConnected) {
+      const isCmd = /cmd\.exe|cmd$/i.test(session.shell);
+      const isBash = /bash|sh/i.test(session.shell);
+      if (isCmd) {
+        await invoke('send_terminal_input', {
+          sessionId: session.sessionId,
+          input: `cd /d "${workspacePath}"\r\n`,
+        });
+      } else if (isBash) {
+        await invoke('send_terminal_input', {
+          sessionId: session.sessionId,
+          input: `cd "${workspacePath}"\r\n`,
+        });
+      } else {
+        await invoke('send_terminal_input', {
+          sessionId: session.sessionId,
+          input: `Set-Location "${workspacePath}"\r\n`,
+        });
+      }
+      setTimeout(() => pollActiveTerminalOutput(), 300);
+    }
+  }
+
+  updatePromptDisplay();
+  renderPanes();
 }
 
 // --- E4: appearance ----------------------------------------------------------
@@ -975,9 +1029,15 @@ export async function executeTerminalCommand(cmdString) {
       await active.startBackendShell();
     }
     if (active.isBackendConnected) {
+      // In Windows cmd.exe, if command is cd to another drive (e.g. `cd D:\...`), cmd requires /d
+      let cmdToSend = command;
+      const isCmd = /cmd\.exe|cmd$/i.test(active.shell);
+      if (isCmd && /^cd\s+([a-zA-Z]:.*)/i.test(command) && !/^cd\s+\/d\s+/i.test(command)) {
+        cmdToSend = command.replace(/^cd\s+/i, 'cd /d ');
+      }
       await invoke('send_terminal_input', {
         sessionId: active.sessionId,
-        input: command + "\r\n",
+        input: cmdToSend + "\r\n",
       });
       [60, 180, 400, 900].forEach(delay => setTimeout(() => pollActiveTerminalOutput(), delay));
     } else {

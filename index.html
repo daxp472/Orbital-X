@@ -1035,6 +1035,12 @@
           </svg>
           <span>Developer Options</span>
         </div>
+        <div class="settings-nav-item" id="stab-updates" data-pane="spane-updates">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          <span>Updates</span>
+        </div>
 
         <div class="settings-sidebar-header" style="margin-top: 20px;">Workspaces</div>
         <div style="padding: 4px 10px; display: flex; flex-direction: column; gap: 4px;">
@@ -1613,8 +1619,8 @@
           <div class="form-group" style="margin-bottom: 16px;">
             <label class="form-label">Default Terminal Shell</label>
             <select class="select-input" id="cfg-shell-type">
-              <option value="powershell" selected>Windows PowerShell</option>
-              <option value="cmd">Command Prompt (cmd.exe)</option>
+              <option value="cmd" selected>Command Prompt (cmd.exe)</option>
+              <option value="powershell">Windows PowerShell</option>
               <option value="bash">Git Bash / WSL</option>
             </select>
           </div>
@@ -1622,7 +1628,7 @@
           <div class="settings-setting-row">
             <div class="settings-setting-info">
               <span class="settings-setting-label">Silent Background Execution (CREATE_NO_WINDOW)</span>
-              <span class="settings-setting-caption">Prevents external black CMD/PowerShell console windows from flashing when Git or tools execute.</span>
+              <span class="settings-setting-caption">Prevents external black console windows from flashing when background tools execute.</span>
             </div>
             <div>
               <label class="settings-toggle-switch">
@@ -1643,11 +1649,6 @@
                 <span class="settings-toggle-slider"></span>
               </label>
             </div>
-          </div>
-
-          <div style="margin-top: 16px; padding: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Updates</div>
-            <button class="btn btn-primary btn-sm" id="btn-check-updates-settings" style="font-size: 13px;">Check for Updates</button>
           </div>
         </div>
 
@@ -1801,6 +1802,17 @@
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 8. SOFTWARE UPDATES PANE -->
+        <div id="spane-updates" class="settings-pane" style="display: none; flex-direction: column; gap: 16px;">
+          <div>
+            <div class="settings-section-title">Software Updates</div>
+            <div class="settings-section-desc">Manage desktop releases, verify official binaries, and check for latest stable updates.</div>
+          </div>
+          <div id="updates-pane-card-container">
+            <!-- Dynamically populated by updater.js renderUpdatesPane() -->
           </div>
         </div>
 

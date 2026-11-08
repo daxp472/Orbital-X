@@ -116,18 +116,18 @@ async function getInvoke() {
       case 'create_interactive_terminal':
         return {
           session_id: args.session_id || 'term_1',
-          name: args.shell || 'powershell',
+          name: args.shell || 'cmd',
           cwd: args.cwd || 'D:\\1work\\YT\\Orbital X',
           is_alive: true,
         };
       case 'send_terminal_input':
         return true;
       case 'poll_terminal_output':
-        return `PS ${args.session_id ? 'D:\\1work\\YT\\Orbital X' : ''}> \n`;
+        return `${args.session_id ? 'D:\\1work\\YT\\Orbital X' : ''}> \n`;
       case 'close_interactive_terminal':
         return true;
       case 'list_terminal_sessions':
-        return [{ session_id: 'term_1', name: 'powershell', cwd: 'D:\\1work\\YT\\Orbital X', is_alive: true }];
+        return [{ session_id: 'term_1', name: 'cmd', cwd: 'D:\\1work\\YT\\Orbital X', is_alive: true }];
       case 'record_token_usage':
         return true;
       case 'get_token_usage_stats':
