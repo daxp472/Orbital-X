@@ -116,16 +116,28 @@ async function main() {
   // 2. Upload assets
   const assetsToUpload = [
     {
+      name: 'orbital-x.exe',
+      path: path.resolve('release/orbital-x.exe')
+    },
+    {
+      name: 'Orbital.X_2.3.6_aarch64.dmg',
+      path: path.resolve('release/Orbital.X_2.3.6_aarch64.dmg')
+    },
+    {
+      name: 'Orbital.X_2.3.6_amd64.AppImage',
+      path: path.resolve('release/Orbital.X_2.3.6_amd64.AppImage')
+    },
+    {
+      name: 'Orbital.X_2.3.6_amd64.deb',
+      path: path.resolve('release/Orbital.X_2.3.6_amd64.deb')
+    },
+    {
       name: 'Orbital.X_2.3.6_x64-setup.exe',
       path: path.resolve('release/Orbital.X_2.3.6_x64-setup.exe')
     },
     {
-      name: 'Orbital X_2.3.6_x64-setup.exe',
-      path: path.resolve('release/Orbital X_2.3.6_x64-setup.exe')
-    },
-    {
-      name: 'orbital-x.exe',
-      path: path.resolve('release/orbital-x.exe')
+      name: 'Orbital.X_aarch64.app.tar.gz',
+      path: path.resolve('release/Orbital.X_aarch64.app.tar.gz')
     }
   ];
 

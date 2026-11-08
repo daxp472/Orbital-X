@@ -174,10 +174,7 @@ impl IsolationEngine {
         #[cfg(not(target_os = "windows"))]
         {
             #[cfg(unix)]
-            {
-                use std::os::unix::process::CommandExt;
-                cmd.process_group(0);
-            }
+            cmd.process_group(0);
             cmd.args(["-c", command_str]);
         }
 

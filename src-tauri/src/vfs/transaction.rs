@@ -147,7 +147,7 @@ impl VfsTransactionManager {
                     .map_err(|e| format!("Failed to write tmp file for '{}': {}", rel_path, e))?;
 
                 // Atomic rename/replace
-                if let Err(_e) = std::fs::rename(&tmp_file, &target_disk_path) {
+                if let Err(_err) = std::fs::rename(&tmp_file, &target_disk_path) {
                     // Windows fallback if target exists and atomic rename fails
                     #[cfg(windows)]
                     {
@@ -160,7 +160,7 @@ impl VfsTransactionManager {
                     #[cfg(not(windows))]
                     {
                         let _ = std::fs::remove_file(&tmp_file);
-                        return Err(format!("Atomic commit rename failed for '{}': {}", rel_path, e));
+                        return Err(format!("Atomic commit rename failed for '{}': {}", rel_path, _err));
                     }
                 }
 
