@@ -321,7 +321,7 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
             "type": "function",
             "function": {
                 "name": "run_command",
-                "description": "Execute a shell command in the workspace directory. Use for: npm install, cargo build, git commands, mkdir, running scripts, starting dev servers, etc. Captures stdout and stderr. Increase timeout_seconds for long-running commands like npm install (use 120) or builds (use 90).",
+                "description": "Execute a shell command inside the secure Workspace Isolation Sandbox (with OS Job Object/Process Group resource caps, sanitized environment, and strict workspace boundary protection). Use for: npm install, cargo build, git commands, mkdir, running scripts, etc. Captures stdout, stderr, and sandbox violations.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -335,6 +335,38 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                         }
                     },
                     "required": ["command"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "isolation_stage_write",
+                "description": "Stage a file mutation completely inside the ephemeral workspace sandbox before committing to host disk. Validates safety boundaries automatically.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Relative workspace file path to stage"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "Full new content for the file"
+                        }
+                    },
+                    "required": ["path", "content"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "isolation_validate_staged",
+                "description": "Run safety verification against all staged mutations in the isolation engine, checking for blocked binary payloads, path traversal, or credential leaks.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
                 }
             }
         },

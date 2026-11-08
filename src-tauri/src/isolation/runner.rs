@@ -22,6 +22,17 @@ pub struct IsolatedCommandResult {
     pub memory_capped: bool,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SandboxStatus {
+    pub is_active: bool,
+    pub platform: String,
+    pub max_memory_mb: u64,
+    pub max_cpu_percent: u32,
+    pub max_active_processes: u32,
+    pub active_staging_files: usize,
+}
+
+#[derive(Clone)]
 pub struct IsolationEngine {
     host_workspace: PathBuf,
     staging_mgr: Arc<TokioMutex<EphemeralStagingManager>>,
@@ -87,10 +98,29 @@ impl IsolationEngine {
         mgr.cleanup()
     }
 
+    /// Returns the live sandbox status, resource caps, and platform implementation.
+    pub async fn get_status(&self) -> SandboxStatus {
+        let staging = self.staging_mgr.lock().await;
+        let active_staging_files = staging.staged_count();
+        let platform = if cfg!(target_os = "windows") {
+            "Windows Job Object".to_string()
+        } else {
+            "Unix Process Group".to_string()
+        };
+        SandboxStatus {
+            is_active: true,
+            platform,
+            max_memory_mb: self.limits.max_memory_bytes / (1024 * 1024),
+            max_cpu_percent: self.limits.max_cpu_rate_percent,
+            max_active_processes: self.limits.max_active_processes,
+            active_staging_files,
+        }
+    }
+
     /// Executes an autonomous agent command completely inside the isolated sandbox:
     /// 1. Attached to the native Windows Job Object / process group sandbox
     /// 2. Sanitized environment with host cloud secrets stripped
-    /// 3. Working directory locked to staging or host workspace
+    /// 3. Working directory locked to staging or host workspace (boundary checked)
     /// 4. CPU and memory resource ceilings enforced
     /// 5. Automatically terminated on timeout or kill signal
     pub async fn execute_sandboxed_command(
@@ -108,11 +138,23 @@ impl IsolationEngine {
             ));
         }
 
+        // Strict workspace path confinement check
         let effective_cwd = if let Some(cwd) = cwd_override {
+            let in_workspace = cwd.starts_with(&self.host_workspace);
+            let in_staging = {
+                let mgr = self.staging_mgr.lock().await;
+                cwd.starts_with(mgr.staging_root())
+            };
+            if !in_workspace && !in_staging {
+                return Err(format!(
+                    "Security Boundary Violation: CWD '{}' escapes workspace boundary '{}'",
+                    cwd.display(),
+                    self.host_workspace.display()
+                ));
+            }
             cwd.to_path_buf()
         } else {
-            let mgr = self.staging_mgr.lock().await;
-            mgr.staging_root().to_path_buf()
+            self.host_workspace.clone()
         };
 
         let sanitized_env = self.scrubber.sanitize_host_environment();
@@ -130,11 +172,20 @@ impl IsolationEngine {
         #[cfg(not(target_os = "windows"))]
         let mut cmd = Command::new("sh");
         #[cfg(not(target_os = "windows"))]
-        cmd.args(["-c", command_str]);
+        {
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.process_group(0);
+            }
+            cmd.args(["-c", command_str]);
+        }
 
         cmd.current_dir(&effective_cwd);
         cmd.env_clear();
         cmd.envs(&sanitized_env);
+        cmd.env("ORBITAL_SANDBOX_ACTIVE", "1");
+        cmd.env("ORBITAL_WORKSPACE_ROOT", self.host_workspace.to_string_lossy().to_string());
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 

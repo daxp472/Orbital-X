@@ -44,6 +44,14 @@ impl EphemeralStagingManager {
         &self.staging_root
     }
 
+    pub fn staged_count(&self) -> usize {
+        self.staged_mutations.len()
+    }
+
+    pub fn staged_mutations(&self) -> &HashMap<PathBuf, StagedMutation> {
+        &self.staged_mutations
+    }
+
     /// Stages a file write operation without touching host disk blocks.
     pub fn stage_write(&mut self, rel_path: &Path, content: &[u8]) -> Result<(), String> {
         let norm_rel = normalize_relative_path(rel_path);

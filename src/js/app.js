@@ -110,6 +110,7 @@ export async function enterWorkspace(rootPath) {
     // Trust gate: explicitly opened workspaces are trusted without blocking alerts
     rememberWorkspaceTrust(meta.root_path, true);
     updateTrustIndicator();
+    updateSandboxStatusIndicator();
 
     // Update terminal sessions to automatically match the active workspace directory
     import('./components/terminal.js').then(m => m.onWorkspaceOpened(meta.root_path)).catch(console.warn);
@@ -372,6 +373,47 @@ function initStatusBarExtras() {
       window.open(issueUrl, '_blank');
     }
   });
+
+  // Pillar 1: Sandbox Status Indicator in status bar
+  updateSandboxStatusIndicator();
+  document.getElementById('sb-sandbox-indicator')?.addEventListener('click', async () => {
+    try {
+      const { getSandboxStatus } = await import('./services/tauri.js');
+      const st = await getSandboxStatus();
+      showToast(
+        `Workspace Sandbox: ${st.platform}\nMemory Cap: ${st.max_memory_mb} MB · CPU Cap: ${st.max_cpu_percent}%\nProcess Limit: ${st.max_active_processes}`,
+        st.is_active ? 'info' : 'warning',
+        4000
+      );
+    } catch (_) {
+      showToast('Workspace Sandbox Active', 'info', 2000);
+    }
+  });
+}
+
+export async function updateSandboxStatusIndicator() {
+  const el = document.getElementById('sb-sandbox-indicator');
+  const dot = document.getElementById('sb-sandbox-dot');
+  const text = document.getElementById('sb-sandbox-text');
+  if (!el || !text) return;
+
+  try {
+    const { getSandboxStatus } = await import('./services/tauri.js');
+    const status = await getSandboxStatus();
+    if (status && status.is_active) {
+      if (dot) dot.style.backgroundColor = 'var(--accent-green)';
+      const shortPlatform = status.platform.includes('Job') ? 'Job Object' : 'Process Group';
+      text.textContent = `Sandbox: Active [${shortPlatform}]`;
+      el.title = `Enterprise Workspace Isolation: Active\nPlatform: ${status.platform}\nMemory Limit: ${status.max_memory_mb} MB\nCPU Limit: ${status.max_cpu_percent}%\nMax Processes: ${status.max_active_processes}\nStaged Files: ${status.active_staging_files}`;
+    } else {
+      if (dot) dot.style.backgroundColor = 'var(--accent-orange)';
+      text.textContent = 'Sandbox: Host';
+      el.title = 'Workspace Isolation: Running directly on Host OS (unisolated)';
+    }
+  } catch (e) {
+    if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+    text.textContent = 'Sandbox: Standby';
+  }
 }
 
 async function tryRestoreEditorSession() {

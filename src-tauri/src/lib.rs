@@ -254,6 +254,27 @@ async fn isolation_validate_staged(
 }
 
 #[tauri::command]
+async fn isolation_get_status(
+    state: State<'_, AppState>,
+) -> Result<isolation::SandboxStatus, String> {
+    let iso_opt = {
+        let guard = state.isolation_engine.lock().map_err(|e| e.to_string())?;
+        guard.clone()
+    };
+    if let Some(engine) = iso_opt {
+        Ok(engine.get_status().await)
+    } else {
+        let host_ws = {
+            let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+            ws.get_root()
+        };
+        let root = host_ws.unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+        let engine = isolation::IsolationEngine::new(root)?;
+        Ok(engine.get_status().await)
+    }
+}
+
+#[tauri::command]
 async fn diagnostics_run_compiler_check(
     timeout_secs: Option<u64>,
     state: State<'_, AppState>,
@@ -1261,7 +1282,7 @@ async fn execute_tool(
         }
         "run_command" => {
             let cmd = arguments.get("command").and_then(|c| c.as_str()).ok_or("Missing command")?;
-            let timeout = arguments.get("timeout_seconds").and_then(|t| t.as_u64()).unwrap_or(60); // default 60s
+            let timeout = arguments.get("timeout_seconds").and_then(|t| t.as_u64()).unwrap_or(60);
 
             let cwd = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -1270,8 +1291,34 @@ async fn execute_tool(
                     None => std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
                 }
             };
-            let res = TerminalService::run_command(cmd, &cwd, timeout).await?;
-            Ok(serde_json::to_value(res).unwrap_or_default())
+
+            let iso_engine = {
+                let guard = state.isolation_engine.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = match iso_engine {
+                Some(e) => e,
+                None => {
+                    let root = PathBuf::from(&cwd);
+                    isolation::IsolationEngine::new(root)?
+                }
+            };
+
+            match engine.execute_sandboxed_command(cmd, Some(std::path::Path::new(&cwd)), timeout).await {
+                Ok(res) => Ok(serde_json::to_value(res).unwrap_or_default()),
+                Err(err_msg) => {
+                    Ok(serde_json::json!({
+                        "command": cmd,
+                        "exit_code": -1,
+                        "stdout": "",
+                        "stderr": format!("[SANDBOX VIOLATION] {}", err_msg),
+                        "duration_ms": 0,
+                        "timed_out": false,
+                        "success": false,
+                        "sandbox_blocked": true
+                    }))
+                }
+            }
         }
         "run_tests" => {
             let (cmd, cwd) = {
@@ -1290,8 +1337,68 @@ async fn execute_tool(
                 };
                 (chosen_cmd.to_string(), cwd_str)
             };
-            let res = TerminalService::run_command(&cmd, &cwd, 120).await?;
-            Ok(serde_json::to_value(res).unwrap_or_default())
+
+            let iso_engine = {
+                let guard = state.isolation_engine.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = match iso_engine {
+                Some(e) => e,
+                None => {
+                    let root = PathBuf::from(&cwd);
+                    isolation::IsolationEngine::new(root)?
+                }
+            };
+
+            match engine.execute_sandboxed_command(&cmd, Some(std::path::Path::new(&cwd)), 120).await {
+                Ok(res) => Ok(serde_json::to_value(res).unwrap_or_default()),
+                Err(err_msg) => {
+                    Ok(serde_json::json!({
+                        "command": cmd,
+                        "exit_code": -1,
+                        "stdout": "",
+                        "stderr": format!("[SANDBOX VIOLATION] {}", err_msg),
+                        "duration_ms": 0,
+                        "timed_out": false,
+                        "success": false,
+                        "sandbox_blocked": true
+                    }))
+                }
+            }
+        }
+        "isolation_stage_write" => {
+            let path = tool_path_arg(&arguments, "isolation_stage_write")?;
+            let content = arguments.get("content").and_then(|c| c.as_str()).ok_or("Missing content")?;
+            let iso_engine = {
+                let guard = state.isolation_engine.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = match iso_engine {
+                Some(e) => e,
+                None => {
+                    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                    let root = ws.get_root().ok_or("No workspace open")?;
+                    isolation::IsolationEngine::new(root)?
+                }
+            };
+            engine.stage_write(std::path::Path::new(path), content.as_bytes()).await?;
+            Ok(serde_json::json!({ "staged": true, "path": path }))
+        }
+        "isolation_validate_staged" => {
+            let iso_engine = {
+                let guard = state.isolation_engine.lock().map_err(|e| e.to_string())?;
+                guard.clone()
+            };
+            let engine = match iso_engine {
+                Some(e) => e,
+                None => {
+                    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                    let root = ws.get_root().ok_or("No workspace open")?;
+                    isolation::IsolationEngine::new(root)?
+                }
+            };
+            let report = engine.validate_staged().await;
+            Ok(serde_json::to_value(report).unwrap_or_default())
         }
         "get_diagnostics" => {
             let forced_tool = arguments.get("tool").and_then(|t| t.as_str()).unwrap_or("").to_string();
@@ -2725,6 +2832,7 @@ pub fn run() {
             isolation_execute_command,
             isolation_stage_write,
             isolation_validate_staged,
+            isolation_get_status,
             diagnostics_run_compiler_check,
             diagnostics_evaluate_healing,
             vfs_read_file,

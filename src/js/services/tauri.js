@@ -156,6 +156,35 @@ async function getInvoke() {
           estimated_tokens: 4650,
           last_request_time: new Date().toISOString()
         };
+      case 'isolation_get_status':
+        return {
+          is_active: true,
+          platform: 'Windows Job Object',
+          max_memory_mb: 1536,
+          max_cpu_percent: 75,
+          max_active_processes: 24,
+          active_staging_files: 0,
+        };
+      case 'isolation_execute_command':
+        return {
+          command: args.command,
+          exit_code: 0,
+          stdout: `[Sandboxed] ${args.command}\nExecution verified in Job Object sandbox.`,
+          stderr: '',
+          duration_ms: 120,
+          timed_out: false,
+          success: true,
+          memory_capped: false,
+        };
+      case 'isolation_stage_write':
+        return { staged: true, path: args.path };
+      case 'isolation_validate_staged':
+        return {
+          is_valid: true,
+          total_mutations: 0,
+          violations: [],
+          bytes_affected: 0,
+        };
       case 'clear_token_usage':
         return true;
       case 'open_folder_dialog':
@@ -356,5 +385,37 @@ export async function pickSaveFile(defaultName = 'chat.md', filterName = 'Markdo
   }
 
   return null;
+}
+
+// ============================================================================
+// Pillar 1: Enterprise Workspace Isolation Wrappers
+// ============================================================================
+
+export async function getSandboxStatus() {
+  try {
+    return await invoke('isolation_get_status');
+  } catch (e) {
+    console.warn('[getSandboxStatus] IPC failed:', e);
+    return {
+      is_active: false,
+      platform: 'Host OS',
+      max_memory_mb: 0,
+      max_cpu_percent: 0,
+      max_active_processes: 0,
+      active_staging_files: 0,
+    };
+  }
+}
+
+export async function executeSandboxedCommand(command, timeoutSecs = 60) {
+  return await invoke('isolation_execute_command', { command, timeout_secs: timeoutSecs });
+}
+
+export async function stageSandboxedWrite(path, content) {
+  return await invoke('isolation_stage_write', { path, content });
+}
+
+export async function validateSandboxedStaged() {
+  return await invoke('isolation_validate_staged');
 }
 

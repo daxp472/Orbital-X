@@ -2429,12 +2429,27 @@ function renderRichToolResult(toolCall, result) {
       }
     } else if (name === 'run_command' || name === 'run_tests' || name === 'get_diagnostics' || name === 'validate_changes') {
       const ok = result.success !== false;
+      const isSandboxBlocked = result.sandbox_blocked || (result.stderr && result.stderr.includes('[SANDBOX VIOLATION]'));
       const output = result.output || result.stdout || (result.checks ? result.checks.map(c => `${c.check}: ${c.success ? 'ok' : 'FAIL'}`).join('\n') : '');
+      const alertHtml = isSandboxBlocked
+        ? `<div class="sandbox-violation-alert" style="background: rgba(255, 69, 58, 0.12); border: 1px solid var(--accent-red); border-radius: var(--radius-sm); padding: 5px 8px; margin-top: 5px; color: var(--accent-red); font-size: 10px; font-weight: 500;">
+            🛡️ <strong>Sandbox Security Violation:</strong> ${esc10(result.stderr || 'Command was blocked by the isolated workspace sandbox.')}
+          </div>`
+        : '';
       html = `<div style="font-size: 10px;">
         <span style="color:${ok ? 'var(--accent-green)' : 'var(--accent-red)'};">${ok ? '✓' : '✗'} exit ${result.exit_code ?? (ok ? 0 : 1)}</span>
         ${result.duration_ms ? `<span style="color: var(--text-muted);"> · ${result.duration_ms}ms</span>` : ''}
+        ${alertHtml}
         ${output ? `<pre style="margin-top: 4px; max-height: 90px; overflow: auto; white-space: pre-wrap; font-size: 9.5px; font-family: var(--font-mono); color: var(--text-secondary); background: rgba(0,0,0,0.2); border-radius: 4px; padding: 4px;">${esc10(output)}</pre>` : ''}
       </div>`;
+      if (isSandboxBlocked) {
+        showToast('Sandbox Alert: Command blocked by Isolation Policy', 'error', 3500);
+      }
+    } else if (name === 'isolation_stage_write') {
+      html = `<div style="font-size: 10px; color: var(--accent-cyan);">🛡️ Staged in Sandbox: <code>${escapeHtml(args.path || '')}</code></div>`;
+    } else if (name === 'isolation_validate_staged') {
+      const valid = result.is_valid !== false;
+      html = `<div style="font-size: 10px; color: ${valid ? 'var(--accent-green)' : 'var(--accent-red)'};">${valid ? '✓ Sandbox Safety Passed' : '✗ Sandbox Safety Violations Detected'} (${result.violations?.length || 0} violations)</div>`;
     } else if (name === 'search_files') {
       const files = new Set((result || []).map(r => r.file));
       const top = (result || []).slice(0, 3).map(r => `<div style="font-family: var(--font-mono); font-size: 9.5px;">${escapeHtml(r.file)}:${r.line ?? ''} <span style="color: var(--text-muted);">${escapeHtml(String(r.snippet || '').slice(0, 60))}</span></div>`).join('');

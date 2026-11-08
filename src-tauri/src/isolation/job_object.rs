@@ -237,10 +237,12 @@ pub use win32_job::WindowsJobSandbox as PlatformJobSandbox;
 #[cfg(not(target_os = "windows"))]
 mod unix_job {
     use super::*;
+    use std::sync::Mutex;
 
     pub struct UnixProcessSandbox {
         limits: SandboxResourceLimits,
         is_terminated: Arc<AtomicBool>,
+        child_pids: Arc<Mutex<Vec<u32>>>,
     }
 
     impl UnixProcessSandbox {
@@ -248,23 +250,41 @@ mod unix_job {
             Ok(Self {
                 limits,
                 is_terminated: Arc::new(AtomicBool::new(false)),
+                child_pids: Arc::new(Mutex::new(Vec::new())),
             })
         }
 
-        pub fn assign_tokio_child(&self, _child: &tokio::process::Child) -> Result<(), String> {
-            // On Unix, process groups and setpgid/prctl are applied during Command spawn pre_exec
+        pub fn assign_tokio_child(&self, child: &tokio::process::Child) -> Result<(), String> {
+            if let Some(pid) = child.id() {
+                if let Ok(mut lock) = self.child_pids.lock() {
+                    lock.push(pid);
+                }
+            }
             Ok(())
         }
 
         pub fn terminate(&self) -> Result<(), String> {
             self.is_terminated.store(true, Ordering::SeqCst);
+            if let Ok(pids) = self.child_pids.lock() {
+                for &pid in pids.iter() {
+                    // Send SIGKILL to the process group (-pid) and process itself
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &format!("-{}", pid)])
+                        .output();
+                    let _ = std::process::Command::new("kill")
+                        .args(["-9", &pid.to_string()])
+                        .output();
+                }
+            }
             Ok(())
         }
     }
 
     impl Drop for UnixProcessSandbox {
         fn drop(&mut self) {
-            let _ = self.terminate();
+            if self.limits.kill_on_close {
+                let _ = self.terminate();
+            }
         }
     }
 }
