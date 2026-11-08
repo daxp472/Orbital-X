@@ -1,7 +1,7 @@
 {
-  "version": "2.3.5",
-  "tag": "v2.3.5",
-  "release_date": "2026-11-07",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.5/Orbital.X_2.3.5_x64-setup.exe",
-  "changelog": "v2.3.5: Four Architectural Pillars Hardening (Workspace Isolation, Semantic Code Graph, Deterministic Diagnostics Loop, VFS Diff Bridge), Reactor Panic Fix, and Native Fullscreen & Window Controls."
+  "version": "2.3.6",
+  "tag": "v2.3.6",
+  "release_date": "2026-11-08",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.6/Orbital.X_2.3.6_x64-setup.exe",
+  "changelog": "v2.3.6: Production End-to-End Hardening across all Four Enterprise Architectural Pillars (IsolationEngine with Win32 Job Object sandbox, SemanticCodeGraph with AST Tree-sitter parsers and incremental re-indexing, DiagnosticService with compiler error parser & Hallucination Loop Breaker, and VfsEngine with copy-on-write overlay, atomic checkpoints, and 2PC crash-safe transactions)."
 }

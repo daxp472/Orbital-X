@@ -2332,7 +2332,7 @@ function setupDeveloperOptions() {
     document.getElementById('btn-dev-copy-diag')?.addEventListener('click', async () => {
       const diag = {
         product: 'Orbital X',
-        version: '2.3.5',
+        version: '2.3.6',
         userAgent: navigator.userAgent,
         agentMode: appState.agentMode,
         theme: appState.theme,

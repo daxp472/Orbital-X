@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg?logo=tauri)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-1.90%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/Release-v2.2.3-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
+[![Version](https://img.shields.io/badge/Release-v2.3.6-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-0078d4.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
-[![Tests](https://img.shields.io/badge/cargo%20test-36%2F36-brightgreen.svg)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/cargo%20test-82%2F82%20passed-brightgreen.svg)](.github/workflows/ci.yml)
 
 **A fast, memory-conscious, autonomous AI coding IDE powered by your own local models.**
 *Native speed · Streaming responses · 100% private inference · Rust-enforced safety*
@@ -42,6 +42,12 @@ The agent streams tokens as they're generated, manages its own context window ag
 - **🔌 Custom OpenAI-compatible endpoints** — LM Studio, llama.cpp server, and vLLM connect through the same provider system.
 - **☁️ Cloud when you want it** — Claude, OpenAI, and Gemini adapters with your own keys.
 
+### 🏛️ Four Enterprise Architectural Pillars (Wired End-to-End)
+1. **🛡️ Enterprise Workspace Isolation (`IsolationEngine`)** — Real OS-level isolation on Windows via Win32 Job Objects (1.5 GB memory cap, 75% CPU rate limit, 24 active processes cap, and `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` cleanup) and process-group/`rlimit` isolation on Unix. Features strict environment variable scrubbing (blocks cloud and API credential leakages) and an ephemeral staging validator.
+2. **🧠 Native Semantic Graph & Context Engine (`SemanticCodeGraph`)** — Real AST parsing via tree-sitter grammars (Rust, TypeScript, Python) extracting functions, structs, classes, and call edges. Single-file incremental indexing on file save, sub-token focused context slicing for agent queries, and full callers/callees impact analysis.
+3. **🔧 Deterministic Diagnostics & Healing Loop (`DiagnosticService`)** — Workspace toolchain autodetection (Cargo, TypeScript `tsc`, npm build), structured compiler JSON diagnostics parsing, and an automated Hallucination Loop Breaker oracle that halts repetitive repair failures and injects strict repair boundaries.
+4. **💾 Virtual File System Diff Bridge & Atomic Checkpoints (`VfsEngine`)** — Copy-on-write memory shadow overlay isolating edits before disk writes, pre-mutation snapshot checkpoints with one-click rollback, and crash-safe two-phase commit (2PC) transactions with automatic `.orbital/vfs_backups/` recovery.
+
 ### Safety, enforced in Rust
 - **🛡️ Tri-mode policy engine** — Agent Pro / Dev / User permission matrix evaluated in the backend, never the WebView.
 - **🔒 Strict workspace confinement** — path validation, symlink/junction escape prevention, and revalidated destructive operations.
@@ -49,7 +55,7 @@ The agent streams tokens as they're generated, manages its own context window ag
 
 ### Editor & UX
 - **📝 Monaco editing** — 50+ languages, minimap, side-by-side diff review for every agent edit, one-key rollback via the change journal.
-- **🖥️ Integrated terminal** — real interactive PowerShell sessions, multi-tab, history, interrupt support.
+- **🖥️ Integrated terminal** — Windows Command Prompt (CMD) default shell, workspace directory auto-inheritance, multi-tab, history, and interrupt support.
 - **💾 Durable project memory** — architecture decisions and conventions persist per project in `.orbital/memory.json`.
 - **💬 Sessions on disk** — chat history survives restarts and localStorage quota limits.
 - **🎨 Four themes + polish** — Orbit Dark, Nebula Light, Midnight Blue, High Contrast; visible keyboard focus, reduced-motion support, and responsive layouts throughout.
@@ -75,9 +81,9 @@ Grab the latest from the **[Releases](https://github.com/daxp472/Orbital-X/relea
 
 | Platform | Asset |
 |---|---|
-| **Windows 10/11 (x64)** | `Orbital.X_x64-setup.exe` — NSIS installer; per-user (no admin) or all-users |
-| **macOS (Apple Silicon)** | `.dmg` |
-| **Linux (x64)** | `.AppImage` / `.deb` |
+| **Windows 10/11 (x64)** | `Orbital X_2.3.6_x64-setup.exe` — NSIS installer; per-user (no admin) or all-users |
+| **macOS (Apple Silicon)** | `Orbital.X_2.3.6_aarch64.dmg` |
+| **Linux (x64)** | `Orbital.X_2.3.6_amd64.AppImage` / `.deb` |
 
 **For local AI, install [Ollama](https://ollama.com)** and pull a coding model:
 
@@ -96,12 +102,12 @@ The permission matrix is evaluated inside Rust (`PolicyEngine`) — the UI can't
 | Action | 🟣 Agent Pro | 🟢 Dev (Default) | 🟠 User |
 |---|---|---|---|
 | Reads, searches, skills, web research | Automatic | Automatic | Approval |
-| File creation & edits | Automatic | Approval + diff | Approval + diff |
-| Safe build/test commands | Automatic | Approval | Approval |
+| File creation & edits | Automatic (2PC VFS Commit) | Approval + Monaco Diff (VFS Staged) | Approval + Monaco Diff |
+| Safe build/test commands | Automatic (Sandboxed) | Approval (Sandboxed) | Approval (Sandboxed) |
 | Arbitrary commands, git commits | Approval | Approval | Approval |
 | Destructive deletions | **Blocked / two-stage manifest** | **Blocked / two-stage manifest** | **Blocked / two-stage manifest** |
 
-> Switch anytime with `Alt + M` or the mode pill in the header. *A policy layer is not an OS sandbox — Orbital X enforces tool boundaries, not system-level isolation.*
+> Switch anytime with `Alt + M` or the mode pill in the header. All background shell executions and agent mutations are contained within the `IsolationEngine` Job Object sandbox.
 
 ---
 
