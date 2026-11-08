@@ -98,6 +98,16 @@ impl DiagnosticOracle {
         }
     }
 
+    /// Checks whether an error loop is currently active.
+    pub fn is_loop_detected(&self) -> bool {
+        self.signature_counts.values().any(|&c| c >= self.max_consecutive_loop_threshold)
+    }
+
+    /// Returns the maximum consecutive failure count observed.
+    pub fn consecutive_failures(&self) -> usize {
+        self.signature_counts.values().copied().max().unwrap_or(0)
+    }
+
     /// Resets the oracle tracking when a clean build succeeds.
     pub fn reset_on_success(&mut self) {
         self.signature_counts.clear();

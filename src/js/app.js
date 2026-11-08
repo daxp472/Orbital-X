@@ -112,6 +112,7 @@ export async function enterWorkspace(rootPath) {
     updateTrustIndicator();
     updateSandboxStatusIndicator();
     updateGraphStatusIndicator();
+    updateDiagnosticsStatusIndicator();
 
     // Update terminal sessions to automatically match the active workspace directory
     import('./components/terminal.js').then(m => m.onWorkspaceOpened(meta.root_path)).catch(console.warn);
@@ -412,6 +413,40 @@ function initStatusBarExtras() {
     } catch (_) {}
     showCallersImpactModal(sym);
   });
+
+  // Pillar 3: Diagnostics Status Indicator in status bar
+  updateDiagnosticsStatusIndicator();
+  document.getElementById('sb-diag-indicator')?.addEventListener('click', async () => {
+    const text = document.getElementById('sb-diag-text');
+    const dot = document.getElementById('sb-diag-dot');
+    if (text) text.textContent = 'Build: Checking…';
+    if (dot) dot.style.backgroundColor = 'var(--accent-orange)';
+
+    try {
+      const { runDiagnosticsCheck, evaluateDiagnosticsHealing } = await import('./services/tauri.js');
+      const [diags, healing] = await Promise.all([
+        runDiagnosticsCheck(30),
+        evaluateDiagnosticsHealing(30),
+      ]);
+
+      if (diags.length === 0) {
+        updateDiagnosticsStatusIndicator(0);
+        showToast('Compiler Diagnostics: Clean build! No errors found.', 'success', 3000);
+      } else {
+        updateDiagnosticsStatusIndicator(diags.length);
+        const first = diags[0];
+        const loopWarning = healing?.loop_detected ? '\n⚠️ RECURSIVE LOOP DETECTED!' : '';
+        showToast(
+          `Compiler Diagnostics: ${diags.length} error(s) found.${loopWarning}\n${first.file_path}:${first.line}: ${first.message}`,
+          healing?.loop_detected ? 'error' : 'warning',
+          6000
+        );
+      }
+    } catch (e) {
+      updateDiagnosticsStatusIndicator();
+      showToast(`Diagnostic check failed: ${e}`, 'error', 3000);
+    }
+  });
 }
 
 export async function updateSandboxStatusIndicator() {
@@ -462,6 +497,42 @@ export async function updateGraphStatusIndicator() {
   } catch (e) {
     if (dot) dot.style.backgroundColor = 'var(--text-muted)';
     text.textContent = 'AST: Standby';
+  }
+}
+
+export async function updateDiagnosticsStatusIndicator(errorsCount = null) {
+  const el = document.getElementById('sb-diag-indicator');
+  const dot = document.getElementById('sb-diag-dot');
+  const text = document.getElementById('sb-diag-text');
+  if (!el || !text) return;
+
+  try {
+    const { getDiagnosticsStatus } = await import('./services/tauri.js');
+    const status = await getDiagnosticsStatus();
+    const count = errorsCount !== null ? errorsCount : (status?.last_error_count || 0);
+
+    if (status && status.is_available) {
+      if (status.is_loop_detected) {
+        if (dot) dot.style.backgroundColor = 'var(--accent-red)';
+        text.textContent = 'Build: Loop Alert';
+        el.title = `Compiler Diagnostics: RECURSIVE LOOP DETECTED (${status.consecutive_failures} fails)\nToolchain: ${status.toolchain}\nClick to Run Check or Reset Loop`;
+      } else if (count > 0) {
+        if (dot) dot.style.backgroundColor = 'var(--accent-red)';
+        text.textContent = `Build: ${count} error${count > 1 ? 's' : ''}`;
+        el.title = `Compiler Diagnostics: ${count} Errors Found\nToolchain: ${status.toolchain}\nClick to Run Check`;
+      } else {
+        if (dot) dot.style.backgroundColor = 'var(--accent-green)';
+        text.textContent = `Build: OK (${status.toolchain})`;
+        el.title = `Compiler Diagnostics: Clean Build\nToolchain: ${status.toolchain}\nClick to Re-run Check`;
+      }
+    } else {
+      if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+      text.textContent = 'Build: Ready';
+      el.title = 'Compiler Diagnostics: Ready (generic/auto-detect)';
+    }
+  } catch (e) {
+    if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+    text.textContent = 'Build: Ready';
   }
 }
 
@@ -1470,6 +1541,7 @@ window.addEventListener('orbital:file-written', () => {
   window.__orbital_reindex_timer = setTimeout(() => {
     startWorkspaceIndexing();
     updateGraphStatusIndicator();
+    updateDiagnosticsStatusIndicator();
   }, 3000);
 });
 

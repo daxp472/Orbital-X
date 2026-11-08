@@ -1335,17 +1335,33 @@ function toolResultForContext(name, args, result) {
   if (result && typeof result === 'object' && result.error !== undefined) {
     return compactToolResult(JSON.stringify(result).slice(0, 1500));
   }
+  // Pillar 3: If tool result contains diagnostic verification or healing prompt, ensure it's explicitly returned to the LLM
+  if (result?.verification?.healing_required || result?.healing_prompt || result?.loop_detected) {
+    return JSON.stringify({
+      tool: name,
+      success: !result.loop_detected && (result.clean !== false),
+      verification: result.verification,
+      healing_prompt: result.healing_prompt,
+      loop_detected: result.loop_detected,
+      loop_breaker_directive: result.loop_breaker_directive || result.healing_prompt?.strict_instructions,
+      diagnostics: (result.diagnostics || []).slice(0, 5),
+    });
+  }
   if ((name === 'write_file' || name === 'patch_file') && args && args.path) {
     // File bodies and full diffs are not needed again by the model — the
     // journal already has them and the model just needs the confirmation.
-    return JSON.stringify({
+    const payload = {
       tool: name,
       path: args.path,
       success: true,
       additions: result?.additions ?? null,
       deletions: result?.deletions ?? null,
       note: result?.note || 'Change applied. Content saved to disk and journaled for undo.'
-    });
+    };
+    if (result?.verification) {
+      payload.verification = result.verification;
+    }
+    return JSON.stringify(payload);
   }
   const str = typeof result === 'string' ? result : JSON.stringify(result);
   return compactToolResult(str);
@@ -2462,6 +2478,14 @@ function renderRichToolResult(toolCall, result) {
       if (diff) {
         html = renderSideBySideDiff(diff, args.path || '');
       }
+    } else if (name === 'run_diagnostics' || name === 'run_compiler_diagnostics') {
+      const clean = result.clean !== false;
+      const count = result.error_count ?? (result.diagnostics?.length || 0);
+      const isLoop = result.loop_detected;
+      html = `<div style="font-size: 10px;">
+        <span style="color:${clean ? 'var(--accent-green)' : 'var(--accent-red)'}; font-weight: 600;">${clean ? '✓ Compiler Build Clean' : `✗ ${count} Compiler Error${count === 1 ? '' : 's'}`}</span>
+        ${isLoop ? '<span style="color: var(--accent-red); margin-left: 6px; font-weight: 700;">[RECURSIVE LOOP BREAKER ACTIVE]</span>' : ''}
+      </div>`;
     } else if (name === 'run_command' || name === 'run_tests' || name === 'get_diagnostics' || name === 'validate_changes') {
       const ok = result.success !== false;
       const isSandboxBlocked = result.sandbox_blocked || (result.stderr && result.stderr.includes('[SANDBOX VIOLATION]'));
@@ -2785,11 +2809,104 @@ async function processToolCallWithPolicy(toolCall) {
       showToast(`🗑️ Agent removed directory: ${args.path}`, 'success', 3000);
     }
 
+    // Pillar 3: Deterministic Diagnostics & Healing Loop handling
+    if (name === 'run_diagnostics' || name === 'run_compiler_diagnostics' || output?.healing_prompt || output?.verification?.healing_required || output?.loop_detected) {
+      const isLoop = output?.loop_detected || output?.healing_prompt?.loop_detected || output?.verification?.loop_detected;
+      const diagList = output?.diagnostics || [];
+      const healingPrompt = output?.healing_prompt;
+
+      if (isLoop) {
+        renderHallucinationLoopBanner(healingPrompt?.strict_instructions || output?.loop_breaker_directive || 'Recursive hallucination loop detected.');
+        showToast('⚠️ Hallucination Loop Breaker Activated', 'error', 5000);
+      }
+
+      if (diagList.length > 0 || output?.verification?.diagnostic) {
+        renderDiagnosticsCard(diagList, output?.verification);
+      }
+
+      try {
+        const { updateDiagnosticsStatusIndicator } = await import('../app.js');
+        updateDiagnosticsStatusIndicator(diagList.length || (output?.verification?.healing_required ? 1 : 0));
+      } catch (_) {}
+    }
+
     return output;
   } catch (err) {
     updateToolBoxStatus(toolBoxId, `Failed: ${err}`, 'failed');
     return { error: err.toString() };
   }
+}
+
+function renderHallucinationLoopBanner(instructions) {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'agent-card hallucination-warning-banner';
+  banner.style.border = '2px solid var(--accent-red, #ef4444)';
+  banner.style.backgroundColor = 'rgba(239, 68, 68, 0.12)';
+  banner.style.borderRadius = '8px';
+  banner.style.padding = '12px 16px';
+  banner.style.margin = '10px 0';
+  banner.style.color = 'var(--text-primary)';
+
+  banner.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+      <span style="font-size: 16px;">🛑</span>
+      <strong style="color: var(--accent-red, #ef4444); font-size: 13px;">HALLUCINATION LOOP BREAKER ACTIVATED</strong>
+    </div>
+    <div style="font-size: 12px; line-height: 1.5; opacity: 0.95; white-space: pre-wrap;">${escapeHtml(instructions)}</div>
+  `;
+
+  timeline.appendChild(banner);
+  timeline.scrollTop = timeline.scrollHeight;
+}
+
+function renderDiagnosticsCard(diagnostics, verification) {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  const card = document.createElement('div');
+  card.className = 'agent-card compiler-diagnostics-card';
+  card.style.border = '1px solid var(--border-color)';
+  card.style.borderLeft = '3px solid var(--accent-red, #ef4444)';
+  card.style.backgroundColor = 'var(--bg-secondary)';
+  card.style.borderRadius = '6px';
+  card.style.padding = '10px 14px';
+  card.style.margin = '8px 0';
+
+  let itemsHtml = '';
+  if (Array.isArray(diagnostics) && diagnostics.length > 0) {
+    itemsHtml = diagnostics.slice(0, 5).map(d => `
+      <div style="font-size: 12px; margin-bottom: 6px; font-family: monospace;">
+        <span style="color: var(--accent-red, #ef4444); font-weight: 600;">[${d.severity || 'Error'}]</span>
+        <span style="color: var(--text-primary); font-weight: 500;">${escapeHtml(d.file_path)}:${d.line}:${d.column}</span>
+        <div style="color: var(--text-secondary); margin-top: 2px;">${escapeHtml(d.message)}</div>
+      </div>
+    `).join('');
+  } else if (verification?.diagnostic) {
+    itemsHtml = `
+      <div style="font-size: 12px; font-family: monospace;">
+        <span style="color: var(--accent-red, #ef4444); font-weight: 600;">[Verification Error]</span>
+        <span style="color: var(--text-primary); font-weight: 500;">Line ${verification.line || '?'}</span>
+        <div style="color: var(--text-secondary); margin-top: 2px;">${escapeHtml(verification.diagnostic)}</div>
+      </div>
+    `;
+  }
+
+  card.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="color: var(--accent-red, #ef4444); font-size: 14px;">⚡</span>
+        <strong style="font-size: 12px; color: var(--text-primary);">Compiler Diagnostics Report</strong>
+      </div>
+      <span style="font-size: 11px; color: var(--text-muted);">${(diagnostics?.length || 1)} issue(s)</span>
+    </div>
+    <div class="diagnostics-list">${itemsHtml}</div>
+  `;
+
+  timeline.appendChild(card);
+  timeline.scrollTop = timeline.scrollHeight;
 }
 
 function requestUserApproval(approvalData) {

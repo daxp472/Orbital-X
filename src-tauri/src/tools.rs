@@ -62,6 +62,22 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "run_diagnostics",
+                "description": "Execute deterministic compiler/linter check (cargo check, npx tsc, npm run build, etc.) to verify code correctness. Returns structured diagnostics, line numbers, and Hallucination Loop Breaker guidance if broken.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "timeout_secs": {
+                            "type": "integer",
+                            "description": "Optional execution timeout in seconds (default 30)"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "run_compiler_diagnostics",
                 "description": "Execute local project compiler/linter check (cargo check, npx tsc, etc.) to detect syntax, type, and borrow checker errors. If failures are detected, returns strict repair boundaries and pinpoint error locations to prevent hallucination loops.",
                 "parameters": {

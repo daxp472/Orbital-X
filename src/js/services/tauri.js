@@ -214,6 +214,21 @@ async function getInvoke() {
           dependencies: [],
           estimated_tokens: 180,
         };
+      case 'diagnostics_run_check':
+      case 'diagnostics_run_compiler_check':
+        return [];
+      case 'diagnostics_get_status':
+        return {
+          toolchain: 'cargo',
+          is_available: true,
+          last_error_count: 0,
+          is_loop_detected: false,
+          consecutive_failures: 0,
+        };
+      case 'diagnostics_reset_loop':
+        return true;
+      case 'diagnostics_evaluate_healing':
+        return null;
       case 'clear_token_usage':
         return true;
       case 'open_folder_dialog':
@@ -498,6 +513,52 @@ export async function getGraphFocusedContext(symbol) {
     return await invoke('graph_get_focused_context', { symbol });
   } catch (e) {
     console.warn('[getGraphFocusedContext] IPC failed:', e);
+    return null;
+  }
+}
+
+// ============================================================================
+// Pillar 3: Deterministic Diagnostics & Healing Loop Wrappers
+// ============================================================================
+
+export async function runDiagnosticsCheck(timeoutSecs = 30) {
+  try {
+    return await invoke('diagnostics_run_check', { timeout_secs: timeoutSecs });
+  } catch (e) {
+    console.warn('[runDiagnosticsCheck] IPC failed:', e);
+    return [];
+  }
+}
+
+export async function getDiagnosticsStatus() {
+  try {
+    return await invoke('diagnostics_get_status');
+  } catch (e) {
+    console.warn('[getDiagnosticsStatus] IPC failed:', e);
+    return {
+      toolchain: 'generic',
+      is_available: false,
+      last_error_count: 0,
+      is_loop_detected: false,
+      consecutive_failures: 0,
+    };
+  }
+}
+
+export async function resetDiagnosticsLoop() {
+  try {
+    return await invoke('diagnostics_reset_loop');
+  } catch (e) {
+    console.warn('[resetDiagnosticsLoop] IPC failed:', e);
+    return false;
+  }
+}
+
+export async function evaluateDiagnosticsHealing(timeoutSecs = 30) {
+  try {
+    return await invoke('diagnostics_evaluate_healing', { timeout_secs: timeoutSecs });
+  } catch (e) {
+    console.warn('[evaluateDiagnosticsHealing] IPC failed:', e);
     return null;
   }
 }

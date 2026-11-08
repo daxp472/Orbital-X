@@ -65,3 +65,12 @@ pub struct LoopDetectionVerdict {
     pub recommended_action: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiagnosticStatus {
+    pub toolchain: String,
+    pub is_available: bool,
+    pub last_error_count: usize,
+    pub is_loop_detected: bool,
+    pub consecutive_failures: usize,
+}
+

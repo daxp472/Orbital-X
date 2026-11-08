@@ -274,18 +274,56 @@ async fn isolation_get_status(
     }
 }
 
-#[tauri::command]
-async fn diagnostics_run_compiler_check(
-    timeout_secs: Option<u64>,
-    state: State<'_, AppState>,
-) -> Result<Vec<diagnostics::CompilerDiagnostic>, String> {
+fn get_or_create_diag_service(state: &State<'_, AppState>) -> Result<diagnostics::DiagnosticService, String> {
+    if let Ok(guard) = state.diagnostics_service.lock() {
+        if let Some(ref svc) = *guard {
+            return Ok(svc.clone());
+        }
+    }
     let host_ws = {
         let ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.get_root()
     };
     let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
     let svc = diagnostics::DiagnosticService::new(root);
+    if let Ok(mut guard) = state.diagnostics_service.lock() {
+        *guard = Some(svc.clone());
+    }
+    Ok(svc)
+}
+
+#[tauri::command]
+async fn diagnostics_run_check(
+    timeout_secs: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<Vec<diagnostics::CompilerDiagnostic>, String> {
+    let svc = get_or_create_diag_service(&state)?;
     svc.run_compiler_check(timeout_secs.unwrap_or(30)).await
+}
+
+#[tauri::command]
+async fn diagnostics_run_compiler_check(
+    timeout_secs: Option<u64>,
+    state: State<'_, AppState>,
+) -> Result<Vec<diagnostics::CompilerDiagnostic>, String> {
+    diagnostics_run_check(timeout_secs, state).await
+}
+
+#[tauri::command]
+async fn diagnostics_get_status(
+    state: State<'_, AppState>,
+) -> Result<diagnostics::DiagnosticStatus, String> {
+    let svc = get_or_create_diag_service(&state)?;
+    Ok(svc.get_status().await)
+}
+
+#[tauri::command]
+async fn diagnostics_reset_loop(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let svc = get_or_create_diag_service(&state)?;
+    svc.reset_loop().await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -293,12 +331,7 @@ async fn diagnostics_evaluate_healing(
     timeout_secs: Option<u64>,
     state: State<'_, AppState>,
 ) -> Result<Option<diagnostics::HealingPrompt>, String> {
-    let host_ws = {
-        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-        ws.get_root()
-    };
-    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
-    let svc = diagnostics::DiagnosticService::new(root);
+    let svc = get_or_create_diag_service(&state)?;
     svc.evaluate_and_heal(timeout_secs.unwrap_or(30)).await
 }
 
@@ -1123,16 +1156,23 @@ async fn execute_tool(
             let summary = engine.commit_transaction().await?;
             Ok(serde_json::to_value(summary).unwrap_or_default())
         }
-        "run_compiler_diagnostics" => {
+        "run_diagnostics" | "run_compiler_diagnostics" => {
             let timeout = arguments.get("timeout_secs").and_then(|v| v.as_u64()).unwrap_or(30);
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
-            };
-            let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
-            let svc = diagnostics::DiagnosticService::new(root);
+            let svc = get_or_create_diag_service(&state)?;
+            let diags = svc.run_compiler_check(timeout).await?;
             let healing = svc.evaluate_and_heal(timeout).await?;
-            Ok(serde_json::to_value(healing).unwrap_or(serde_json::json!({ "clean": true })))
+            let is_clean = diags.is_empty();
+            let loop_detected = healing.as_ref().map(|h| h.loop_detected).unwrap_or(false);
+            let loop_directive = healing.as_ref().map(|h| h.strict_instructions.clone());
+
+            Ok(serde_json::json!({
+                "clean": is_clean,
+                "error_count": diags.len(),
+                "diagnostics": diags,
+                "healing_prompt": healing,
+                "loop_detected": loop_detected,
+                "loop_breaker_directive": loop_directive
+            }))
         }
         "query_code_graph" => {
             let symbol = arguments.get("symbol").and_then(|v| v.as_str()).unwrap_or("");
@@ -1224,7 +1264,28 @@ async fn execute_tool(
                     engine.on_file_changed(path);
                 }
             }
-            Ok(serde_json::to_value(diff).unwrap_or_default())
+
+            let auto_verify = arguments.get("auto_verify").and_then(|v| v.as_bool()).unwrap_or(false);
+            let mut diff_val = serde_json::to_value(&diff).unwrap_or_default();
+            if auto_verify {
+                if let Ok(svc) = get_or_create_diag_service(&state) {
+                    if let Ok(healing) = svc.evaluate_and_heal(20).await {
+                        if let Some(prompt) = healing {
+                            diff_val["verification"] = serde_json::json!({
+                                "clean": false,
+                                "healing_required": true,
+                                "diagnostic": prompt.diagnostic_message,
+                                "line": prompt.line_number,
+                                "loop_detected": prompt.loop_detected,
+                                "strict_instructions": prompt.strict_instructions,
+                            });
+                        } else {
+                            diff_val["verification"] = serde_json::json!({ "clean": true });
+                        }
+                    }
+                }
+            }
+            Ok(diff_val)
         }
         "patch_file" => {
             let path = tool_path_arg(&arguments, "patch_file")?;
@@ -1241,7 +1302,28 @@ async fn execute_tool(
                     engine.on_file_changed(path);
                 }
             }
-            Ok(serde_json::to_value(diff).unwrap_or_default())
+
+            let auto_verify = arguments.get("auto_verify").and_then(|v| v.as_bool()).unwrap_or(false);
+            let mut diff_val = serde_json::to_value(&diff).unwrap_or_default();
+            if auto_verify {
+                if let Ok(svc) = get_or_create_diag_service(&state) {
+                    if let Ok(healing) = svc.evaluate_and_heal(20).await {
+                        if let Some(prompt) = healing {
+                            diff_val["verification"] = serde_json::json!({
+                                "clean": false,
+                                "healing_required": true,
+                                "diagnostic": prompt.diagnostic_message,
+                                "line": prompt.line_number,
+                                "loop_detected": prompt.loop_detected,
+                                "strict_instructions": prompt.strict_instructions,
+                            });
+                        } else {
+                            diff_val["verification"] = serde_json::json!({ "clean": true });
+                        }
+                    }
+                }
+            }
+            Ok(diff_val)
         }
         "delete_file" => {
             let path = tool_path_arg(&arguments, "delete_file")?;
@@ -2862,7 +2944,10 @@ pub fn run() {
             isolation_stage_write,
             isolation_validate_staged,
             isolation_get_status,
+            diagnostics_run_check,
             diagnostics_run_compiler_check,
+            diagnostics_get_status,
+            diagnostics_reset_loop,
             diagnostics_evaluate_healing,
             vfs_read_file,
             vfs_write_file,

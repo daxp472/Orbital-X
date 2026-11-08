@@ -381,7 +381,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Reads and searches are fully autonomous in Pro Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
-                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "run_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"
@@ -466,7 +466,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Reads, searches, and task status updates are automatic in Dev Mode
                     "workspace_info" | "list_files" | "search_files" | "read_file"
-                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "run_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff" | "git_log"
@@ -590,7 +590,7 @@ impl PolicyEngine {
                 match tool_name {
                     // Read and search tools are fully allowed in Ask mode so the model can inspect code
                     "workspace_info" | "list_files" | "search_files" | "read_file"
-                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "vfs_get_diffs"
+                    | "query_code_graph" | "get_focused_context" | "run_compiler_diagnostics" | "run_diagnostics" | "vfs_get_diffs"
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"

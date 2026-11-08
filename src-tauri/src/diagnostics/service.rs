@@ -1,7 +1,7 @@
 use super::detector::ToolchainDetector;
 use super::oracle::DiagnosticOracle;
 use super::parser::DiagnosticParser;
-use super::types::{CompilerDiagnostic, HealingPrompt, ProjectToolchain};
+use super::types::{CompilerDiagnostic, DiagnosticStatus, HealingPrompt, ProjectToolchain};
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::Arc;
@@ -117,5 +117,27 @@ impl DiagnosticService {
 
         let mut oracle_lock = self.oracle.lock().await;
         Ok(oracle_lock.evaluate_diagnostics(&diags))
+    }
+
+    /// Returns the live diagnostic and healing loop status.
+    pub async fn get_status(&self) -> DiagnosticStatus {
+        let cmd = ToolchainDetector::detect_toolchain(&self.workspace_root);
+        let oracle_lock = self.oracle.lock().await;
+        let is_loop = oracle_lock.is_loop_detected();
+        let consecutive = oracle_lock.consecutive_failures();
+
+        DiagnosticStatus {
+            toolchain: cmd.toolchain.as_str().to_string(),
+            is_available: cmd.toolchain != ProjectToolchain::Generic,
+            last_error_count: consecutive,
+            is_loop_detected: is_loop,
+            consecutive_failures: consecutive,
+        }
+    }
+
+    /// Resets failure and hallucination loop tracking.
+    pub async fn reset_loop(&self) {
+        let mut oracle_lock = self.oracle.lock().await;
+        oracle_lock.reset_on_success();
     }
 }
