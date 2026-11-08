@@ -229,6 +229,34 @@ async function getInvoke() {
         return true;
       case 'diagnostics_evaluate_healing':
         return null;
+      case 'vfs_get_status':
+        return {
+          is_active: true,
+          dirty_count: 0,
+          checkpoint_count: 0,
+          dirty_files: [],
+        };
+      case 'vfs_get_pending_diffs':
+      case 'vfs_get_all_diffs':
+        return [];
+      case 'vfs_create_checkpoint':
+        return {
+          id: `ckpt_${Date.now()}`,
+          timestamp: Date.now(),
+          description: args.description || 'Mock checkpoint',
+          snapshot_count: 0,
+        };
+      case 'vfs_rollback_checkpoint':
+      case 'vfs_rollback_all':
+      case 'vfs_discard_changes':
+        return true;
+      case 'vfs_commit_all':
+      case 'vfs_commit_transaction':
+        return {
+          committed_count: 0,
+          backup_path: '.orbital/vfs_backups/backup_mock',
+          files: [],
+        };
       case 'clear_token_usage':
         return true;
       case 'open_folder_dialog':
@@ -562,5 +590,69 @@ export async function evaluateDiagnosticsHealing(timeoutSecs = 30) {
     return null;
   }
 }
+
+// ============================================================================
+// Pillar 4: Virtual File System (VFS) Diff Bridge & Checkpoints Wrappers
+// ============================================================================
+
+export async function getVfsStatus() {
+  try {
+    return await invoke('vfs_get_status');
+  } catch (e) {
+    console.warn('[getVfsStatus] IPC failed:', e);
+    return {
+      is_active: false,
+      dirty_count: 0,
+      checkpoint_count: 0,
+      dirty_files: [],
+    };
+  }
+}
+
+export async function getVfsPendingDiffs() {
+  try {
+    return await invoke('vfs_get_pending_diffs');
+  } catch (e) {
+    console.warn('[getVfsPendingDiffs] IPC failed:', e);
+    return [];
+  }
+}
+
+export async function commitVfsAll() {
+  try {
+    return await invoke('vfs_commit_all');
+  } catch (e) {
+    console.warn('[commitVfsAll] IPC failed:', e);
+    return null;
+  }
+}
+
+export async function rollbackVfsAll() {
+  try {
+    return await invoke('vfs_rollback_all');
+  } catch (e) {
+    console.warn('[rollbackVfsAll] IPC failed:', e);
+    return false;
+  }
+}
+
+export async function createVfsCheckpoint(description) {
+  try {
+    return await invoke('vfs_create_checkpoint', { description });
+  } catch (e) {
+    console.warn('[createVfsCheckpoint] IPC failed:', e);
+    return null;
+  }
+}
+
+export async function rollbackVfsCheckpoint(checkpointId) {
+  try {
+    return await invoke('vfs_rollback_checkpoint', { checkpoint_id: checkpointId });
+  } catch (e) {
+    console.warn('[rollbackVfsCheckpoint] IPC failed:', e);
+    return false;
+  }
+}
+
 
 

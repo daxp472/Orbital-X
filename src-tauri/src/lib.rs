@@ -335,26 +335,63 @@ async fn diagnostics_evaluate_healing(
     svc.evaluate_and_heal(timeout_secs.unwrap_or(30)).await
 }
 
+fn get_or_create_vfs_engine(state: &State<'_, AppState>) -> Result<vfs::VfsEngine, String> {
+    if let Ok(guard) = state.vfs.lock() {
+        if let Some(ref engine) = *guard {
+            return Ok(engine.clone());
+        }
+    }
+    let host_ws = {
+        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.get_root()
+    };
+    let root = host_ws.ok_or_else(|| "No workspace root is currently active".to_string())?;
+    let engine = vfs::VfsEngine::new(root);
+    if let Ok(mut guard) = state.vfs.lock() {
+        *guard = Some(engine.clone());
+    }
+    Ok(engine)
+}
+
+#[tauri::command]
+async fn vfs_get_status(
+    state: State<'_, AppState>,
+) -> Result<vfs::VfsStatus, String> {
+    let engine = get_or_create_vfs_engine(&state)?;
+    Ok(engine.get_status().await)
+}
+
+#[tauri::command]
+async fn vfs_get_pending_diffs(
+    state: State<'_, AppState>,
+) -> Result<Vec<vfs::VfsFileDiff>, String> {
+    let engine = get_or_create_vfs_engine(&state)?;
+    Ok(engine.get_pending_diffs().await)
+}
+
+#[tauri::command]
+async fn vfs_commit_all(
+    state: State<'_, AppState>,
+) -> Result<vfs::VfsCommitSummary, String> {
+    let engine = get_or_create_vfs_engine(&state)?;
+    engine.commit_all().await
+}
+
+#[tauri::command]
+async fn vfs_rollback_all(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let engine = get_or_create_vfs_engine(&state)?;
+    engine.rollback_all().await;
+    Ok(())
+}
+
 #[tauri::command]
 async fn vfs_read_file(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = match vfs_opt {
-        Some(e) => e,
-        None => {
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
-            };
-            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
-            vfs::VfsEngine::new(root)
-        }
-    };
+    let engine = get_or_create_vfs_engine(&state)?;
     engine.read_file(Path::new(&path)).await
 }
 
@@ -364,21 +401,7 @@ async fn vfs_write_file(
     content: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = match vfs_opt {
-        Some(e) => e,
-        None => {
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
-            };
-            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
-            vfs::VfsEngine::new(root)
-        }
-    };
+    let engine = get_or_create_vfs_engine(&state)?;
     engine.write_file(Path::new(&path), &content).await
 }
 
@@ -387,21 +410,7 @@ async fn vfs_delete_file(
     path: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = match vfs_opt {
-        Some(e) => e,
-        None => {
-            let host_ws = {
-                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                ws.get_root()
-            };
-            let root = host_ws.ok_or_else(|| "No workspace root is active".to_string())?;
-            vfs::VfsEngine::new(root)
-        }
-    };
+    let engine = get_or_create_vfs_engine(&state)?;
     engine.delete_file(Path::new(&path)).await
 }
 
@@ -409,15 +418,8 @@ async fn vfs_delete_file(
 async fn vfs_get_all_diffs(
     state: State<'_, AppState>,
 ) -> Result<Vec<vfs::VfsFileDiff>, String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    if let Some(engine) = vfs_opt {
-        Ok(engine.get_all_diffs().await)
-    } else {
-        Ok(Vec::new())
-    }
+    let engine = get_or_create_vfs_engine(&state)?;
+    Ok(engine.get_all_diffs().await)
 }
 
 #[tauri::command]
@@ -425,11 +427,7 @@ async fn vfs_create_checkpoint(
     description: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<vfs::VfsCheckpoint, String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    let engine = get_or_create_vfs_engine(&state)?;
     Ok(engine.create_checkpoint(&description.unwrap_or_else(|| "Agent checkpoint".into())).await)
 }
 
@@ -438,11 +436,7 @@ async fn vfs_rollback_checkpoint(
     checkpoint_id: String,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    let engine = get_or_create_vfs_engine(&state)?;
     engine.rollback_checkpoint(&checkpoint_id).await
 }
 
@@ -450,11 +444,7 @@ async fn vfs_rollback_checkpoint(
 async fn vfs_commit_transaction(
     state: State<'_, AppState>,
 ) -> Result<vfs::VfsCommitSummary, String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    let engine = vfs_opt.ok_or_else(|| "No active VFS engine available".to_string())?;
+    let engine = get_or_create_vfs_engine(&state)?;
     engine.commit_transaction().await
 }
 
@@ -462,13 +452,8 @@ async fn vfs_commit_transaction(
 async fn vfs_discard_changes(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let vfs_opt = {
-        let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-        guard.clone()
-    };
-    if let Some(engine) = vfs_opt {
-        engine.discard_changes().await;
-    }
+    let engine = get_or_create_vfs_engine(&state)?;
+    engine.discard_changes().await;
     Ok(())
 }
 
@@ -1107,52 +1092,35 @@ async fn execute_tool(
         "vfs_shadow_write" => {
             let path_str = arguments.get("path").and_then(|v| v.as_str()).unwrap_or("");
             let content = arguments.get("content").and_then(|v| v.as_str()).unwrap_or("");
-            let vfs_opt = {
-                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-                guard.clone()
-            };
-            let engine = match vfs_opt {
-                Some(e) => e,
-                None => {
-                    let host_ws = {
-                        let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                        ws.get_root()
-                    };
-                    let root = host_ws.ok_or_else(|| "No workspace open".to_string())?;
-                    vfs::VfsEngine::new(root)
-                }
-            };
+            let engine = get_or_create_vfs_engine(&state)?;
             engine.write_file(Path::new(path_str), content).await?;
-            Ok(serde_json::json!({ "staged": true, "path": path_str }))
+            let diffs = engine.get_pending_diffs().await;
+            let file_diff = diffs.into_iter().find(|d| d.path == path_str);
+            Ok(serde_json::json!({ "staged": true, "path": path_str, "diff": file_diff }))
         }
         "vfs_get_diffs" => {
-            let vfs_opt = {
-                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-                guard.clone()
-            };
-            if let Some(engine) = vfs_opt {
-                let diffs = engine.get_all_diffs().await;
-                Ok(serde_json::to_value(diffs).unwrap_or_default())
-            } else {
-                Ok(serde_json::json!([]))
-            }
+            let engine = get_or_create_vfs_engine(&state)?;
+            let diffs = engine.get_pending_diffs().await;
+            Ok(serde_json::to_value(diffs).unwrap_or_default())
         }
-        "vfs_create_checkpoint" => {
+        "vfs_checkpoint" | "vfs_create_checkpoint" => {
             let desc = arguments.get("description").and_then(|v| v.as_str()).unwrap_or("Agent checkpoint");
-            let vfs_opt = {
-                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-                guard.clone()
-            };
-            let engine = vfs_opt.ok_or_else(|| "No workspace open".to_string())?;
+            let engine = get_or_create_vfs_engine(&state)?;
             let ckpt = engine.create_checkpoint(desc).await;
             Ok(serde_json::to_value(ckpt).unwrap_or_default())
         }
+        "vfs_rollback" => {
+            let engine = get_or_create_vfs_engine(&state)?;
+            if let Some(ckpt_id) = arguments.get("checkpoint_id").and_then(|v| v.as_str()) {
+                engine.rollback_checkpoint(ckpt_id).await?;
+                Ok(serde_json::json!({ "rolled_back": true, "checkpoint_id": ckpt_id }))
+            } else {
+                engine.rollback_all().await;
+                Ok(serde_json::json!({ "rolled_back": true, "all_uncommitted": true }))
+            }
+        }
         "vfs_commit" => {
-            let vfs_opt = {
-                let guard = state.vfs.lock().map_err(|e| e.to_string())?;
-                guard.clone()
-            };
-            let engine = vfs_opt.ok_or_else(|| "No workspace open".to_string())?;
+            let engine = get_or_create_vfs_engine(&state)?;
             let summary = engine.commit_transaction().await?;
             Ok(serde_json::to_value(summary).unwrap_or_default())
         }
@@ -1255,6 +1223,28 @@ async fn execute_tool(
             )?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent edit");
 
+            // Auto pre-write checkpoint in VFS
+            let vfs_engine = get_or_create_vfs_engine(&state)?;
+            let ckpt = vfs_engine.create_checkpoint(&format!("Pre-write checkpoint for {}", path)).await;
+
+            // In Dev Mode: stage in VFS shadow overlay for Monaco preview & user approval
+            if mode == AgentMode::Dev {
+                vfs_engine.write_file(Path::new(path), content).await?;
+                let diffs = vfs_engine.get_pending_diffs().await;
+                let file_diff = diffs.into_iter().find(|d| d.path == path);
+                return Ok(serde_json::json!({
+                    "staged_in_vfs": true,
+                    "path": path,
+                    "checkpoint_id": ckpt.id,
+                    "diff": file_diff,
+                    "message": format!("Changes staged in Virtual File System (checkpoint: {}). Monaco diff preview ready.", ckpt.id)
+                }));
+            }
+
+            // In Agent Pro Mode: stage through VFS, 2PC atomic commit, then update physical workspace
+            vfs_engine.write_file(Path::new(path), content).await?;
+            let commit_summary = vfs_engine.commit_transaction().await?;
+
             let diff = {
                 let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.write_file(path, content, desc)?
@@ -1267,6 +1257,10 @@ async fn execute_tool(
 
             let auto_verify = arguments.get("auto_verify").and_then(|v| v.as_bool()).unwrap_or(false);
             let mut diff_val = serde_json::to_value(&diff).unwrap_or_default();
+            diff_val["vfs_committed"] = serde_json::json!(true);
+            diff_val["checkpoint_id"] = serde_json::json!(ckpt.id);
+            diff_val["commit_summary"] = serde_json::to_value(&commit_summary).unwrap_or_default();
+
             if auto_verify {
                 if let Ok(svc) = get_or_create_diag_service(&state) {
                     if let Ok(healing) = svc.evaluate_and_heal(20).await {
@@ -1293,6 +1287,44 @@ async fn execute_tool(
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).ok_or("Missing end_line")? as usize;
             let new_content = arguments.get("new_content").and_then(|c| c.as_str()).ok_or("Missing new_content")?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent patch");
+
+            // Auto pre-write checkpoint in VFS
+            let vfs_engine = get_or_create_vfs_engine(&state)?;
+            let ckpt = vfs_engine.create_checkpoint(&format!("Pre-patch checkpoint for {}", path)).await;
+
+            let original_text = {
+                let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.read_file(path)?.content
+            };
+            let lines: Vec<&str> = original_text.lines().collect();
+            let mut new_lines = Vec::new();
+            if start > 1 && start <= lines.len() + 1 {
+                new_lines.extend_from_slice(&lines[0..start - 1]);
+            }
+            if !new_content.is_empty() {
+                new_lines.push(new_content);
+            }
+            if end < lines.len() {
+                new_lines.extend_from_slice(&lines[end..]);
+            }
+            let patched_content = new_lines.join("\n");
+
+            if mode == AgentMode::Dev {
+                vfs_engine.write_file(Path::new(path), &patched_content).await?;
+                let diffs = vfs_engine.get_pending_diffs().await;
+                let file_diff = diffs.into_iter().find(|d| d.path == path);
+                return Ok(serde_json::json!({
+                    "staged_in_vfs": true,
+                    "path": path,
+                    "checkpoint_id": ckpt.id,
+                    "diff": file_diff,
+                    "message": format!("Patch staged in Virtual File System (checkpoint: {}). Monaco diff preview ready.", ckpt.id)
+                }));
+            }
+
+            vfs_engine.write_file(Path::new(path), &patched_content).await?;
+            let commit_summary = vfs_engine.commit_transaction().await?;
+
             let diff = {
                 let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.patch_file(path, start, end, new_content, desc)?
@@ -1305,6 +1337,10 @@ async fn execute_tool(
 
             let auto_verify = arguments.get("auto_verify").and_then(|v| v.as_bool()).unwrap_or(false);
             let mut diff_val = serde_json::to_value(&diff).unwrap_or_default();
+            diff_val["vfs_committed"] = serde_json::json!(true);
+            diff_val["checkpoint_id"] = serde_json::json!(ckpt.id);
+            diff_val["commit_summary"] = serde_json::to_value(&commit_summary).unwrap_or_default();
+
             if auto_verify {
                 if let Ok(svc) = get_or_create_diag_service(&state) {
                     if let Ok(healing) = svc.evaluate_and_heal(20).await {
@@ -1327,6 +1363,26 @@ async fn execute_tool(
         }
         "delete_file" => {
             let path = tool_path_arg(&arguments, "delete_file")?;
+            let vfs_engine = get_or_create_vfs_engine(&state)?;
+            let ckpt = vfs_engine.create_checkpoint(&format!("Pre-delete checkpoint for {}", path)).await;
+
+            if mode == AgentMode::Dev {
+                vfs_engine.delete_file(Path::new(path)).await?;
+                let diffs = vfs_engine.get_pending_diffs().await;
+                let file_diff = diffs.into_iter().find(|d| d.path == path);
+                return Ok(serde_json::json!({
+                    "staged_in_vfs": true,
+                    "path": path,
+                    "deleted": true,
+                    "checkpoint_id": ckpt.id,
+                    "diff": file_diff,
+                    "message": format!("File deletion staged in Virtual File System (checkpoint: {}). Monaco diff preview ready.", ckpt.id)
+                }));
+            }
+
+            vfs_engine.delete_file(Path::new(path)).await?;
+            let _ = vfs_engine.commit_transaction().await;
+
             let msg = {
                 let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
                 ws.delete_file(path)?
@@ -1336,7 +1392,7 @@ async fn execute_tool(
                     engine.on_file_changed(path);
                 }
             }
-            Ok(serde_json::json!({ "success": true, "message": msg }))
+            Ok(serde_json::json!({ "success": true, "message": msg, "checkpoint_id": ckpt.id }))
         }
         "delete_directory" | "delete_folder" => {
             let path = tool_path_arg(&arguments, "delete_directory")?;
@@ -2953,6 +3009,10 @@ pub fn run() {
             vfs_write_file,
             vfs_delete_file,
             vfs_get_all_diffs,
+            vfs_get_status,
+            vfs_get_pending_diffs,
+            vfs_commit_all,
+            vfs_rollback_all,
             vfs_create_checkpoint,
             vfs_rollback_checkpoint,
             vfs_commit_transaction,

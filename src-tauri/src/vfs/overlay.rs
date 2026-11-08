@@ -162,6 +162,26 @@ impl VfsOverlay {
             .collect()
     }
 
+    /// Convenience alias: writes to shadow overlay without touching physical disk.
+    pub fn write_shadow(&mut self, candidate: &Path, content: Vec<u8>) -> Result<(), String> {
+        self.write(candidate, content)
+    }
+
+    /// Convenience alias: reads from shadow overlay.
+    pub fn read_shadow(&mut self, candidate: &Path) -> Result<Vec<u8>, String> {
+        self.read(candidate)
+    }
+
+    /// Convenience alias: marks file as deleted in shadow overlay.
+    pub fn delete_shadow(&mut self, candidate: &Path) -> Result<(), String> {
+        self.delete(candidate)
+    }
+
+    /// Lists relative paths of all currently dirty shadow files.
+    pub fn list_dirty_files(&self) -> Vec<String> {
+        self.get_dirty_entries().into_iter().map(|(p, _)| p).collect()
+    }
+
     /// Discards all uncommitted in-memory shadow edits.
     pub fn discard_all(&mut self) {
         self.entries.clear();

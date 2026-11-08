@@ -51,6 +51,38 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "vfs_checkpoint",
+                "description": "Alias for vfs_create_checkpoint. Create an in-memory rollback checkpoint before attempting refactoring.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "description": {
+                            "type": "string",
+                            "description": "Reason or milestone description for this checkpoint"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "vfs_rollback",
+                "description": "Rollback staged shadow modifications or revert to a previously created checkpoint ID.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "checkpoint_id": {
+                            "type": "string",
+                            "description": "Optional specific checkpoint ID to revert to. If omitted, all uncommitted shadow mutations are discarded."
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "vfs_commit",
                 "description": "Atomically commit all validated staged shadow mutations to physical disk, automatically creating an emergency rollback backup in .orbital/vfs_backups/.",
                 "parameters": {

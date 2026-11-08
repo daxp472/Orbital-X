@@ -113,6 +113,7 @@ export async function enterWorkspace(rootPath) {
     updateSandboxStatusIndicator();
     updateGraphStatusIndicator();
     updateDiagnosticsStatusIndicator();
+    updateVfsStatusIndicator();
 
     // Update terminal sessions to automatically match the active workspace directory
     import('./components/terminal.js').then(m => m.onWorkspaceOpened(meta.root_path)).catch(console.warn);
@@ -447,6 +448,32 @@ function initStatusBarExtras() {
       showToast(`Diagnostic check failed: ${e}`, 'error', 3000);
     }
   });
+
+  // Pillar 4: Virtual File System (VFS) Diff Bridge & Checkpoints Indicator in status bar
+  updateVfsStatusIndicator();
+  document.getElementById('sb-vfs-indicator')?.addEventListener('click', async () => {
+    try {
+      const { getVfsStatus, getVfsPendingDiffs } = await import('./services/tauri.js');
+      const [status, diffs] = await Promise.all([
+        getVfsStatus(),
+        getVfsPendingDiffs(),
+      ]);
+
+      if (!diffs || diffs.length === 0) {
+        showToast(`VFS Status: Clean\n0 staged shadow edits. ${status?.checkpoint_count || 0} checkpoint(s) available.`, 'info', 3000);
+        return;
+      }
+
+      const { previewVfsDiff } = await import('./editor/monaco.js');
+      if (diffs.length === 1) {
+        previewVfsDiff(diffs[0]);
+      } else {
+        showVfsDiffsModal(diffs, status);
+      }
+    } catch (e) {
+      showToast(`VFS inspection failed: ${e}`, 'error', 3000);
+    }
+  });
 }
 
 export async function updateSandboxStatusIndicator() {
@@ -534,6 +561,128 @@ export async function updateDiagnosticsStatusIndicator(errorsCount = null) {
     if (dot) dot.style.backgroundColor = 'var(--text-muted)';
     text.textContent = 'Build: Ready';
   }
+}
+
+export async function updateVfsStatusIndicator() {
+  const el = document.getElementById('sb-vfs-indicator');
+  const dot = document.getElementById('sb-vfs-dot');
+  const text = document.getElementById('sb-vfs-text');
+  if (!el || !text) return;
+
+  try {
+    const { getVfsStatus } = await import('./services/tauri.js');
+    const status = await getVfsStatus();
+    const dirtyCount = status?.dirty_count || 0;
+    const checkpointCount = status?.checkpoint_count || 0;
+
+    if (dirtyCount > 0) {
+      if (dot) dot.style.backgroundColor = 'var(--accent-orange)';
+      text.textContent = `VFS: ${dirtyCount} pending`;
+      el.title = `Virtual File System: ${dirtyCount} Uncommitted Shadow Edit${dirtyCount > 1 ? 's' : ''}\nCheckpoints: ${checkpointCount}\nDirty Files: ${(status.dirty_files || []).join(', ')}\nClick to Review Diffs, Commit, or Rollback`;
+    } else {
+      if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+      text.textContent = `VFS: 0 staged`;
+      el.title = `Virtual File System: Clean (0 staged edits)\nCheckpoints Available: ${checkpointCount}\nClick to Review VFS Status`;
+    }
+  } catch (e) {
+    if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+    text.textContent = 'VFS: Standby';
+  }
+}
+
+export async function showVfsDiffsModal(diffs, status) {
+  const existing = document.getElementById('vfs-review-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'vfs-review-modal';
+  modal.style.position = 'fixed';
+  modal.style.top = '0';
+  modal.style.left = '0';
+  modal.style.width = '100vw';
+  modal.style.height = '100vh';
+  modal.style.backgroundColor = 'rgba(0,0,0,0.65)';
+  modal.style.backdropFilter = 'blur(4px)';
+  modal.style.display = 'flex';
+  modal.style.alignItems = 'center';
+  modal.style.justifyContent = 'center';
+  modal.style.zIndex = '9999';
+
+  const card = document.createElement('div');
+  card.style.background = 'var(--bg-secondary, #1e1e1e)';
+  card.style.border = '1px solid var(--border-color, #333)';
+  card.style.borderRadius = '8px';
+  card.style.width = '560px';
+  card.style.maxWidth = '90vw';
+  card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.5)';
+  card.style.display = 'flex';
+  card.style.flexDirection = 'column';
+  card.style.overflow = 'hidden';
+
+  card.innerHTML = `
+    <div style="padding: 14px 16px; border-bottom: 1px solid var(--border-color, #333); display: flex; justify-content: space-between; align-items: center;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 600; font-size: 14px;">Virtual File System (VFS) Staged Diffs</span>
+        <span style="background: var(--accent-orange, #e59500); color: #000; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 10px;">${diffs.length} Pending</span>
+      </div>
+      <button id="vfs-modal-close" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px;">&times;</button>
+    </div>
+    <div style="padding: 12px 16px; max-height: 360px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;">
+      ${diffs.map((d, i) => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: var(--bg-tertiary, #252526); border-radius: 4px;">
+          <div>
+            <div style="font-size: 13px; font-weight: 500; font-family: monospace;">${d.path}</div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; gap: 8px; margin-top: 2px;">
+              <span style="color: var(--accent-green, #4ec9b0);">+${d.additions}</span>
+              <span style="color: var(--accent-red, #f44747);">-${d.deletions}</span>
+              <span>${d.status}</span>
+            </div>
+          </div>
+          <button class="vfs-preview-btn" data-index="${i}" style="padding: 4px 10px; font-size: 12px; background: var(--accent-blue, #0e639c); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Review Diff</button>
+        </div>
+      `).join('')}
+    </div>
+    <div style="padding: 12px 16px; border-top: 1px solid var(--border-color, #333); display: flex; justify-content: space-between; align-items: center; background: var(--bg-primary, #181818);">
+      <button id="vfs-rollback-all-btn" style="padding: 6px 14px; font-size: 12px; background: transparent; color: var(--accent-red, #f44747); border: 1px solid var(--accent-red, #f44747); border-radius: 4px; cursor: pointer;">Discard All Changes</button>
+      <div style="display: flex; gap: 8px;">
+        <button id="vfs-cancel-btn" style="padding: 6px 14px; font-size: 12px; background: var(--bg-secondary, #2d2d2d); color: var(--text-normal); border: 1px solid var(--border-color, #444); border-radius: 4px; cursor: pointer;">Close</button>
+        <button id="vfs-commit-all-btn" style="padding: 6px 14px; font-size: 12px; background: var(--accent-green, #388a34); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Commit All to Disk</button>
+      </div>
+    </div>
+  `;
+
+  modal.appendChild(card);
+  document.body.appendChild(modal);
+
+  const close = () => modal.remove();
+  modal.querySelector('#vfs-modal-close').onclick = close;
+  modal.querySelector('#vfs-cancel-btn').onclick = close;
+
+  modal.querySelectorAll('.vfs-preview-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const idx = parseInt(btn.dataset.index, 10);
+      close();
+      const { previewVfsDiff } = await import('./editor/monaco.js');
+      previewVfsDiff(diffs[idx]);
+    };
+  });
+
+  modal.querySelector('#vfs-rollback-all-btn').onclick = async () => {
+    if (!confirm('Are you sure you want to discard all pending Virtual File System changes?')) return;
+    const { rollbackVfsAll } = await import('./services/tauri.js');
+    await rollbackVfsAll();
+    close();
+    updateVfsStatusIndicator();
+    showToast('All VFS shadow modifications discarded.', 'info', 3000);
+  };
+
+  modal.querySelector('#vfs-commit-all-btn').onclick = async () => {
+    const { commitVfsAll } = await import('./services/tauri.js');
+    const summary = await commitVfsAll();
+    close();
+    updateVfsStatusIndicator();
+    showToast(`Committed ${summary?.committed_count || diffs.length} files to disk via atomic 2PC transaction.`, 'success', 3000);
+  };
 }
 
 export async function showCallersImpactModal(initialSymbol = '') {

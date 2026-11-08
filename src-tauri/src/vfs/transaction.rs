@@ -48,6 +48,22 @@ impl VfsTransactionManager {
         Ok(())
     }
 
+    /// Lists all active checkpoint snapshots.
+    pub fn list_checkpoints(&self) -> Vec<VfsCheckpoint> {
+        self.checkpoints.iter().map(|(ckpt, _)| ckpt.clone()).collect()
+    }
+
+    /// Discards all shadow changes and rolls back to clean disk baseline.
+    pub fn rollback_all(&mut self, overlay: &mut VfsOverlay) {
+        overlay.discard_all();
+        self.checkpoints.clear();
+    }
+
+    /// Alias for commit_atomic.
+    pub fn commit_all(&mut self, overlay: &mut VfsOverlay) -> Result<VfsCommitSummary, String> {
+        self.commit_atomic(overlay)
+    }
+
     /// Gathers diffs for all current dirty or deleted files against their disk baselines.
     pub fn compute_all_diffs(&self, overlay: &VfsOverlay) -> Vec<VfsFileDiff> {
         let dirty = overlay.get_dirty_entries();

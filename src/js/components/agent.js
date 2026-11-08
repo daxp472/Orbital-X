@@ -2057,8 +2057,9 @@ STRATEGY:
 
       // FIX 3: notify the explorer after any filesystem mutation so the
       // tree refreshes automatically — no manual reload needed
-      if (['write_file', 'patch_file', 'delete_file', 'delete_directory', 'rename_file', 'create_directory', 'batch_delete_files'].includes(toolCall.name)) {
+      if (['write_file', 'patch_file', 'delete_file', 'delete_directory', 'rename_file', 'create_directory', 'batch_delete_files', 'vfs_shadow_write', 'vfs_commit', 'vfs_rollback'].includes(toolCall.name)) {
         window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name, path: toolCall.arguments?.path } }));
+        import('../app.js').then(m => m.updateVfsStatusIndicator()).catch(() => {});
       }
 
       // FIX 4: auto-save a progress memory milestone when the agent writes
@@ -2473,11 +2474,58 @@ function renderRichToolResult(toolCall, result) {
   const esc10 = (txt) => escapeHtml(String(txt || '').split('\n').slice(0, 10).join('\n'));
 
   try {
-    if (name === 'write_file' || name === 'patch_file') {
+    if (result.staged_in_vfs || name === 'vfs_shadow_write') {
+      const diff = result.diff;
+      const ckpt = result.checkpoint_id || '';
+      html = `<div style="font-size: 11px; padding: 4px 0;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div>
+            <span style="color: var(--accent-orange); font-weight: 600;">⚡ Staged in VFS Shadow Memory</span>
+            ${ckpt ? `<span style="color: var(--text-muted); font-size: 10px;"> (${escapeHtml(ckpt)})</span>` : ''}
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">
+              ${diff ? `<span style="color: var(--accent-green);">+${diff.additions}</span> <span style="color: var(--accent-red);">-${diff.deletions}</span> · ` : ''}
+              <span>${escapeHtml(result.path || args.path || '')}</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            ${diff ? `<button class="btn-preview-vfs-diff" style="font-size: 10.5px; padding: 3px 8px; background: var(--accent-blue); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Preview Diff</button>` : ''}
+            <button class="btn-commit-vfs" style="font-size: 10.5px; padding: 3px 8px; background: var(--accent-green); color: #fff; border: none; border-radius: 4px; cursor: pointer;">Commit</button>
+            <button class="btn-discard-vfs" style="font-size: 10.5px; padding: 3px 8px; background: transparent; color: var(--accent-red); border: 1px solid var(--accent-red); border-radius: 4px; cursor: pointer;">Discard</button>
+          </div>
+        </div>
+      </div>`;
+      setTimeout(() => {
+        box.querySelector('.btn-preview-vfs-diff')?.addEventListener('click', async () => {
+          const { previewVfsDiff } = await import('../editor/monaco.js');
+          previewVfsDiff(diff);
+        });
+        box.querySelector('.btn-commit-vfs')?.addEventListener('click', async () => {
+          const { commitVfsAll } = await import('../services/tauri.js');
+          await commitVfsAll();
+          const { updateVfsStatusIndicator } = await import('../app.js');
+          updateVfsStatusIndicator();
+        });
+        box.querySelector('.btn-discard-vfs')?.addEventListener('click', async () => {
+          const { rollbackVfsAll } = await import('../services/tauri.js');
+          await rollbackVfsAll();
+          const { updateVfsStatusIndicator } = await import('../app.js');
+          updateVfsStatusIndicator();
+        });
+      }, 50);
+    } else if (name === 'write_file' || name === 'patch_file') {
       const diff = String(result.diff_unified || '');
+      const ckpt = result.checkpoint_id ? ` · ckpt: ${escapeHtml(result.checkpoint_id)}` : '';
       if (diff) {
         html = renderSideBySideDiff(diff, args.path || '');
+      } else {
+        html = `<div style="font-size: 10px; color: var(--accent-green);">✓ Written successfully${ckpt}</div>`;
       }
+    } else if (name === 'vfs_commit') {
+      html = `<div style="font-size: 10.5px; color: var(--accent-green); font-weight: 500;">✓ Committed ${result.committed_count || 1} file(s) to physical disk (backup: <code>${escapeHtml(result.backup_path || '')}</code>)</div>`;
+    } else if (name === 'vfs_create_checkpoint' || name === 'vfs_checkpoint') {
+      html = `<div style="font-size: 10.5px; color: var(--accent-cyan);">📌 Checkpoint created: <code>${escapeHtml(result.id || '')}</code> — ${escapeHtml(result.description || '')}</div>`;
+    } else if (name === 'vfs_rollback') {
+      html = `<div style="font-size: 10.5px; color: var(--accent-orange);">⏪ Rollback executed successfully (${result.checkpoint_id ? `checkpoint ${escapeHtml(result.checkpoint_id)}` : 'all uncommitted changes'})</div>`;
     } else if (name === 'run_diagnostics' || name === 'run_compiler_diagnostics') {
       const clean = result.clean !== false;
       const count = result.error_count ?? (result.diagnostics?.length || 0);

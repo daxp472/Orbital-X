@@ -26,6 +26,16 @@ pub struct VfsFileDiff {
     pub deletions: usize,
     pub hunks: Vec<VfsDiffHunk>,
     pub unified_patch: String,
+    pub original_content: Option<String>,
+    pub shadow_content: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VfsStatus {
+    pub is_active: bool,
+    pub dirty_count: usize,
+    pub checkpoint_count: usize,
+    pub dirty_files: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

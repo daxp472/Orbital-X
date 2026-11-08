@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 
 use crate::vfs::overlay::VfsOverlay;
 use crate::vfs::transaction::VfsTransactionManager;
-use crate::vfs::types::{VfsCheckpoint, VfsCommitSummary, VfsFileDiff};
+use crate::vfs::types::{VfsCheckpoint, VfsCommitSummary, VfsFileDiff, VfsStatus};
 
 /// Thread-safe Virtual File System Engine managing agent shadow mutations,
 /// real-time diff calculations, and transactional atomic disk commits.
@@ -73,6 +73,43 @@ impl VfsEngine {
     pub async fn discard_changes(&self) {
         let mut overlay = self.overlay.write().await;
         overlay.discard_all();
+    }
+
+    /// Returns the live VFS status and dirty file count.
+    pub async fn get_status(&self) -> VfsStatus {
+        let overlay = self.overlay.read().await;
+        let tx = self.tx_mgr.read().await;
+        let dirty_files = overlay.list_dirty_files();
+        let dirty_count = dirty_files.len();
+        let ckpts = tx.list_checkpoints();
+
+        VfsStatus {
+            is_active: true,
+            dirty_count,
+            checkpoint_count: ckpts.len(),
+            dirty_files,
+        }
+    }
+
+    /// Alias for get_all_diffs: gathers all pending uncommitted file diffs.
+    pub async fn get_pending_diffs(&self) -> Vec<VfsFileDiff> {
+        self.get_all_diffs().await
+    }
+
+    /// Alias for commit_transaction: atomically applies all staged mutations to disk.
+    pub async fn commit_all(&self) -> Result<VfsCommitSummary, String> {
+        self.commit_transaction().await
+    }
+
+    /// Alias for discard_changes: rolls back all uncommitted shadow mutations.
+    pub async fn rollback_all(&self) {
+        self.discard_changes().await;
+    }
+
+    /// Lists all active in-memory checkpoint snapshots.
+    pub async fn list_checkpoints(&self) -> Vec<VfsCheckpoint> {
+        let tx = self.tx_mgr.read().await;
+        tx.list_checkpoints()
     }
 
     /// Returns the number of files currently modified in the shadow layer.

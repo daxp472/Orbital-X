@@ -9,7 +9,7 @@ pub use overlay::VfsOverlay;
 pub use service::VfsEngine;
 pub use transaction::VfsTransactionManager;
 pub use types::{
-    VfsCheckpoint, VfsCommitSummary, VfsDiffHunk, VfsDiffStatus, VfsFileDiff, VfsFileEntry,
+    VfsCheckpoint, VfsCommitSummary, VfsDiffHunk, VfsDiffStatus, VfsFileDiff, VfsFileEntry, VfsStatus,
 };
 
 #[cfg(test)]

@@ -14,6 +14,8 @@ impl VfsDiffBridge {
                 deletions: 0,
                 hunks: Vec::new(),
                 unified_patch: String::new(),
+                original_content: None,
+                shadow_content: None,
             };
         }
 
@@ -49,6 +51,8 @@ impl VfsDiffBridge {
                     lines: patch_lines.iter().skip(2).cloned().collect(),
                 }],
                 unified_patch: patch_lines.join("\n"),
+                original_content: Some(old_str),
+                shadow_content: None,
             };
         }
 
@@ -81,6 +85,8 @@ impl VfsDiffBridge {
                     lines: patch_lines.iter().skip(2).cloned().collect(),
                 }],
                 unified_patch: patch_lines.join("\n"),
+                original_content: None,
+                shadow_content: Some(new_str),
             };
         }
 
@@ -88,13 +94,12 @@ impl VfsDiffBridge {
         let old_text = String::from_utf8_lossy(entry.baseline_content.as_ref().unwrap()).to_string();
         let new_text = String::from_utf8_lossy(&entry.content).to_string();
 
-        let old_lines: Vec<&str> = old_text.lines().collect();
-        let new_lines: Vec<&str> = new_text.lines().collect();
-
-        Self::compute_line_diff(rel_path, &old_lines, &new_lines)
+        Self::compute_line_diff(rel_path, &old_text, &new_text)
     }
 
-    fn compute_line_diff(path: &str, old_lines: &[&str], new_lines: &[&str]) -> VfsFileDiff {
+    fn compute_line_diff(path: &str, old_text: &str, new_text: &str) -> VfsFileDiff {
+        let old_lines: Vec<&str> = old_text.lines().collect();
+        let new_lines: Vec<&str> = new_text.lines().collect();
         let mut hunks = Vec::new();
         let mut additions = 0;
         let mut deletions = 0;
@@ -200,6 +205,8 @@ impl VfsDiffBridge {
             deletions,
             hunks,
             unified_patch: unified.join("\n"),
+            original_content: Some(old_text.to_string()),
+            shadow_content: Some(new_text.to_string()),
         }
     }
 }

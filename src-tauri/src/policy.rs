@@ -400,7 +400,7 @@ impl PolicyEngine {
                     }
                     // File writes, patches, directory creation are autonomous in Pro Mode
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
-                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_checkpoint" | "vfs_rollback" | "vfs_discard" | "vfs_commit"
                     | "undo_agent_change" | "save_project_memory" | "delete_project_memory"
                     | "create_directory" | "rename_file" | "copy_file" => {
                         PolicyDecision {
@@ -482,7 +482,7 @@ impl PolicyEngine {
                     }
                     // File edits require approval card in Dev Mode
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
-                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_checkpoint" | "vfs_rollback" | "vfs_discard" | "vfs_commit"
                     | "undo_agent_change" | "rename_file" | "copy_file" | "create_directory" => {
                         PolicyDecision {
                             allowed: true,
@@ -550,7 +550,7 @@ impl PolicyEngine {
                     }
                     // File edits and deletions require confirmation
                     "write_file" | "patch_file" | "create_file" | "apply_patch"
-                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_commit"
+                    | "vfs_shadow_write" | "vfs_create_checkpoint" | "vfs_checkpoint" | "vfs_rollback" | "vfs_discard" | "vfs_commit"
                     | "create_directory" | "rename_file" | "copy_file" | "delete_file" | "delete_directory"
                     | "delete_folder" | "batch_delete_files" | "delete_path" => {
                         PolicyDecision {

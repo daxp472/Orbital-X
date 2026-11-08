@@ -2073,3 +2073,36 @@ export function openDiffModal(filePath, oldContent, newContent, onAccept, onReje
   rejectBtn.onclick = () => { cleanup(); if (onReject) onReject(); };
   closeBtn.onclick = () => { cleanup(); if (onReject) onReject(); };
 }
+
+export function previewVfsDiff(diff, onCommit, onRollback) {
+  if (!diff) return;
+  const filePath = diff.path;
+  const oldContent = diff.original_content ?? '';
+  const newContent = diff.shadow_content ?? '';
+
+  openDiffModal(
+    filePath,
+    oldContent,
+    newContent,
+    async () => {
+      if (onCommit) {
+        await onCommit();
+      } else {
+        const { commitVfsAll } = await import('../services/tauri.js');
+        await commitVfsAll();
+      }
+      const { updateVfsStatusIndicator } = await import('../app.js');
+      updateVfsStatusIndicator();
+    },
+    async () => {
+      if (onRollback) {
+        await onRollback();
+      } else {
+        const { rollbackVfsAll } = await import('../services/tauri.js');
+        await rollbackVfsAll();
+      }
+      const { updateVfsStatusIndicator } = await import('../app.js');
+      updateVfsStatusIndicator();
+    }
+  );
+}
