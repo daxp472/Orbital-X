@@ -2713,6 +2713,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tokio",
  "tokio-util",
+ "tree-sitter",
  "uuid",
  "walkdir",
  "winreg 0.52.0",
@@ -4746,6 +4747,16 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tree-sitter"
+version = "0.22.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df7cc499ceadd4dcdf7ec6d4cbc34ece92c3fa07821e287aedecd4416c516dca"
+dependencies = [
+ "cc",
+ "regex",
 ]
 
 [[package]]

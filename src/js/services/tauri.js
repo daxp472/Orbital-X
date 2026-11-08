@@ -185,6 +185,35 @@ async function getInvoke() {
           violations: [],
           bytes_affected: 0,
         };
+      case 'graph_get_stats':
+        return {
+          total_symbols: 142,
+          total_edges: 89,
+          total_files: 28,
+          is_indexing: false,
+        };
+      case 'graph_get_callers':
+        return [
+          { id: 'src/main.rs:function:run:12', name: 'run', kind: 'function', file_path: 'src/main.rs', signature: 'pub fn run()', line: 12 }
+        ];
+      case 'graph_get_callees':
+        return [
+          { id: 'src/auth.rs:function:verify:8', name: 'verify', kind: 'function', file_path: 'src/auth.rs', signature: 'pub fn verify()', line: 8 }
+        ];
+      case 'graph_get_dependencies':
+        return [
+          { id: 'src/auth.rs:struct:AuthService:4', name: 'AuthService', kind: 'struct', file_path: 'src/auth.rs', signature: 'pub struct AuthService', line: 4 }
+        ];
+      case 'graph_get_focused_context':
+        return {
+          target_symbol: args.symbol || 'AppService',
+          target_file: 'src/service.rs',
+          definition_snippet: `// File: src/service.rs:15\npub struct ${args.symbol || 'AppService'}`,
+          callers: [{ id: 'src/main.rs:10', name: 'main', kind: 'function', file_path: 'src/main.rs', signature: 'fn main()', line: 10 }],
+          callees: [{ id: 'src/util.rs:20', name: 'init_logger', kind: 'function', file_path: 'src/util.rs', signature: 'pub fn init_logger()', line: 20 }],
+          dependencies: [],
+          estimated_tokens: 180,
+        };
       case 'clear_token_usage':
         return true;
       case 'open_folder_dialog':
@@ -418,4 +447,59 @@ export async function stageSandboxedWrite(path, content) {
 export async function validateSandboxedStaged() {
   return await invoke('isolation_validate_staged');
 }
+
+// ============================================================================
+// Pillar 2: Native Semantic Graph & Context Wrappers
+// ============================================================================
+
+export async function getGraphStats() {
+  try {
+    return await invoke('graph_get_stats');
+  } catch (e) {
+    console.warn('[getGraphStats] IPC failed:', e);
+    return {
+      total_symbols: 0,
+      total_edges: 0,
+      total_files: 0,
+      is_indexing: false,
+    };
+  }
+}
+
+export async function getGraphCallers(target) {
+  try {
+    return await invoke('graph_get_callers', { target });
+  } catch (e) {
+    console.warn('[getGraphCallers] IPC failed:', e);
+    return [];
+  }
+}
+
+export async function getGraphCallees(source) {
+  try {
+    return await invoke('graph_get_callees', { source });
+  } catch (e) {
+    console.warn('[getGraphCallees] IPC failed:', e);
+    return [];
+  }
+}
+
+export async function getGraphDependencies(symbol, maxDepth = 2) {
+  try {
+    return await invoke('graph_get_dependencies', { symbol, max_depth: maxDepth });
+  } catch (e) {
+    console.warn('[getGraphDependencies] IPC failed:', e);
+    return [];
+  }
+}
+
+export async function getGraphFocusedContext(symbol) {
+  try {
+    return await invoke('graph_get_focused_context', { symbol });
+  } catch (e) {
+    console.warn('[getGraphFocusedContext] IPC failed:', e);
+    return null;
+  }
+}
+
 

@@ -1496,6 +1496,41 @@ async function resolveFileMentions(promptText) {
     }
   }
 
+  // Pillar 2: Native Semantic Graph Focused Context Slicing
+  // Matches explicit symbols tagged with #symbol or @symbol (without file extension)
+  const symbolMentions = [...new Set([
+    ...(promptText.match(/#([a-zA-Z_0-9:]+)/g) || []).map(m => m.slice(1)),
+    ...(promptText.match(/@([a-zA-Z_0-9:]+)/g) || []).map(m => m.slice(1))
+      .filter(t => !t.includes('.') && !['codebase', 'workspace'].includes(t.toLowerCase())),
+  ])].filter(s => s.length >= 2);
+
+  if (symbolMentions.length > 0) {
+    const graphSlices = [];
+    for (const sym of symbolMentions.slice(0, 4)) {
+      try {
+        const slice = await invoke('graph_get_focused_context', { symbol: sym });
+        if (slice && slice.target_symbol) {
+          const callersStr = (slice.callers || []).slice(0, 8).map(c => `${c.name} [${c.file_path}:${c.line || '?'}]`).join(', ') || 'None (root symbol or external entry point)';
+          const calleesStr = (slice.callees || []).slice(0, 8).map(c => `${c.name} [${c.file_path}:${c.line || '?'}]`).join(', ') || 'None';
+          const depsStr = (slice.dependencies || []).slice(0, 6).map(d => `${d.name} [${d.file_path}:${d.line || '?'}]`).join(', ') || 'None';
+          graphSlices.push(
+            `### AST Semantic Context Slice: ${slice.target_symbol} (${slice.target_file})\n` +
+            `${slice.definition_snippet}\n` +
+            `- Callers: ${callersStr}\n` +
+            `- Callees: ${calleesStr}\n` +
+            `- Dependencies: ${depsStr}\n` +
+            `- Estimated slice tokens: ${slice.estimated_tokens}`
+          );
+        }
+      } catch (e) {
+        console.warn(`[resolveFileMentions] Failed to extract AST slice for "${sym}":`, e);
+      }
+    }
+    if (graphSlices.length > 0) {
+      enriched += '\n\n--- AST Semantic Graph Focused Context ---\n' + graphSlices.join('\n\n') + '\n------------------------------------------\n';
+    }
+  }
+
   return enriched;
 }
 

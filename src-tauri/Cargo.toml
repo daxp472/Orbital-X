@@ -33,6 +33,7 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 walkdir = "2.5"
 regex = "1.11"
 dirs = "5.0"
+tree-sitter = "0.22"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

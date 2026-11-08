@@ -556,6 +556,27 @@ function bindEditorCommands(ed) {
     run: (e) => runGenerateDocstring(e),
   });
   ed.addAction({
+    id: 'orbital.findCallersImpact',
+    label: 'Find Callers / Impact Graph (AST)',
+    contextMenuGroupId: 'navigation',
+    contextMenuOrder: 3,
+    keybindings: [C2 | S2 | K2.KeyI],
+    run: async (e) => {
+      const model = e.getModel();
+      const pos = e.getPosition();
+      let word = '';
+      const sel = e.getSelection();
+      if (sel && !sel.isEmpty()) {
+        word = model.getValueInRange(sel).trim();
+      } else if (pos) {
+        const wordInfo = model.getWordAtPosition(pos);
+        if (wordInfo) word = wordInfo.word;
+      }
+      const { showCallersImpactModal } = await import('../app.js');
+      showCallersImpactModal(word);
+    },
+  });
+  ed.addAction({
     id: 'orbital.openFolder',
     label: 'Open Workspace Folder',
     keybindings: [C2 | K2.KeyO],
@@ -1740,6 +1761,7 @@ export async function saveTab(tab, panel = 'left') {
     tab.isDirty = false;
     tabDirtyMap.set(tab.id, false);
     renderTabs(panel);
+    window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: tab.path } }));
     console.log('File saved successfully:', tab.path, diff);
   } catch (e) {
     alert('Error saving file: ' + e);

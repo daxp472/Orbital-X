@@ -461,8 +461,16 @@ fn read_file(path: String, state: State<'_, AppState>) -> Result<FileReadResult,
 
 #[tauri::command]
 fn save_file(path: String, content: String, description: Option<String>, state: State<'_, AppState>) -> Result<FileDiff, String> {
-    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-    ws.write_file(&path, &content, &description.unwrap_or_else(|| "User manual save".into()))
+    let diff = {
+        let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.write_file(&path, &content, &description.unwrap_or_else(|| "User manual save".into()))?
+    };
+    if let Ok(guard) = state.semantic_graph.lock() {
+        if let Some(ref engine) = *guard {
+            engine.on_file_changed(&path);
+        }
+    }
+    Ok(diff)
 }
 
 #[tauri::command]
@@ -1207,8 +1215,15 @@ async fn execute_tool(
             )?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent edit");
 
-            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-            let diff = ws.write_file(path, content, desc)?;
+            let diff = {
+                let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.write_file(path, content, desc)?
+            };
+            if let Ok(guard) = state.semantic_graph.lock() {
+                if let Some(ref engine) = *guard {
+                    engine.on_file_changed(path);
+                }
+            }
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "patch_file" => {
@@ -1217,14 +1232,28 @@ async fn execute_tool(
             let end = arguments.get("end_line").and_then(|v| v.as_u64()).ok_or("Missing end_line")? as usize;
             let new_content = arguments.get("new_content").and_then(|c| c.as_str()).ok_or("Missing new_content")?;
             let desc = arguments.get("description").and_then(|d| d.as_str()).unwrap_or("Agent patch");
-            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-            let diff = ws.patch_file(path, start, end, new_content, desc)?;
+            let diff = {
+                let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.patch_file(path, start, end, new_content, desc)?
+            };
+            if let Ok(guard) = state.semantic_graph.lock() {
+                if let Some(ref engine) = *guard {
+                    engine.on_file_changed(path);
+                }
+            }
             Ok(serde_json::to_value(diff).unwrap_or_default())
         }
         "delete_file" => {
             let path = tool_path_arg(&arguments, "delete_file")?;
-            let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-            let msg = ws.delete_file(path)?;
+            let msg = {
+                let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+                ws.delete_file(path)?
+            };
+            if let Ok(guard) = state.semantic_graph.lock() {
+                if let Some(ref engine) = *guard {
+                    engine.on_file_changed(path);
+                }
+            }
             Ok(serde_json::json!({ "success": true, "message": msg }))
         }
         "delete_directory" | "delete_folder" => {

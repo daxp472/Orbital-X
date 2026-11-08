@@ -111,6 +111,7 @@ export async function enterWorkspace(rootPath) {
     rememberWorkspaceTrust(meta.root_path, true);
     updateTrustIndicator();
     updateSandboxStatusIndicator();
+    updateGraphStatusIndicator();
 
     // Update terminal sessions to automatically match the active workspace directory
     import('./components/terminal.js').then(m => m.onWorkspaceOpened(meta.root_path)).catch(console.warn);
@@ -389,6 +390,28 @@ function initStatusBarExtras() {
       showToast('Workspace Sandbox Active', 'info', 2000);
     }
   });
+
+  // Pillar 2: Semantic Graph Status Indicator in status bar
+  updateGraphStatusIndicator();
+  document.getElementById('sb-graph-indicator')?.addEventListener('click', async () => {
+    let sym = '';
+    try {
+      const monacoMod = await import('./editor/monaco.js');
+      const activeEd = monacoMod.getActiveEditor?.();
+      if (activeEd) {
+        const model = activeEd.getModel();
+        const pos = activeEd.getPosition();
+        const sel = activeEd.getSelection();
+        if (sel && !sel.isEmpty()) {
+          sym = model.getValueInRange(sel).trim();
+        } else if (pos) {
+          const w = model.getWordAtPosition(pos);
+          if (w) sym = w.word;
+        }
+      }
+    } catch (_) {}
+    showCallersImpactModal(sym);
+  });
 }
 
 export async function updateSandboxStatusIndicator() {
@@ -413,6 +436,71 @@ export async function updateSandboxStatusIndicator() {
   } catch (e) {
     if (dot) dot.style.backgroundColor = 'var(--text-muted)';
     text.textContent = 'Sandbox: Standby';
+  }
+}
+
+export async function updateGraphStatusIndicator() {
+  const el = document.getElementById('sb-graph-indicator');
+  const dot = document.getElementById('sb-graph-dot');
+  const text = document.getElementById('sb-graph-text');
+  if (!el || !text) return;
+
+  try {
+    const { getGraphStats } = await import('./services/tauri.js');
+    const stats = await getGraphStats();
+    if (stats) {
+      if (stats.is_indexing) {
+        if (dot) dot.style.backgroundColor = 'var(--accent-orange)';
+        text.textContent = 'AST: Indexing…';
+        el.title = `Native Semantic Graph: Indexing Workspace...\nClick to Find Callers / Impact Graph`;
+      } else {
+        if (dot) dot.style.backgroundColor = 'var(--accent-cyan)';
+        text.textContent = `AST: ${stats.total_files} files · ${stats.total_symbols} symbols`;
+        el.title = `Native Semantic Code Graph: Active\nFiles: ${stats.total_files}\nAST Symbols: ${stats.total_symbols}\nCall Edges: ${stats.total_edges}\nClick to Find Callers / Impact Graph`;
+      }
+    }
+  } catch (e) {
+    if (dot) dot.style.backgroundColor = 'var(--text-muted)';
+    text.textContent = 'AST: Standby';
+  }
+}
+
+export async function showCallersImpactModal(initialSymbol = '') {
+  let symbol = initialSymbol;
+  if (!symbol) {
+    symbol = window.prompt('Enter function, method, struct, or class name to inspect:');
+  }
+  if (!symbol || !symbol.trim()) return;
+  symbol = symbol.trim();
+
+  try {
+    const { getGraphFocusedContext, getGraphCallers } = await import('./services/tauri.js');
+    const [ctx, callers] = await Promise.all([
+      getGraphFocusedContext(symbol),
+      getGraphCallers(symbol),
+    ]);
+
+    const directCallers = ctx?.callers || callers || [];
+    if (!ctx && directCallers.length === 0) {
+      showToast(`No callers or AST definitions found for "${symbol}" in the active workspace.`, 'info', 3000);
+      return;
+    }
+
+    const callerSummary = directCallers.length > 0
+      ? directCallers.slice(0, 5).map(c => `${c.name} (${c.file_path}:${c.line || '?'})`).join(', ')
+      : 'None (entry point)';
+
+    const calleeSummary = (ctx?.callees && ctx.callees.length > 0)
+      ? ctx.callees.slice(0, 5).map(c => `${c.name} (${c.file_path}:${c.line || '?'})`).join(', ')
+      : 'None';
+
+    showToast(
+      `AST Impact [${ctx?.target_symbol || symbol}]:\nCallers: ${callerSummary}\nCallees: ${calleeSummary}`,
+      'info',
+      6000
+    );
+  } catch (e) {
+    showToast(`Failed to query semantic graph: ${e}`, 'error', 3000);
   }
 }
 
@@ -1379,7 +1467,10 @@ function ensureIndexIndicator() {
 window.addEventListener('orbital:file-written', () => {
   // Cheap re-index debounce
   clearTimeout(window.__orbital_reindex_timer);
-  window.__orbital_reindex_timer = setTimeout(() => startWorkspaceIndexing(), 4000);
+  window.__orbital_reindex_timer = setTimeout(() => {
+    startWorkspaceIndexing();
+    updateGraphStatusIndicator();
+  }, 3000);
 });
 
 function initQuickOpen() {
