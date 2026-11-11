@@ -5,6 +5,10 @@ node_modules/
 dist/
 dist-ssr/
 release/*.exe
+release/*.dmg
+release/*.AppImage
+release/*.deb
+release/*.tar.gz
 release/Orbital x 2/
 
 # Tauri & Rust build artifacts
