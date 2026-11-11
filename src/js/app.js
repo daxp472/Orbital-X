@@ -16,7 +16,7 @@ import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
 import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
-import { showToast, loadActivityHistory, markAllActivityRead, clearActivity, recordActivity, notifyNative, isWindowHidden, getFilteredActivities, getNotificationPersona, setNotificationPersona } from './services/notifications.js';
+import { showToast, loadActivityHistory, markAllActivityRead, markActivityRead, dismissActivity, clearActivity, recordActivity, notifyNative, isWindowHidden, getFilteredActivities, getNotificationPersona, setNotificationPersona, updateUnreadBadge } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
 import { initDebug } from './components/debug.js';
@@ -1249,10 +1249,29 @@ function showReportIssueOfflineModal() {
 // ==========================================================================
 
 // ---------------------------------------------------------------
-// K2 — Activity Center
+// K2 — Professional Notification Center
 // ---------------------------------------------------------------
 
 let currentActivityFilter = 'all';
+
+const NOTIF_CATEGORY_ICONS = {
+  task: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>',
+  milestone: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>',
+  file: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>',
+  error: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>',
+  system: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>'
+};
+
+function formatNotifTime(isoString) {
+  if (!isoString) return '';
+  const now = Date.now();
+  const past = new Date(isoString).getTime();
+  const diffSec = Math.floor((now - past) / 1000);
+  if (diffSec < 30) return 'Just now';
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return new Date(isoString).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
 function initActivityCenter() {
   loadActivityHistory();
@@ -1267,17 +1286,21 @@ function initActivityCenter() {
     personaSelect.addEventListener('change', (e) => {
       setNotificationPersona(e.target.value);
       renderActivityList(currentActivityFilter);
-      showToast(`Notification feed customized: ${personaSelect.options[personaSelect.selectedIndex]?.text.split('(')[0].trim()}`, 'info', 2000);
+      showToast(`Notification feed density set: ${personaSelect.options[personaSelect.selectedIndex]?.text.split('(')[0].trim()}`, 'info', 2000);
     });
   }
 
-  // Filter chips (Feature 6)
-  const chips = document.querySelectorAll('.activity-filter-chips .activity-chip');
-  chips.forEach(chip => {
-    chip.addEventListener('click', () => {
-      chips.forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      currentActivityFilter = chip.dataset.filter || 'all';
+  // Modern tabs
+  const tabs = document.querySelectorAll('.notif-tabs .notif-tab');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      currentActivityFilter = tab.dataset.filter || 'all';
       renderActivityList(currentActivityFilter);
     });
   });
@@ -1286,6 +1309,7 @@ function initActivityCenter() {
     panel.style.display = 'none';
     backdrop.style.display = 'none';
   };
+
   bell?.addEventListener('click', () => {
     const open = panel.style.display === 'flex';
     if (open) { close(); return; }
@@ -1293,14 +1317,23 @@ function initActivityCenter() {
     backdrop.style.display = 'block';
     if (personaSelect) personaSelect.value = getNotificationPersona();
     renderActivityList(currentActivityFilter);
-    markAllActivityRead();
   });
+
   backdrop?.addEventListener('click', close);
   document.getElementById('activity-close')?.addEventListener('click', close);
+
+  document.getElementById('activity-mark-read')?.addEventListener('click', () => {
+    markAllActivityRead();
+    renderActivityList(currentActivityFilter);
+    showToast('All notifications marked as read', 'info', 1800);
+  });
+
   document.getElementById('activity-clear')?.addEventListener('click', () => {
     clearActivity();
     renderActivityList(currentActivityFilter);
+    showToast('Notifications cleared', 'info', 1800);
   });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && panel.style.display === 'flex') close();
   });
@@ -1314,76 +1347,124 @@ function renderActivityList(filterType = 'all') {
   list.innerHTML = '';
 
   const persona = getNotificationPersona();
-  const personaDesc = persona === 'milestones'
-    ? '🎯 Showing curated milestone summaries & task completions (Low noise: max 20)'
-    : (persona === 'balanced' ? '⚡ Showing balanced notifications & important file saves' : '🔍 Showing complete developer logs');
+  const summaryText = document.getElementById('notif-summary-text');
+  if (summaryText) {
+    const personaLabel = persona === 'milestones'
+      ? 'Curated feed (low noise)'
+      : (persona === 'balanced' ? 'Balanced developer feed' : 'Complete developer log');
+    summaryText.textContent = `${personaLabel} • ${notifs.length} item${notifs.length === 1 ? '' : 's'}`;
+  }
+
+  // Update tab counts
+  updateUnreadBadge();
 
   if (notifs.length === 0) {
     list.innerHTML = `
-      <div style="font-size: 11px; color: var(--text-muted); padding: 4px 6px; margin-bottom: 6px;">${personaDesc}</div>
-      <div class="pack-empty">No notifications matching this filter.<br>Milestone achievements, agent plans, and task completions appear here.</div>
+      <div class="notif-empty-state">
+        <svg class="notif-empty-icon" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <div class="notif-empty-title">No notifications</div>
+        <div class="notif-empty-desc">You are all caught up. Task progress, milestone summaries, and file updates will appear here.</div>
+      </div>
     `;
     return;
   }
 
-  const headerHint = document.createElement('div');
-  headerHint.style.cssText = 'font-size: 10.5px; color: var(--text-muted); padding: 2px 4px 6px 4px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px;';
-  headerHint.innerHTML = `<span>${personaDesc}</span><span style="font-weight: 600; color: var(--accent-cyan);">${notifs.length} item${notifs.length === 1 ? '' : 's'}</span>`;
-  list.appendChild(headerHint);
-
-  const ICONS = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '❌' };
-
   for (const n of notifs) {
-    const row = document.createElement('div');
-    row.className = 'pack-card';
-    row.style.cssText = 'padding: 8px 10px; cursor: pointer; transition: all 0.12s ease;';
+    const card = document.createElement('div');
+    card.className = `notif-card${!n.read ? ' unread' : ''}`;
+    card.dataset.id = n.id;
+    card.dataset.category = n.category || 'system';
 
-    const time = new Date(n.timestamp).toLocaleTimeString();
-    const countBadge = n.count && n.count > 1 ? `<span style="font-size: 9.5px; background: rgba(57, 197, 187, 0.18); color: var(--accent-cyan); padding: 1px 5px; border-radius: 4px; margin-left: 6px; font-weight: 700;">×${n.count}</span>` : '';
+    const category = n.category || (n.type === 'error' ? 'error' : 'system');
+    const categoryIcon = NOTIF_CATEGORY_ICONS[category] || NOTIF_CATEGORY_ICONS.system;
+    const timeFormatted = formatNotifTime(n.timestamp);
 
-    let tagHtml = '';
-    if (n.category === 'milestone') {
-      tagHtml = '<span class="activity-tag-badge activity-tag-milestone">🎯 Milestone</span>';
-    } else if (n.category === 'task') {
-      tagHtml = '<span class="activity-tag-badge activity-tag-task">📋 Task</span>';
-    } else if (n.category === 'file') {
-      tagHtml = '<span class="activity-tag-badge activity-tag-file">📁 File</span>';
-    } else if (n.category === 'error' || n.type === 'error') {
-      tagHtml = '<span class="activity-tag-badge activity-tag-error">⚠️ Error</span>';
-    }
+    const countBadge = n.count && n.count > 1
+      ? `<span class="notif-repeat-badge">×${n.count}</span>`
+      : '';
 
-    row.innerHTML = `
-      <div class="pack-title-row" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-        <span class="pack-name" style="font-weight: 500; font-size: 11.5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-          ${ICONS[n.type] || 'ℹ️'} ${escapeHtml(n.message)} ${countBadge}
-        </span>
-        ${tagHtml}
+    const hasPath = !!n.meta?.path;
+    const pathBase = hasPath ? escapeHtml(n.meta.path.split(/[/\\]/).pop()) : '';
+
+    card.innerHTML = `
+      <div class="notif-card-header">
+        <div class="notif-card-tag-group">
+          <span class="notif-card-icon">${categoryIcon}</span>
+          <span class="notif-card-tag notif-tag-${category}">${escapeHtml(category)}</span>
+          ${countBadge}
+        </div>
+        <div class="notif-card-meta-right">
+          <span class="notif-card-time" title="${new Date(n.timestamp).toLocaleString()}">${timeFormatted}</span>
+          <button class="notif-card-dismiss" data-id="${n.id}" title="Dismiss" aria-label="Dismiss">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
-      <div class="pack-meta" style="margin-top: 4px; font-size: 10px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-        <span>${time}</span>
-        ${n.meta?.path ? `<span style="font-family: var(--font-mono); color: var(--accent-cyan); text-decoration: underline;">Open ${escapeHtml(n.meta.path.split(/[/\\]/).pop())} ↗</span>` : ''}
-      </div>
+      <div class="notif-card-body">${escapeHtml(n.message)}</div>
+      ${hasPath ? `
+        <div class="notif-card-footer">
+          <span class="notif-card-action">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+            Open ${pathBase}${n.meta.line ? `:${n.meta.line}` : ''}
+          </span>
+        </div>
+      ` : ''}
     `;
 
-    row.addEventListener('click', async () => {
-      const path = n.meta?.path;
-      if (path) {
+    // Dismiss button click
+    const dismissBtn = card.querySelector('.notif-card-dismiss');
+    dismissBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismissActivity(n.id);
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(10px)';
+      setTimeout(() => {
+        card.remove();
+        renderActivityList(currentActivityFilter);
+      }, 140);
+    });
+
+    // Navigation on card click
+    card.addEventListener('click', async () => {
+      markActivityRead(n.id);
+      card.classList.remove('unread');
+
+      if (n.meta?.path) {
         try {
-          const fileData = await invoke('read_file', { path });
+          const fileData = await invoke('read_file', { path: n.meta.path });
           const m = await import('./editor/monaco.js');
           m.openFileInTab(fileData);
           if (n.meta?.line) {
             const ed = m.getActiveEditor();
-            if (ed) { ed.revealLineInCenter(n.meta.line); ed.setPosition({ lineNumber: n.meta.line, column: 1 }); }
+            if (ed) {
+              ed.revealLineInCenter(n.meta.line);
+              ed.setPosition({ lineNumber: n.meta.line, column: 1 });
+            }
           }
           document.getElementById('activity-center-backdrop').style.display = 'none';
           document.getElementById('activity-center').style.display = 'none';
         } catch (e) {
-          showToast(`Could not open ${path}: ${e}`, 'error', 3000);
+          showToast(`Could not open file: ${e}`, 'error', 3000);
         }
+      } else if (category === 'task' || category === 'milestone') {
+        // Switch to Agent / Tasks view
+        document.querySelector('[data-view="agent"]')?.click();
+        document.getElementById('activity-center-backdrop').style.display = 'none';
+        document.getElementById('activity-center').style.display = 'none';
       }
     });
-    list.appendChild(row);
+
+    list.appendChild(card);
   }
 }
 

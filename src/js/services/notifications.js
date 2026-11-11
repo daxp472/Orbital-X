@@ -131,6 +131,23 @@ export function recordActivity(message, type = 'info', meta = {}) {
   } catch (e) {}
 }
 
+export function dismissActivity(id) {
+  if (!id) return;
+  state.notifications = (state.notifications || []).filter(n => n.id !== id);
+  updateUnreadBadge();
+  try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) {}
+}
+
+export function markActivityRead(id) {
+  if (!id) return;
+  const item = (state.notifications || []).find(n => n.id === id);
+  if (item) {
+    item.read = true;
+    updateUnreadBadge();
+    try { localStorage.setItem('orbital_activity', JSON.stringify(state.notifications)); } catch (e) {}
+  }
+}
+
 export function markAllActivityRead() {
   for (const n of state.notifications || []) n.read = true;
   updateUnreadBadge();
@@ -157,20 +174,38 @@ export function unreadActivityCount() {
   return (state.notifications || []).filter(n => !n.read).length;
 }
 
-function updateUnreadBadge() {
+export function updateUnreadBadge() {
   const bell = document.getElementById('btn-activity-center');
-  if (!bell) return;
   const count = unreadActivityCount();
-  let badge = bell.querySelector('.activity-badge');
-  if (count > 0) {
-    if (!badge) {
-      badge = document.createElement('span');
-      badge.className = 'activity-badge';
-      bell.appendChild(badge);
+  if (bell) {
+    let badge = bell.querySelector('.activity-badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'activity-badge';
+        bell.appendChild(badge);
+      }
+      badge.textContent = count > 9 ? '9+' : String(count);
+    } else if (badge) {
+      badge.remove();
     }
-    badge.textContent = count > 9 ? '9+' : String(count);
-  } else if (badge) {
-    badge.remove();
+  }
+
+  const drawerPill = document.getElementById('notif-unread-count-pill');
+  if (drawerPill) {
+    if (count > 0) {
+      drawerPill.textContent = `${count} unread`;
+      drawerPill.style.display = 'inline-block';
+    } else {
+      drawerPill.style.display = 'none';
+    }
+  }
+
+  // Update tab counts
+  const totalCount = (state.notifications || []).length;
+  const tabAllBadge = document.getElementById('tab-badge-all');
+  if (tabAllBadge) {
+    tabAllBadge.textContent = String(totalCount);
   }
 }
 
