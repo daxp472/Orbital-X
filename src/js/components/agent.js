@@ -317,6 +317,7 @@ function initChatDropZone() {
       }
       updateStatusBarAgentStatus();
       appendTimelineCard('assistant', '⏹️ Task stopped by user.');
+      appendAgentChangedFilesSummaryCard('cancelled');
     });
   }
 
@@ -346,6 +347,7 @@ function initChatDropZone() {
       }
       updateStatusBarAgentStatus();
       appendTimelineCard('assistant', '🛑 Task cancelled by user.');
+      appendAgentChangedFilesSummaryCard('cancelled');
     });
   }
 
@@ -2125,6 +2127,7 @@ STRATEGY:
       initialUserPrompt
     );
     appendSessionSummaryCard(sessionStats, iteration, finalCalibration);
+    appendAgentChangedFilesSummaryCard('completed');
   }
   // K3: native notification when the window is hidden during a run
   window.dispatchEvent(new CustomEvent('orbital:agent-run-finished', { detail: { steps: iteration } }));
@@ -2309,6 +2312,101 @@ function appendSessionSummaryCard(stats, steps, calibration = null) {
   `;
   timeline.appendChild(card);
   card.scrollIntoView({ block: 'end' });
+}
+
+// ---------------------------------------------------------------------------
+// Post-task Changed Files Summary Card (Categorized & Clickable into Monaco)
+// ---------------------------------------------------------------------------
+
+async function appendAgentChangedFilesSummaryCard(taskStatus = 'completed') {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+
+  try {
+    const { getChangedFilesSummary } = await import('../services/changed-files.js');
+    const summary = getChangedFilesSummary();
+    if (summary.total === 0) return;
+
+    const card = document.createElement('div');
+    card.className = 'agent-changed-files-summary-card';
+    card.style.cssText = 'margin: 10px 0; padding: 12px 14px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-surface); font-size: 12px;';
+
+    const statusBadge = taskStatus === 'completed'
+      ? '<span style="background: rgba(34, 197, 94, 0.15); color: #22c55e; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-size: 11px;">✓ Task Completed</span>'
+      : taskStatus === 'cancelled'
+      ? '<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-size: 11px;">⚠ Task Cancelled</span>'
+      : '<span style="background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 2px 7px; border-radius: 4px; font-weight: 600; font-size: 11px;">✗ Task Partial / Stopped</span>';
+
+    const renderSection = (title, files, badgeColor, prefix) => {
+      if (!files || files.length === 0) return '';
+      const items = files.map(f => {
+        const subtitle = f.oldPath ? `(renamed from ${escapeHtml(f.oldPath)})` : '';
+        return `
+          <div class="agent-changed-file-row" data-path="${escapeHtml(f.fullPath)}" data-action="${f.action}" style="display: flex; align-items: center; justify-content: space-between; padding: 5px 8px; margin: 3px 0; border-radius: 4px; background: var(--bg-activity); cursor: pointer; transition: background 0.12s ease;">
+            <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              <span style="font-weight: 700; color: ${badgeColor}; font-family: var(--font-mono); font-size: 11px;">${prefix}</span>
+              <span style="color: var(--text-primary); font-family: var(--font-mono); font-size: 11.5px;">${escapeHtml(f.relativePath)}</span>
+              ${subtitle ? `<span style="color: var(--text-muted); font-size: 10px;">${subtitle}</span>` : ''}
+            </div>
+            <span style="color: var(--text-muted); font-size: 10px; flex-shrink: 0;">Open in Editor →</span>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div style="margin-top: 8px;">
+          <div style="font-weight: 600; font-size: 11px; color: ${badgeColor}; margin-bottom: 3px;">
+            ${title} (${files.length})
+          </div>
+          ${items}
+        </div>
+      `;
+    };
+
+    let sectionsHtml = '';
+    sectionsHtml += renderSection('Created Files', summary.created, '#38bdf8', '+');
+    sectionsHtml += renderSection('Modified Files', summary.modified, '#22c55e', '~');
+    sectionsHtml += renderSection('Renamed Files', summary.renamed, '#f59e0b', '→');
+    sectionsHtml += renderSection('Deleted Files', summary.deleted, '#ef4444', '-');
+
+    card.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; margin-bottom: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 14px;">📁</span>
+          <strong style="color: var(--text-primary);">Files Changed by Agent (${summary.total})</strong>
+        </div>
+        ${statusBadge}
+      </div>
+      ${sectionsHtml}
+    `;
+
+    card.querySelectorAll('.agent-changed-file-row').forEach(row => {
+      row.addEventListener('mouseenter', () => { row.style.background = 'var(--bg-hover)'; });
+      row.addEventListener('mouseleave', () => { row.style.background = 'var(--bg-activity)'; });
+      row.addEventListener('click', async () => {
+        const targetPath = row.dataset.path;
+        const action = row.dataset.action;
+        if (action === 'deleted') {
+          const { showToast } = await import('../services/notifications.js');
+          showToast(`File ${targetPath} was deleted.`, 'info');
+          return;
+        }
+        try {
+          const fileData = await invoke('read_file', { path: targetPath });
+          const monacoModule = await import('../editor/monaco.js');
+          monacoModule.openFileInTab(fileData);
+          monacoModule.getActiveEditor()?.focus();
+        } catch (err) {
+          console.warn('Failed to open file from summary card:', err);
+        }
+      });
+    });
+
+    timeline.appendChild(card);
+    card.scrollIntoView({ block: 'end' });
+  } catch (err) {
+    console.warn('Failed to render changed files summary card:', err);
+  }
 }
 
 // ---------------------------------------------------------------------------

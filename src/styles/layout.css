@@ -1068,10 +1068,10 @@ body {
 }
 
 /* ==========================================================================
-   Status Bar (Apple-Style Translucent Footer)
+   Status Bar (VS Code / Cursor Inspired Minimal Design)
    ========================================================================== */
 .statusbar {
-  height: var(--statusbar-height, 25px);
+  height: var(--statusbar-height, 24px);
   background: var(--bg-glass-translucent, rgba(18, 20, 26, 0.95));
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
@@ -1079,33 +1079,72 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 8px;
   font-size: 11px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
   flex-shrink: 0;
   z-index: 100;
+  overflow: hidden;
 }
 
-.statusbar-left, .statusbar-right {
+.statusbar-left, .statusbar-center, .statusbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
 }
 
 .status-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 1px 6px;
+  height: 20px;
   border-radius: var(--radius-xs);
   transition: all var(--trans-fast);
+  white-space: nowrap;
+  user-select: none;
+  font-size: 11px;
 }
 
 .status-item:hover {
   background-color: var(--bg-hover);
   color: var(--text-primary-bright);
+}
+
+.sb-icon-btn {
+  padding: 2px 4px;
+  opacity: 0.82;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sb-icon-btn:hover {
+  opacity: 1;
+  background-color: var(--bg-hover);
+  color: var(--text-primary-bright);
+}
+
+/* Graceful responsive collapsing */
+@media (max-width: 1200px) {
+  #sb-indent, #sb-line-ending {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  #status-encoding, #status-mode {
+    display: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  #status-token-usage, #status-workspace {
+    display: none !important;
+  }
 }
 
 /* ==========================================================================

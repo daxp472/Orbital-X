@@ -93,17 +93,27 @@ export function normalizeFilePath(rawPath) {
 }
 
 /**
- * Record a modified file with deduplication.
+ * Record a modified file with deduplication and typed mutation tracking.
  */
-export function recordFileModified(rawPath) {
+export function recordFileMutation(rawPath, action = 'modified', oldPath = null) {
   const norm = normalizeFilePath(rawPath);
   if (!norm) return;
 
   const existing = canonicalFilesMap.get(norm.canonicalKey);
   if (existing) {
+    if (action === 'deleted') {
+      if (existing.action === 'created') {
+        canonicalFilesMap.delete(norm.canonicalKey);
+        updateChangedFilesUI();
+        return;
+      }
+      existing.action = 'deleted';
+    } else if (existing.action !== 'created') {
+      existing.action = action;
+    }
     existing.count = (existing.count || 1) + 1;
     existing.lastModified = Date.now();
-    // Update fullPath/name if more specific
+    if (oldPath) existing.oldPath = oldPath;
     if (norm.fullPath.includes(':') || norm.fullPath.startsWith('/')) {
       existing.fullPath = norm.fullPath;
     }
@@ -113,6 +123,8 @@ export function recordFileModified(rawPath) {
       name: norm.name,
       relativePath: norm.relativePath,
       fullPath: norm.fullPath,
+      action,
+      oldPath: oldPath ? normalizeFilePath(oldPath)?.relativePath : null,
       count: 1,
       lastModified: Date.now()
     });
@@ -121,9 +133,25 @@ export function recordFileModified(rawPath) {
   updateChangedFilesUI();
 }
 
+export function recordFileModified(rawPath) {
+  recordFileMutation(rawPath, 'modified');
+}
+
 export function clearSessionChangedFiles() {
   canonicalFilesMap.clear();
   updateChangedFilesUI();
+}
+
+export function getChangedFilesSummary() {
+  const all = Array.from(canonicalFilesMap.values()).sort((a, b) => (b.lastModified || 0) - (a.lastModified || 0));
+  return {
+    all,
+    created: all.filter(f => f.action === 'created'),
+    modified: all.filter(f => f.action === 'modified'),
+    deleted: all.filter(f => f.action === 'deleted'),
+    renamed: all.filter(f => f.action === 'renamed'),
+    total: all.length
+  };
 }
 
 /**
@@ -135,9 +163,24 @@ export async function refreshChangedFiles() {
     if (res && res.is_repo && res.raw) {
       for (const line of res.raw.split('\n')) {
         if (line.startsWith('##') || line.trim().length < 3) continue;
+        const code = line.slice(0, 2);
         let p = line.slice(3).trim();
-        const arrow = p.indexOf(' -> ');
-        if (arrow !== -1) p = p.slice(arrow + 4);
+        let action = 'modified';
+        let oldPath = null;
+
+        if (code.includes('?') || code.includes('A')) {
+          action = 'created';
+        } else if (code.includes('D')) {
+          action = 'deleted';
+        } else if (code.includes('R')) {
+          action = 'renamed';
+          const arrow = p.indexOf(' -> ');
+          if (arrow !== -1) {
+            oldPath = p.slice(0, arrow).trim();
+            p = p.slice(arrow + 4).trim();
+          }
+        }
+
         if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
         if (!p) continue;
 
@@ -148,6 +191,8 @@ export async function refreshChangedFiles() {
             name: norm.name,
             relativePath: norm.relativePath,
             fullPath: norm.fullPath,
+            action,
+            oldPath: oldPath ? normalizeFilePath(oldPath)?.relativePath : null,
             count: 1,
             lastModified: Date.now()
           });
@@ -242,9 +287,18 @@ function renderReviewChangesList(filterQuery = '') {
     row.title = `Click to view and edit ${file.relativePath} in editor`;
 
     const icon = getFileIcon(file.name);
+    const actionBadge = file.action === 'created'
+      ? '<span style="font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; margin-right: 6px;">+ Created</span>'
+      : file.action === 'deleted'
+      ? '<span style="font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(239, 68, 68, 0.15); color: #ef4444; margin-right: 6px;">- Deleted</span>'
+      : file.action === 'renamed'
+      ? `<span style="font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; margin-right: 6px;">→ ${escapeHtml(file.oldPath || 'Renamed')}</span>`
+      : '<span style="font-size: 10px; font-weight: 600; padding: 1px 5px; border-radius: 3px; background: rgba(34, 197, 94, 0.15); color: #22c55e; margin-right: 6px;">~ Modified</span>';
+
     row.innerHTML = `
       <div class="review-change-left">
         <span class="review-change-icon">${icon}</span>
+        ${actionBadge}
         <span class="review-change-name">${escapeHtml(file.name)}</span>
       </div>
       <div class="review-change-right">
@@ -324,7 +378,17 @@ export function initReviewChangesBar() {
 
   // Listen for file changes emitted by agent or filesystem
   window.addEventListener('orbital:files-changed', (e) => {
-    if (e.detail?.path) recordFileModified(e.detail.path);
+    const detail = e.detail || {};
+    let action = detail.action || 'modified';
+    const tool = (detail.tool || '').toLowerCase();
+    if (tool.includes('delete') || action === 'deleted') {
+      action = 'deleted';
+    } else if (tool.includes('rename') || action === 'renamed') {
+      action = 'renamed';
+    } else if (tool === 'write_file' && detail.isNew) {
+      action = 'created';
+    }
+    if (detail.path) recordFileMutation(detail.path, action, detail.oldPath);
     updateChangedFilesUI();
   });
 

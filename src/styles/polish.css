@@ -115,23 +115,7 @@ body.theme-light .settings-sidebar,
   font-size: var(--text-xs);
 }
 
-/* ---------- Status bar: graceful narrowing ---------- */
-@media (max-width: 1100px) {
-  .statusbar-right .status-item[title]:not(#sb-ctx-meter):not(#status-model-indicator) {
-    display: none;
-  }
-  #status-encoding,
-  .statusbar-left .status-item:nth-child(3),
-  .statusbar-left .status-item:nth-child(4) {
-    display: none;
-  }
-}
-@media (max-width: 900px) {
-  #sb-ctx-meter,
-  #status-mode {
-    display: none;
-  }
-}
+/* ---------- Status bar: graceful narrowing handled cleanly in layout.css ---------- */
 
 /* ---------- Responsive layout ---------- */
 @media (max-width: 1024px) {

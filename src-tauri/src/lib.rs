@@ -3,6 +3,7 @@
 pub mod boilerplate;
 pub mod diagnostics;
 pub mod isolation;
+pub mod portable;
 pub mod semantic_graph;
 pub mod vfs;
 mod extensions;
@@ -966,9 +967,7 @@ fn save_crash_report(entry: String, custom_dir: Option<String>) -> Result<String
     let base_dir = if let Some(custom) = custom_dir.filter(|s| !s.trim().is_empty()) {
         std::path::PathBuf::from(custom)
     } else {
-        dirs::home_dir()
-            .map(|h| h.join(".orbital"))
-            .unwrap_or_else(|| std::path::PathBuf::from("C:\\.orbital"))
+        portable::orbital_data_dir()
     };
 
     if let Err(e) = std::fs::create_dir_all(&base_dir) {
@@ -2168,10 +2167,14 @@ async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, Stri
 // disk under ~/.orbital/ instead, written atomically via tmp+rename.
 // ============================================================================
 
+#[tauri::command]
+fn is_portable_mode() -> bool {
+    portable::is_portable()
+}
+
+#[tauri::command]
 fn chat_sessions_path() -> PathBuf {
-    let dir = dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    let dir = portable::orbital_data_dir();
     let _ = std::fs::create_dir_all(&dir);
     dir.join("chat_sessions.json")
 }
@@ -2951,6 +2954,10 @@ fn set_skill_enabled(id: String, enabled: bool) -> Result<serde_json::Value, Str
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // True Portable Mode: detect sibling Data/ directory, PORTABLE marker, or --portable flag
+    // and initialize storage / WEBVIEW2_USER_DATA_FOLDER before Tauri/WebView2 starts
+    portable::init_portable_mode();
+
     let state = AppState {
         workspace: Mutex::new(WorkspaceService::new()),
         active_mode: Mutex::new(AgentMode::Dev),
@@ -2962,10 +2969,8 @@ pub fn run() {
         vfs: Mutex::new(None),
     };
 
-    // P1: catch Rust panics into ~/.orbital/orbital.log so a crash leaves a trace
-    let log_dir = dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"));
+    // P1: catch Rust panics into portable/user storage so a crash leaves a trace
+    let log_dir = portable::orbital_data_dir();
     let _ = std::fs::create_dir_all(&log_dir);
     let panic_log = log_dir.join("orbital.log");
     std::panic::set_hook(Box::new(move |info| {
@@ -3062,6 +3067,7 @@ pub fn run() {
             notify_native,
             check_latest_release,
             check_for_updates,
+            is_portable_mode,
             download_update,
             install_update,
             get_workspace_stats,

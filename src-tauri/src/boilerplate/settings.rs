@@ -57,9 +57,7 @@ impl BoilerplateSettings {
 
 /// Returns the configuration path for boilerplate settings under `~/.orbital/boilerplate.json`.
 pub fn settings_file_path() -> PathBuf {
-    dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"))
+    crate::portable::orbital_data_dir()
         .join("boilerplate.json")
 }
 
@@ -94,9 +92,7 @@ pub fn user_templates_dir() -> PathBuf {
             return dir;
         }
     }
-    dirs::home_dir()
-        .map(|h| h.join(".orbital").join("templates"))
-        .unwrap_or_else(|| PathBuf::from(".orbital/templates"))
+    crate::portable::orbital_data_dir().join("templates")
 }
 
 #[cfg(test)]

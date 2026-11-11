@@ -102,7 +102,7 @@ export const state = {
     // File boilerplate starter content templates
     boilerplate: { enabled: true, disabledLanguages: [] },
     // B1: inline AI autocomplete (ghost text)
-    inlineComplete: { enabled: true, provider: 'ollama' },
+    inlineComplete: { enabled: true, provider: 'ollama', enableCloudSuggestions: false },
     // Editor appearance/formatting options (monaco.js applyEditorSettings)
     editor: {},
   },

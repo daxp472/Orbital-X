@@ -344,70 +344,197 @@ impl ProviderService {
         language: &str,
     ) -> Result<String, String> {
         let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(8))
+            .timeout(std::time::Duration::from_secs(5))
             .build()
             .map_err(|e| e.to_string())?;
 
-        let system_prompt = "You are a code completion engine. Complete the code at the cursor. Return ONLY the completion text, no explanation. 1-5 lines max.";
-        let user_prompt = format!(
-            "Language: {}
-Code before cursor:
-{}
+        let clean_provider = provider.to_lowercase();
+        let clean_provider_str = clean_provider.as_str();
 
-Code after cursor:
-{}
+        let clean_completion = |raw: &str| -> String {
+            let mut s = raw.trim();
+            if s.starts_with("```") {
+                if let Some(first_nl) = s.find('\n') {
+                    s = &s[first_nl + 1..];
+                }
+            }
+            if let Some(idx) = s.rfind("```") {
+                s = &s[..idx];
+            }
+            s.trim_end().to_string()
+        };
 
-Continue the code at the cursor. Return only the raw completion text.",
-            language, prefix, suffix
-        );
-
-        match provider.to_lowercase().as_str() {
+        match clean_provider_str {
             "ollama" => {
-                let url = base_url.unwrap_or_else(|| "http://localhost:11434".into());
-                let payload = serde_json::json!({
-                    "model": if model.is_empty() { "qwen2.5-coder:7b" } else { model },
+                let url = base_url.unwrap_or_else(|| "http://127.0.0.1:11434".into());
+                let normalized_url = url.replace("localhost", "127.0.0.1");
+                let target_model = if model.is_empty() { "qwen2.5-coder:7b" } else { model };
+
+                // First attempt: FIM (Fill-In-The-Middle) via /api/generate
+                let fim_payload = serde_json::json!({
+                    "model": target_model,
+                    "prompt": prefix,
+                    "suffix": suffix,
+                    "stream": false,
+                    "keep_alive": "15m",
+                    "options": {
+                        "num_predict": 48,
+                        "temperature": 0.1,
+                        "stop": ["\n\n", "```", "<|endoftext|>", "<|fim_pad|>"]
+                    }
+                });
+
+                if let Ok(resp) = client
+                    .post(format!("{}/api/generate", normalized_url.trim_end_matches('/')))
+                    .json(&fim_payload)
+                    .send()
+                    .await
+                {
+                    if resp.status().is_success() {
+                        if let Ok(json) = resp.json::<serde_json::Value>().await {
+                            if let Some(c) = json.get("response").and_then(|v| v.as_str()) {
+                                if !c.trim().is_empty() {
+                                    return Ok(clean_completion(c));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fallback: /api/chat with prompt
+                let user_prompt = format!(
+                    "Language: {}\nCode before cursor:\n{}\nCode after cursor:\n{}\nComplete code at cursor without explanations or fences.",
+                    language, prefix, suffix
+                );
+                let chat_payload = serde_json::json!({
+                    "model": target_model,
                     "messages": [
-                        { "role": "system", "content": system_prompt },
+                        { "role": "system", "content": "You are a code completion engine. Return ONLY the code to insert at cursor. No explanations. 1-3 lines max." },
                         { "role": "user", "content": user_prompt }
                     ],
                     "stream": false,
                     "keep_alive": "15m",
                     "options": {
-                        "num_predict": 64,
-                        "num_ctx": 2048,
-                        "temperature": 0.15,
-                        "top_p": 0.9,
-                        "num_thread": 8,
-                        "stop": ["```", "\n\n\n"]
+                        "num_predict": 48,
+                        "temperature": 0.1,
+                        "stop": ["```", "\n\n"]
                     }
                 });
                 let resp = client
-                    .post(format!("{}/api/chat", url.trim_end_matches('/')))
+                    .post(format!("{}/api/chat", normalized_url.trim_end_matches('/')))
+                    .json(&chat_payload)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Ollama completion request failed: {}", e))?;
+                if !resp.status().is_success() {
+                    return Err(format!("Ollama HTTP {}", resp.status()));
+                }
+                let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                let text = json
+                    .pointer("/message/content")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or_default();
+                Ok(clean_completion(text))
+            }
+            "anthropic" => {
+                let user_prompt = format!(
+                    "Language: {}\nCode before cursor:\n{}\nCode after cursor:\n{}\nComplete the code directly at cursor. Return ONLY raw completion tokens.",
+                    language, prefix, suffix
+                );
+                let payload = serde_json::json!({
+                    "model": if model.is_empty() { "claude-3-5-haiku-20241022" } else { model },
+                    "max_tokens": 48,
+                    "temperature": 0.1,
+                    "system": "You are an inline code autocompletion engine. Output only the immediate code to insert. No markdown, no comments, no explanation.",
+                    "messages": [
+                        { "role": "user", "content": user_prompt }
+                    ]
+                });
+                let resp = client
+                    .post("https://api.anthropic.com/v1/messages")
+                    .header("x-api-key", api_key.trim())
+                    .header("anthropic-version", "2023-06-01")
+                    .header("content-type", "application/json")
                     .json(&payload)
                     .send()
                     .await
-                    .map_err(|e| format!("completion request failed: {}", e))?;
+                    .map_err(|e| format!("Anthropic completion failed: {}", e))?;
                 if !resp.status().is_success() {
-                    return Err(format!("completion HTTP {}", resp.status()));
+                    return Err(format!("Anthropic HTTP {}", resp.status()));
                 }
                 let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-                Ok(json
-                    .pointer("/message/content")
+                let text = json
+                    .pointer("/content/0/text")
                     .and_then(|c| c.as_str())
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string())
+                    .unwrap_or_default();
+                Ok(clean_completion(text))
             }
-            "openai" => {
-                let endpoint = base_url.unwrap_or_else(|| "https://api.openai.com/v1/chat/completions".into());
+            "gemini" => {
+                let user_prompt = format!(
+                    "Language: {}\nCode before:\n{}\nCode after:\n{}\nReturn ONLY the exact code to insert at cursor. 1-3 lines max.",
+                    language, prefix, suffix
+                );
+                let mdl = if model.is_empty() { "gemini-1.5-flash" } else { model };
+                let url = format!(
+                    "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                    mdl, api_key.trim()
+                );
                 let payload = serde_json::json!({
-                    "model": if model.is_empty() { "gpt-4o-mini" } else { model },
+                    "contents": [{
+                        "parts": [{ "text": user_prompt }]
+                    }],
+                    "generationConfig": {
+                        "maxOutputTokens": 48,
+                        "temperature": 0.1,
+                        "stopSequences": ["\n\n", "```"]
+                    }
+                });
+                let resp = client
+                    .post(&url)
+                    .json(&payload)
+                    .send()
+                    .await
+                    .map_err(|e| format!("Gemini completion failed: {}", e))?;
+                if !resp.status().is_success() {
+                    return Err(format!("Gemini HTTP {}", resp.status()));
+                }
+                let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+                let text = json
+                    .pointer("/candidates/0/content/parts/0/text")
+                    .and_then(|c| c.as_str())
+                    .unwrap_or_default();
+                Ok(clean_completion(text))
+            }
+            // Standard OpenAI & OpenAI-compatible providers (Groq, DeepSeek, OpenRouter, Mistral)
+            "openai" | "groq" | "deepseek" | "openrouter" | "mistral" => {
+                let default_endpoint = match clean_provider_str {
+                    "groq" => "https://api.groq.com/openai/v1/chat/completions",
+                    "deepseek" => "https://api.deepseek.com/chat/completions",
+                    "openrouter" => "https://openrouter.ai/api/v1/chat/completions",
+                    "mistral" => "https://api.mistral.ai/v1/chat/completions",
+                    _ => "https://api.openai.com/v1/chat/completions",
+                };
+                let endpoint = base_url.unwrap_or_else(|| default_endpoint.into());
+                let default_model = match clean_provider_str {
+                    "groq" => "llama-3.1-8b-instant",
+                    "deepseek" => "deepseek-chat",
+                    "openrouter" => "meta-llama/llama-3.1-8b-instruct",
+                    "mistral" => "mistral-small-latest",
+                    _ => "gpt-4o-mini",
+                };
+                let user_prompt = format!(
+                    "Language: {}\nCode before cursor:\n{}\nCode after cursor:\n{}\nContinue code at cursor. Return ONLY raw completion text.",
+                    language, prefix, suffix
+                );
+                let payload = serde_json::json!({
+                    "model": if model.is_empty() { default_model } else { model },
                     "messages": [
-                        { "role": "system", "content": system_prompt },
+                        { "role": "system", "content": "You are a code completion engine. Return ONLY the code to insert at the cursor. No formatting, no explanation." },
                         { "role": "user", "content": user_prompt }
                     ],
-                    "max_tokens": 64,
-                    "temperature": 0.15
+                    "max_tokens": 48,
+                    "temperature": 0.1,
+                    "stop": ["```", "\n\n"]
                 });
                 let resp = client
                     .post(&endpoint)
@@ -415,17 +542,16 @@ Continue the code at the cursor. Return only the raw completion text.",
                     .json(&payload)
                     .send()
                     .await
-                    .map_err(|e| format!("completion request failed: {}", e))?;
+                    .map_err(|e| format!("Completion request failed: {}", e))?;
                 if !resp.status().is_success() {
-                    return Err(format!("completion HTTP {}", resp.status()));
+                    return Err(format!("Completion HTTP {}", resp.status()));
                 }
                 let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
-                Ok(json
+                let text = json
                     .pointer("/choices/0/message/content")
                     .and_then(|c| c.as_str())
-                    .unwrap_or_default()
-                    .trim()
-                    .to_string())
+                    .unwrap_or_default();
+                Ok(clean_completion(text))
             }
             _ => Err(format!("Inline completion is not supported for provider '{}'", provider)),
         }

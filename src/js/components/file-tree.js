@@ -12,6 +12,8 @@ let recentFiles = [];
 try { recentFiles = JSON.parse(localStorage.getItem('orbital_recent_files') || '[]'); } catch (e) { recentFiles = []; }
 let favorites = []; // { path, name }
 let treeFilter = '';
+// Persistent set of expanded folder relative paths to preserve user navigation state across agent mutations
+const expandedDirectoryPaths = new Set();
 
 export function getRecentFiles() { return recentFiles; }
 
@@ -166,6 +168,9 @@ export function getFileIcon(filename, isDir, isExpanded) {
 }
 
 export async function loadWorkspace(rootPath, cachedMeta = null) {
+  if (state.workspace.rootPath !== rootPath) {
+    expandedDirectoryPaths.clear();
+  }
   await loadFavorites();
   renderExplorerTopSections();
   try {
@@ -193,17 +198,23 @@ export async function refreshFileTree() {
   const container = document.getElementById('file-tree-container');
   if (!container || !state.workspace.rootPath) return;
 
+  // Preserve scroll position and active file selection across tree updates
+  const savedScrollTop = container.scrollTop;
+  const selectedNode = container.querySelector('.tree-node.selected');
+  const selectedPath = selectedNode ? (selectedNode.dataset.path || null) : null;
+
   try {
     const tree = await invoke('get_file_tree', { max_depth: 4 });
     state.workspace.files = tree;
-    renderTree(tree, container);
+    renderTree(tree, container, { selectedPath, savedScrollTop });
   } catch (e) {
     container.innerHTML = `<div style="padding: 12px; color: var(--accent-red); font-size: 12px;">Error loading tree: ${e}</div>`;
   }
 }
 
-function renderTree(treeNode, container) {
-  container.innerHTML = '';
+function renderTree(treeNode, container, options = {}) {
+  const { selectedPath = null, savedScrollTop = 0 } = options;
+
   if (!treeNode || !treeNode.children) {
     container.innerHTML = '<div style="padding: 12px; color: var(--text-muted); font-size: 12px;">Empty folder</div>';
     return;
@@ -217,7 +228,18 @@ function renderTree(treeNode, container) {
     buildNodeElement(child, list, 0);
   });
 
+  // Targeted swap into container preserving exact scroll position and active selection
+  container.innerHTML = '';
   container.appendChild(list);
+
+  if (selectedPath) {
+    try {
+      const escaped = CSS.escape(selectedPath);
+      const matching = container.querySelector(`.tree-node[data-path="${escaped}"]`);
+      if (matching) matching.classList.add('selected');
+    } catch (_) {}
+  }
+  container.scrollTop = savedScrollTop;
   wireTreeDragDrop();
 }
 
@@ -226,10 +248,11 @@ function buildNodeElement(node, parentElem, indentLevel) {
   nodeRow.className = 'tree-node';
   nodeRow.style.paddingLeft = `${indentLevel * 14 + 8}px`;
 
-  let isExpanded = false;
+  // Preserve folder expansion: check if path is in persistent set
+  let isExpanded = expandedDirectoryPaths.has(node.path);
 
   const arrow = document.createElement('span');
-  arrow.className = `tree-arrow ${node.is_directory ? '' : 'leaf'}`;
+  arrow.className = `tree-arrow ${node.is_directory ? '' : 'leaf'} ${isExpanded ? 'expanded' : ''}`;
   arrow.innerHTML = node.is_directory
     ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="tree-chevron-svg"><polyline points="6 4 10 8 6 12"></polyline></svg>'
     : '';
@@ -284,7 +307,7 @@ function buildNodeElement(node, parentElem, indentLevel) {
   if (node.is_directory && node.children && node.children.length > 0) {
     childContainer = document.createElement('div');
     childContainer.className = 'tree-subtree';
-    childContainer.style.display = 'none';
+    childContainer.style.display = isExpanded ? 'block' : 'none';
     node.children.forEach(c => buildNodeElement(c, childContainer, indentLevel + 1));
     parentElem.appendChild(childContainer);
   }
@@ -304,6 +327,11 @@ function buildNodeElement(node, parentElem, indentLevel) {
     if (node.is_directory) {
       if (childContainer) {
         isExpanded = !isExpanded;
+        if (isExpanded) {
+          expandedDirectoryPaths.add(node.path);
+        } else {
+          expandedDirectoryPaths.delete(node.path);
+        }
         childContainer.style.display = isExpanded ? 'block' : 'none';
         arrow.classList.toggle('expanded', isExpanded);
         icon.innerHTML = getFileSvgIcon(node.name, true, isExpanded);

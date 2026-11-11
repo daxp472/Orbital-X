@@ -655,27 +655,51 @@ function registerInlineCompletions() {
 
       // Responsive 180ms debounce (feels instant like Copilot without spamming backend)
       const mySeq = ++inlineCompletionSeq;
+      let isCancelled = false;
+      const cancelSub = token?.onCancellationRequested?.(() => { isCancelled = true; });
+
       await new Promise(r => setTimeout(r, 180));
-      if (mySeq !== inlineCompletionSeq || token?.isCancellationRequested) return { items: [] };
+      if (isCancelled || mySeq !== inlineCompletionSeq || token?.isCancellationRequested) {
+        cancelSub?.dispose?.();
+        return { items: [] };
+      }
 
       const offset = model.getOffsetAt(position);
       const full = model.getValue();
-      const prefix = full.slice(Math.max(0, offset - 800), offset);
-      const suffix = full.slice(offset, Math.min(full.length, offset + 200));
+      const prefix = full.slice(Math.max(0, offset - 1000), offset);
+      const suffix = full.slice(offset, Math.min(full.length, offset + 300));
       const language = model.getLanguageId();
 
+      const provider = (state.ai.provider || 'ollama').toLowerCase();
+      // Requirement: local Ollama enabled by default; cloud providers optional & configurable to prevent unexpected API costs
+      const isCloudProvider = provider !== 'ollama';
+      if (isCloudProvider && !cfg.enableCloudSuggestions) {
+        cancelSub?.dispose?.();
+        // Fallback to instant local syntax predictive engine
+        const fallback = getLocalSuggestion(prefix, suffix, lineContent, language);
+        if (fallback) {
+          return {
+            items: [{
+              insertText: fallback,
+              range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+            }]
+          };
+        }
+        return { items: [] };
+      }
+
       const indicator = document.getElementById('sb-complete-indicator');
-      if (indicator) indicator.style.display = '';
+      if (indicator) indicator.style.display = 'inline-flex';
 
       try {
         const spec = state.ai.speculative || {};
         let text = '';
 
-        if (spec.enabled && spec.draftModel) {
+        if (spec.enabled && spec.draftModel && provider === 'ollama') {
           try {
             const res = await invoke('speculative_complete_code', {
               draftModel: spec.draftModel,
-              verifierModel: spec.verifierModel || state.ai.model || 'llama3',
+              verifierModel: spec.verifierModel || state.ai.model || 'qwen2.5-coder:7b',
               baseUrl: state.ai.endpoint || 'http://localhost:11434',
               prefix,
               suffix,
@@ -685,22 +709,25 @@ function registerInlineCompletions() {
             text = (res && (res.completion || res.final || res.draft)) || '';
           } catch (_) {}
         } else {
-          // Robust AI completion with timeout race against local predictive fallback
           const aiPromise = invoke('complete_code', {
-            provider: state.ai.provider || 'ollama',
-            apiKey: state.ai.apiKey || '',
-            model: state.ai.model || 'llama3',
-            baseUrl: state.ai.endpoint || 'http://localhost:11434',
+            provider,
+            apiKey: state.ai.keys[provider] || state.ai.apiKey || '',
+            model: state.ai.model || '',
+            baseUrl: provider === 'ollama' ? (state.ai.endpoint || 'http://localhost:11434') : (state.ai.openaiBaseUrl || null),
             prefix,
             suffix,
             language,
           });
 
-          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2000));
+          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 3000));
           const res = await Promise.race([aiPromise, timeoutPromise]);
           if (res && res.completion) {
             text = res.completion;
           }
+        }
+
+        if (isCancelled || mySeq !== inlineCompletionSeq || token?.isCancellationRequested) {
+          return { items: [] };
         }
 
         // If backend was slow or empty, fall back to local syntax predictive engine
@@ -708,20 +735,25 @@ function registerInlineCompletions() {
           text = getLocalSuggestion(prefix, suffix, lineContent, language) || '';
         }
 
-        if (mySeq !== inlineCompletionSeq || token?.isCancellationRequested) return { items: [] };
+        if (!text || text.length > 600) return { items: [] };
 
         // Clean up completion string: strip markdown fences and leading blank lines
         text = text.replace(/^\`\`\`[a-zA-Z0-9_-]*\r?\n?/, '').replace(/\r?\n?\`\`\`$/, '');
         text = text.replace(/^\s*\r?\n+/, '');
 
-        if (!text || text.length > 500) return { items: [] };
+        // Word-prefix deduplication: prevent "funcfunction" duplication when cursor is mid-word
+        const match = lineContent.match(/[a-zA-Z0-9_$]+$/);
+        const currentWordPrefix = match ? match[0] : '';
+        if (currentWordPrefix && text.startsWith(currentWordPrefix)) {
+          text = text.substring(currentWordPrefix.length);
+        }
 
-        // Avoid duplicate overlap with characters directly after cursor
+        // Suffix overlap deduplication: strip duplicate tokens matching characters immediately after cursor
         const afterCursor = model.getLineContent(position.lineNumber).substring(position.column - 1);
         if (afterCursor && text.startsWith(afterCursor)) {
           text = text.substring(afterCursor.length);
         }
-        if (!text) return { items: [] };
+        if (!text || !text.trim()) return { items: [] };
 
         return {
           items: [
@@ -743,6 +775,7 @@ function registerInlineCompletions() {
         }
         return { items: [] };
       } finally {
+        cancelSub?.dispose?.();
         if (indicator) indicator.style.display = 'none';
       }
     },

@@ -698,6 +698,7 @@ function loadEditorSettingsIntoUI() {
     const ic = state.settings.inlineComplete || {};
     check('cfg-inline-complete', ic.enabled);
     set('cfg-inline-provider', ic.provider);
+    check('cfg-inline-cloud', ic.enableCloudSuggestions);
   });
 }
 
@@ -730,9 +731,10 @@ function applyFromUI() {
     s.letterSpacing = num('cfg-letter-spacing', s.letterSpacing);
     s.fontLigatures = val('cfg-font-ligatures', s.fontLigatures);
 
-    state.settings.inlineComplete = state.settings.inlineComplete || { enabled: false, provider: 'ollama' };
+    state.settings.inlineComplete = state.settings.inlineComplete || { enabled: false, provider: 'ollama', enableCloudSuggestions: false };
     state.settings.inlineComplete.enabled = val('cfg-inline-complete', state.settings.inlineComplete.enabled);
     state.settings.inlineComplete.provider = val('cfg-inline-provider', state.settings.inlineComplete.provider);
+    state.settings.inlineComplete.enableCloudSuggestions = val('cfg-inline-cloud', state.settings.inlineComplete.enableCloudSuggestions || false);
     try {
       localStorage.setItem('orbital_inline_complete', JSON.stringify(state.settings.inlineComplete));
     } catch (e) { /* quota */ }

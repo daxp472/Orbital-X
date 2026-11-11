@@ -24,9 +24,7 @@ fn base_orbital_dir() -> PathBuf {
             return PathBuf::from(p);
         }
     }
-    dirs::home_dir()
-        .map(|h| h.join(".orbital"))
-        .unwrap_or_else(|| PathBuf::from(".orbital"))
+    crate::portable::orbital_data_dir()
 }
 
 fn extensions_dir() -> PathBuf {

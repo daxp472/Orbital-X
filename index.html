@@ -895,11 +895,11 @@
       </aside>
     </div>
 
-    <!-- Status Bar (Exact match to screenshot bottom bar) -->
+    <!-- Status Bar (Professional VS Code / Cursor Redesign) -->
     <footer class="statusbar">
       <div class="statusbar-left">
         <!-- Branch -->
-        <div class="status-item" id="status-git">
+        <div class="status-item" id="status-git" title="Current Git Branch (Click to checkout)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="6" y1="3" x2="6" y2="15"></line>
             <circle cx="18" cy="6" r="3"></circle>
@@ -909,69 +909,87 @@
           <span id="sb-git-branch">main</span>
         </div>
         <!-- Sync -->
-        <div class="status-item" title="Synchronize Changes">
+        <div class="status-item" id="status-git-sync" title="Synchronize Changes">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"></polyline>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
           </svg>
         </div>
         <!-- Error & Warning counters -->
-        <div class="status-item" title="0 Errors, 0 Warnings">
-          <span style="font-size: 10px;">⊗ 0</span>
-          <span style="font-size: 10px; margin-left: 4px;">⚠ 0</span>
+        <div class="status-item" id="status-problems" title="0 Errors, 0 Warnings">
+          <span style="font-size: 11px;">⊗ 0</span>
+          <span style="font-size: 11px; margin-left: 5px;">⚠ 0</span>
         </div>
         <!-- Current Workspace -->
-        <div class="status-item" id="status-workspace">
+        <div class="status-item" id="status-workspace" title="Active Workspace Folder">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="opacity: 0.85;">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
           <span id="sb-workspace-text">Orbital X</span>
         </div>
-        <!-- Pillar 1: Enterprise Workspace Isolation Status Indicator -->
-        <div class="status-item" id="sb-sandbox-indicator" title="Workspace Isolation Sandbox: Active [Job Object / Staging]" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-          <span class="mode-dot" id="sb-sandbox-dot" style="background-color: var(--accent-green); width: 6px; height: 6px; border-radius: 50%;"></span>
-          <span id="sb-sandbox-text" style="font-weight: 500;">Sandbox: Active</span>
+        <!-- Enterprise Architectural Health Pill -->
+        <div class="status-item sb-pillar-pill" id="sb-pillars-pill" title="Enterprise Core Pillars: Active&#10;• Sandbox: Active&#10;• Semantic Graph: Ready&#10;• Diagnostics: Healthy&#10;• VFS Bridge: Clean&#10;Click to Inspect System Status" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
+          <span class="mode-dot" id="sb-pillars-dot" style="background-color: var(--accent-green); width: 6px; height: 6px; border-radius: 50%;"></span>
+          <span id="sb-pillars-text" style="font-weight: 500;">Pillars: OK</span>
         </div>
-        <!-- Pillar 2: Native Semantic Graph Status Indicator -->
-        <div class="status-item" id="sb-graph-indicator" title="AST Semantic Graph: Click to Find Callers / Impact Graph" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-          <span class="mode-dot" id="sb-graph-dot" style="background-color: var(--accent-cyan); width: 6px; height: 6px; border-radius: 50%;"></span>
-          <span id="sb-graph-text" style="font-weight: 500;">AST: Ready</span>
+        <!-- Background listeners for individual pillars to preserve real-time updates -->
+        <div style="display: none;">
+          <span id="sb-sandbox-indicator"><span id="sb-sandbox-dot"></span><span id="sb-sandbox-text"></span></span>
+          <span id="sb-graph-indicator"><span id="sb-graph-dot"></span><span id="sb-graph-text"></span></span>
+          <span id="sb-diag-indicator"><span id="sb-diag-dot"></span><span id="sb-diag-text"></span></span>
+          <span id="sb-vfs-indicator"><span id="sb-vfs-dot"></span><span id="sb-vfs-text"></span></span>
         </div>
-        <!-- Pillar 3: Deterministic Diagnostics & Healing Health Badge -->
-        <div class="status-item" id="sb-diag-indicator" title="Compiler & Diagnostics Health: Click to Run Check" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-          <span class="mode-dot" id="sb-diag-dot" style="background-color: var(--accent-green); width: 6px; height: 6px; border-radius: 50%;"></span>
-          <span id="sb-diag-text" style="font-weight: 500;">Build: OK</span>
-        </div>
-        <!-- Pillar 4: Virtual File System (VFS) Diff Bridge & Checkpoints Indicator -->
-        <div class="status-item" id="sb-vfs-indicator" title="VFS Shadow Diff Bridge: Click to Review Staged Diffs & Checkpoints" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
-          <span class="mode-dot" id="sb-vfs-dot" style="background-color: var(--text-muted); width: 6px; height: 6px; border-radius: 50%;"></span>
-          <span id="sb-vfs-text" style="font-weight: 500;">VFS: 0 staged</span>
+      </div>
+
+      <div class="statusbar-center">
+        <!-- AI Completion Indicator -->
+        <div class="status-item" id="sb-complete-indicator" style="display: none;" title="Inline AI Autocomplete running…">
+          <span style="animation: spin 1.2s linear infinite; display: inline-block;">◍</span>
+          <span>completing…</span>
         </div>
       </div>
 
       <div class="statusbar-right">
-        <!-- Token Usage Counter Pill -->
-        <div class="status-item" id="status-token-usage" style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Token Usage Counter (Click to open Dashboard)">
-          <span style="color: var(--accent-cyan); font-weight: bold; font-size: 11px;">⚡</span>
-          <span id="status-token-count">0 tok today</span>
-        </div>
-        <div class="status-item" id="sb-ctx-meter" title="Context window usage and generation speed">— ctx</div>
-        <div class="status-item" id="status-mode">
-          <span class="mode-dot" style="background-color: var(--accent-cyan);"></span>
-          <span id="sb-mode-text">Dev Mode</span>
-        </div>
-        <div class="status-item" id="status-model-indicator">
+        <!-- Model & Agent Mode Pill -->
+        <div class="status-item" id="status-model-indicator" title="Active Model & Agent Mode (Click to change)">
           <span class="mode-dot" id="sb-model-dot" style="background-color: var(--accent-green);"></span>
           <span id="sb-model-text">Ollama (Local)</span>
+          <span id="status-mode" style="opacity: 0.8; margin-left: 2px;">· <span id="sb-mode-text">Dev</span></span>
         </div>
-        <div class="status-item" id="status-cursor">Ln 1, Col 1</div>
-        <div class="status-item" id="sb-indent" title="Indentation of the active file">Spaces: 2</div>
-        <div class="status-item" id="sb-line-ending" title="Line ending of the active file">LF</div>
-        <div class="status-item" id="sb-selection" title="Current selection"></div>
-        <div class="status-item" id="sb-complete-indicator" title="Inline AI autocomplete running…">◍ completing…</div>
-        <div class="status-item" id="sb-format-btn" title="Format Document (Shift+Alt+F)" style="display: inline-flex; align-items: center;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="7" y2="18"></line></svg></div>
-        <div class="status-item" id="status-encoding">UTF-8</div>
-        <div class="status-item" id="status-language">Markdown</div>
-        <div class="status-item" id="sb-settings-link" title="Open Settings">Orbital X - Settings</div>
-        <div class="status-item" id="sb-report-issue" title="Report Issue" style="cursor: pointer; color: var(--accent-cyan); font-weight: 500;">
-          <span>Report Issue</span>
+        <!-- Token Usage -->
+        <div class="status-item" id="status-token-usage" title="Token Usage Counter (Click to open Dashboard)">
+          <span style="color: var(--accent-cyan); font-weight: bold; font-size: 11px;">⚡</span>
+          <span id="status-token-count">0 tok</span>
+        </div>
+        <div class="status-item" id="sb-ctx-meter" title="Context window usage and generation speed" style="display: none;">— ctx</div>
+        <!-- Cursor Coordinates -->
+        <div class="status-item" id="status-cursor" title="Cursor Line & Column (Click to Goto Line)">Ln 1, Col 1</div>
+        <div class="status-item" id="sb-indent" title="Indentation Settings">Spaces: 2</div>
+        <div class="status-item" id="status-encoding" title="File Encoding">UTF-8</div>
+        <div class="status-item" id="sb-line-ending" title="Line Sequence">LF</div>
+        <div class="status-item" id="sb-selection" title="Active Selection" style="display: none;"></div>
+        <div class="status-item" id="status-language" title="Language Mode">Markdown</div>
+        <!-- Format Document Icon Button -->
+        <div class="status-item sb-icon-btn" id="sb-format-btn" title="Format Document (Shift+Alt+F)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="21" y1="10" x2="7" y2="10"></line>
+            <line x1="21" y1="6" x2="3" y2="6"></line>
+            <line x1="21" y1="14" x2="3" y2="14"></line>
+            <line x1="21" y1="18" x2="7" y2="18"></line>
+          </svg>
+        </div>
+        <!-- Settings Icon Button (Replacing bulky 130px text) -->
+        <div class="status-item sb-icon-btn" id="sb-settings-link" title="Open Settings (Ctrl+,)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </div>
+        <!-- Report Issue / Feedback Icon Button (Replacing bulky 95px text) -->
+        <div class="status-item sb-icon-btn" id="sb-report-issue" title="Report Issue / Feedback">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
         </div>
       </div>
     </footer>

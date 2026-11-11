@@ -315,6 +315,9 @@ class TerminalSession {
 
   async startBackendShell() {
     try {
+      if (state.workspace.rootPath) {
+        this.cwd = state.workspace.rootPath;
+      }
       const res = await invoke('create_interactive_terminal', {
         sessionId: this.sessionId,
         name: this.name,

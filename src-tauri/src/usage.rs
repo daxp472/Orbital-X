@@ -53,9 +53,7 @@ pub struct UsageService;
 
 impl UsageService {
     fn get_storage_path() -> PathBuf {
-        let dir = dirs::home_dir()
-            .map(|h| h.join(".orbital"))
-            .unwrap_or_else(|| PathBuf::from(".orbital"));
+        let dir = crate::portable::orbital_data_dir();
         if !dir.exists() {
             let _ = fs::create_dir_all(&dir);
         }
