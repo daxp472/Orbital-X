@@ -1033,11 +1033,8 @@ body {
   font-size: 0.9rem;
 }
 
-.monaco-features-list li::before {
-  content: '✓';
-  color: var(--accent-cyan);
-  font-weight: 600;
-}
+.monaco-features-list li::before,
+/* consolidated above */
 
 /* Terminal Features List */
 .terminal-features-list {
@@ -1054,11 +1051,7 @@ body {
   font-size: 0.9rem;
 }
 
-.terminal-features-list li::before {
-  content: '✓';
-  color: var(--accent-cyan);
-  font-weight: 600;
-}
+/* consolidated above */
 
 /* How-To Guides Section */
 .howto-guides {
