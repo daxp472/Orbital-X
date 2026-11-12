@@ -1174,7 +1174,14 @@ function initAboutModal() {
   const btnCheckUpdates = document.getElementById('btn-about-check-updates');
   const btnReportIssue = document.getElementById('btn-about-report-issue');
 
-  const openAbout = () => {
+  const openAbout = async () => {
+    try {
+      const { resolveCurrentVersion } = await import('./components/updater.js');
+      const v = await resolveCurrentVersion();
+      const badge = modal?.querySelector('.about-version-badge');
+      if (badge) badge.textContent = `Version ${v} • Desktop Release`;
+      if (btnAbout) btnAbout.title = `Orbital X — v${v} (Click for About)`;
+    } catch (_) {}
     if (modal) modal.style.display = 'flex';
   };
 

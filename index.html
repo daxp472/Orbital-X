@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.2.9 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.3.8 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -1742,6 +1742,42 @@
             </div>
           </div>
 
+          <!-- Section 2: Hybrid Portable Environment Inspector -->
+          <div class="dev-card">
+            <div class="dev-card-header">
+              <div class="dev-card-title-wrap">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                <div>
+                  <div class="dev-card-title">Hybrid Portable Environment Inspector</div>
+                  <div class="dev-card-caption">Verify USB environment binding, crash-safe lock guard, and workspace memory synchronization.</div>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="dev-portable-status-badge" style="font-family: monospace; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: var(--accent-cyan);">Detecting…</span>
+                <button class="btn btn-secondary btn-sm" id="btn-dev-refresh-portable" title="Refresh portable status" style="padding: 4px 8px;">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                </button>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 11px; color: var(--text-secondary);">
+              <div><strong style="color: var(--text-primary);">Portable Root:</strong> <span id="dev-portable-root-path" style="font-family: monospace;">—</span></div>
+              <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                <div><strong style="color: var(--text-primary);">Crash Lock Guard:</strong> <span id="dev-portable-lock-status">—</span></div>
+                <div><strong style="color: var(--text-primary);">Synced Workspaces:</strong> <span id="dev-portable-sync-count">—</span></div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
+              <button class="btn btn-secondary btn-sm" id="btn-dev-sync-to-portable" style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                <span>Backup Workspace Memory to USB</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-dev-sync-from-portable" style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Restore Workspace Memory from USB</span>
+              </button>
+            </div>
+          </div>
+
 
           <!-- Section 3: Core Runtime & IPC Diagnostics -->
           <div class="dev-card">
@@ -1949,7 +1985,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.2.9 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.3.8 · The AI-native IDE for everyone</div>
           </div>
         </div>
 
@@ -2257,7 +2293,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.3.7 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.3.8 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

@@ -312,6 +312,38 @@ async function getInvoke() {
         return [];
       case 'get_hardware_info':
         return { totalRamBytes: null, gpus: [] };
+      case 'get_app_version':
+        return '2.3.8';
+      case 'get_portable_status':
+        return {
+          is_portable: false,
+          data_dir: '~/.orbital',
+          usb_mounted: false,
+          lock_active: true,
+          host_platform: 'windows',
+          host_arch: 'x86_64',
+          role_usb: 'Environment, preferences, extensions, skills, and chat sessions',
+          role_host: 'Ollama local models, GPU acceleration, and system toolchains',
+          synced_projects_count: 0
+        };
+      case 'sync_project_memory_to_portable':
+        return {
+          success: true,
+          workspace_path: args?.workspace_path || '',
+          sync_dir: 'Data/.orbital/project_sync',
+          files_synced: 2,
+          timestamp: new Date().toISOString(),
+          message: 'Project memory safely synced to portable storage.'
+        };
+      case 'sync_project_memory_from_portable':
+        return {
+          success: true,
+          workspace_path: args?.workspace_path || '',
+          sync_dir: 'Data/.orbital/project_sync',
+          files_synced: 2,
+          timestamp: new Date().toISOString(),
+          message: 'Project memory safely restored from portable storage.'
+        };
       case 'open_dev_tools':
         // In browser fallback, simulate opening dev tools
         console.log('[IPC Mock] open_dev_tools - would open DevTools in Tauri');

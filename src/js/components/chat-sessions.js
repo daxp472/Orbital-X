@@ -388,57 +388,121 @@ function closeHistoryDropdown() {
 }
 
 let historySearch = '';
-let showArchived = false;
+let historyTab = 'all'; // 'all' | 'pinned' | 'archived'
+
+const CHAT_ICONS = {
+  pin: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1v3.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"></path></svg>',
+  archive: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"></polyline><rect x="1" y="3" width="22" height="5"></rect><line x1="10" y1="12" x2="14" y2="12"></line></svg>',
+  trash: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>',
+  search: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>',
+  plus: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>',
+  chat: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>'
+};
 
 function renderHistoryList() {
-  const listElem = document.getElementById('chat-history-list');
-  if (!listElem) return;
-  listElem.innerHTML = '';
+  const dropdown = document.getElementById('chat-history-dropdown');
+  if (!dropdown) return;
 
-  // H4: session search across titles + message contents
-  const search = document.createElement('input');
-  search.type = 'text';
-  search.className = 'input-text';
-  search.placeholder = 'Search sessions…';
-  search.value = historySearch;
-  search.style.cssText = 'width: 100%; font-size: 11px; margin-bottom: 6px;';
-  search.addEventListener('input', () => {
-    historySearch = search.value;
-    renderHistoryRows(listElem);
+  const pinnedCount = sessions.filter(s => s.pinned).length;
+  const archivedCount = sessions.filter(s => s.archived).length;
+  const activeCount = sessions.filter(s => !s.archived).length;
+
+  dropdown.innerHTML = `
+    <div class="chat-history-header">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span style="color: var(--accent-cyan); display: flex; align-items: center;">${CHAT_ICONS.chat}</span>
+        <span>Recent Conversations</span>
+        <span style="font-size: 10px; background: rgba(57, 197, 187, 0.15); color: var(--accent-cyan); padding: 1px 6px; border-radius: 10px; font-weight: 600;">${sessions.length}</span>
+      </div>
+      <div style="display: flex; gap: 4px; align-items: center;">
+        <button class="btn btn-secondary btn-sm" id="btn-import-chat-popover" style="font-size: 10.5px; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px;" title="Import Chat File">
+          <span>Import</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-export-chat-popover" style="font-size: 10.5px; padding: 2px 7px; display: inline-flex; align-items: center; gap: 4px;" title="Export Active Chat">
+          <span>Export</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-history-toolbar">
+      <div class="chat-history-search-wrap">
+        <span class="chat-history-search-icon">${CHAT_ICONS.search}</span>
+        <input type="text" id="chat-history-search-input" class="chat-history-search-input" placeholder="Search conversations &amp; messages…" value="${escapeHtml(historySearch)}" />
+        ${historySearch ? '<button class="chat-history-search-clear" id="chat-history-clear-search">✕</button>' : ''}
+      </div>
+
+      <div class="chat-history-filter-tabs">
+        <button class="chat-history-filter-btn ${historyTab === 'all' ? 'active' : ''}" data-tab="all">
+          Active (${activeCount})
+        </button>
+        <button class="chat-history-filter-btn ${historyTab === 'pinned' ? 'active' : ''}" data-tab="pinned">
+          Pinned (${pinnedCount})
+        </button>
+        <button class="chat-history-filter-btn ${historyTab === 'archived' ? 'active' : ''}" data-tab="archived">
+          Archived (${archivedCount})
+        </button>
+      </div>
+    </div>
+
+    <div class="chat-history-list" id="chat-history-items-container"></div>
+  `;
+
+  // Attach search events
+  const searchInput = dropdown.querySelector('#chat-history-search-input');
+  searchInput?.addEventListener('input', (e) => {
+    historySearch = e.target.value;
+    renderHistoryRows();
   });
-  search.addEventListener('keydown', (e) => e.stopPropagation());
-  listElem.appendChild(search);
+  searchInput?.addEventListener('keydown', (e) => e.stopPropagation());
 
-  const archivedToggle = document.createElement('label');
-  archivedToggle.style.cssText = 'display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-muted); cursor: pointer; margin-bottom: 6px;';
-  archivedToggle.innerHTML = `<input type="checkbox" ${showArchived ? 'checked' : ''}> Show archived (${sessions.filter(x => x.archived).length})`;
-  archivedToggle.querySelector('input').addEventListener('change', (e) => {
-    showArchived = e.target.checked;
+  dropdown.querySelector('#chat-history-clear-search')?.addEventListener('click', () => {
+    historySearch = '';
     renderHistoryList();
   });
-  listElem.appendChild(archivedToggle);
 
-  renderHistoryRows(listElem);
+  // Attach tab filter events
+  dropdown.querySelectorAll('.chat-history-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      historyTab = btn.dataset.tab;
+      dropdown.querySelectorAll('.chat-history-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderHistoryRows();
+    });
+  });
+
+  // Re-bind import/export buttons in popover header
+  dropdown.querySelector('#btn-import-chat-popover')?.addEventListener('click', importSessionFromMarkdown);
+  dropdown.querySelector('#btn-export-chat-popover')?.addEventListener('click', exportActiveSessionMarkdown);
+
+  renderHistoryRows();
 }
 
-function renderHistoryRows(listElem) {
-  listElem.querySelectorAll('.chat-history-row').forEach(el => el.remove());
+function renderHistoryRows() {
+  const container = document.getElementById('chat-history-items-container');
+  if (!container) return;
+  container.innerHTML = '';
+
   const q = historySearch.trim().toLowerCase();
 
-  const rowsHost = document.createElement('div');
-  rowsHost.className = 'chat-history-row';
-  rowsHost.style.cssText = 'display: flex; flex-direction: column; gap: 4px;';
-  listElem.appendChild(rowsHost);
-
   const visible = sessions.filter(sess => {
-    if (!showArchived && sess.archived) return false;
+    // Tab filter
+    if (historyTab === 'all' && sess.archived) return false;
+    if (historyTab === 'pinned' && (!sess.pinned || sess.archived)) return false;
+    if (historyTab === 'archived' && !sess.archived) return false;
+
+    // Search query filter
     if (!q) return true;
     if ((sess.title || '').toLowerCase().includes(q)) return true;
     return (sess.messages || []).some(m => (m.content || '').toLowerCase().includes(q));
   });
 
   if (visible.length === 0) {
-    rowsHost.innerHTML = `<div style="padding: 12px; color: var(--text-muted); font-size: 11px; text-align: center;">${q ? 'No sessions match.' : 'No chat history yet.'}</div>`;
+    container.innerHTML = `
+      <div style="padding: 24px 14px; color: var(--text-muted); font-size: 11.5px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px;">
+        <span style="opacity: 0.5;">${CHAT_ICONS.chat}</span>
+        <span>${q ? 'No conversations match "' + escapeHtml(q) + '"' : (historyTab === 'archived' ? 'No archived conversations' : (historyTab === 'pinned' ? 'No pinned conversations' : 'No chat history yet'))}</span>
+      </div>
+    `;
     return;
   }
 
@@ -452,22 +516,32 @@ function renderHistoryRows(listElem) {
 
     item.innerHTML = `
       <div style="flex: 1; min-width: 0;">
-        <div class="chat-history-title">${escapeHtml(sess.pinned ? '📌 ' : '')}${escapeHtml(sess.archived ? '📦 ' : '')}${escapeHtml(sess.title)}</div>
-        <div class="chat-history-meta">${msgCount} messages · ${dateStr}</div>
+        <div class="chat-history-title">
+          <span>${escapeHtml(sess.title)}</span>
+          ${sess.pinned ? `<span class="chat-history-badge chat-history-badge-pinned">Pinned</span>` : ''}
+          ${sess.archived ? `<span class="chat-history-badge chat-history-badge-archived">Archived</span>` : ''}
+        </div>
+        <div class="chat-history-meta">
+          <span>${msgCount} message${msgCount === 1 ? '' : 's'}</span>
+          <span>•</span>
+          <span>${dateStr}</span>
+        </div>
       </div>
-      <span style="display: flex; gap: 2px; flex-shrink: 0;">
-        <button class="git-icon-btn hist-pin" title="${sess.pinned ? 'Unpin' : 'Pin to top'}" style="color:${sess.pinned ? 'var(--accent-cyan)' : 'var(--text-muted)'};">📌</button>
-        <button class="git-icon-btn hist-archive" title="${sess.archived ? 'Unarchive' : 'Archive'}">📦</button>
-        <button class="chat-history-del" title="Delete Chat" data-del-id="${sess.id}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
+      <div class="chat-history-actions">
+        <button class="chat-action-btn hist-pin" title="${sess.pinned ? 'Unpin conversation' : 'Pin to top'}" style="color:${sess.pinned ? 'var(--accent-cyan)' : 'var(--text-muted)'};">
+          ${CHAT_ICONS.pin}
         </button>
-      </span>
+        <button class="chat-action-btn hist-archive" title="${sess.archived ? 'Unarchive' : 'Archive conversation'}" style="color:${sess.archived ? 'var(--accent-cyan)' : 'var(--text-muted)'};">
+          ${CHAT_ICONS.archive}
+        </button>
+        <button class="chat-action-btn del-btn chat-history-del" title="Delete conversation" data-del-id="${sess.id}">
+          ${CHAT_ICONS.trash}
+        </button>
+      </div>
     `;
 
     item.addEventListener('click', () => switchSession(sess.id));
+
     item.querySelector('.hist-pin')?.addEventListener('click', (e) => {
       e.stopPropagation();
       sess.pinned = !sess.pinned;
@@ -475,19 +549,21 @@ function renderHistoryRows(listElem) {
       saveSessionsToStorage();
       renderHistoryList();
     });
+
     item.querySelector('.hist-archive')?.addEventListener('click', (e) => {
       e.stopPropagation();
       sess.archived = !sess.archived;
-      if (sess.archived && sess.id === activeSessionId && !showArchived) {
+      if (sess.archived && sess.id === activeSessionId && historyTab !== 'archived') {
         const next = sessions.find(x => !x.archived);
         if (next) switchSession(next.id);
       }
       saveSessionsToStorage();
       renderHistoryList();
     });
+
     item.querySelector('.chat-history-del')?.addEventListener('click', (e) => deleteSession(sess.id, e));
 
-    rowsHost.appendChild(item);
+    container.appendChild(item);
   }
 }
 

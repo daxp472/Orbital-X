@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg?logo=tauri)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-1.90%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/Release-v2.3.6-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
+[![Version](https://img.shields.io/badge/Release-v2.3.8-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-0078d4.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
-[![Tests](https://img.shields.io/badge/cargo%20test-82%2F82%20passed-brightgreen.svg)](.github/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/cargo%20test-84%2F84%20passed-brightgreen.svg)](.github/workflows/ci.yml)
 
 **A fast, memory-conscious, autonomous AI coding IDE powered by your own local models.**
 *Native speed · Streaming responses · 100% private inference · Rust-enforced safety*
@@ -81,9 +81,9 @@ Grab the latest from the **[Releases](https://github.com/daxp472/Orbital-X/relea
 
 | Platform | Asset |
 |---|---|
-| **Windows 10/11 (x64)** | `Orbital X_2.3.6_x64-setup.exe` — NSIS installer; per-user (no admin) or all-users |
-| **macOS (Apple Silicon)** | `Orbital.X_2.3.6_aarch64.dmg` |
-| **Linux (x64)** | `Orbital.X_2.3.6_amd64.AppImage` / `.deb` |
+| **Windows 10/11 (x64)** | `Orbital.X_2.3.8_x64-setup.exe` — NSIS installer; per-user (no admin) or all-users |
+| **macOS (Apple Silicon)** | `Orbital.X_2.3.8_aarch64.dmg` |
+| **Linux (x64)** | `Orbital.X_2.3.8_amd64.AppImage` / `.deb` |
 
 **For local AI, install [Ollama](https://ollama.com)** and pull a coding model:
 
