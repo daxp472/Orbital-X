@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFAQAccordion();
   initReportIssuePage();
   initMockupApprovalDemo();
+  initGitHubReleaseSync();
 });
 
 
@@ -74,29 +75,29 @@ function initOSDetection() {
 // 2. Interactive Operating Mode Switcher Demo
 const modeData = {
   dev: {
-    title: '🟢 Dev Mode (Default & Balanced)',
+    title: 'Dev Mode (Default & Balanced)',
     desc: 'Perfect for day-to-day coding. File searches and inspections are completely automatic. Any file edit or terminal command presents an interactive Approval Card with Monaco Diff preview before execution.',
-    fileReads: '⚡ Automatic (0 Prompts)',
-    fileWrites: '🛡️ Approval Card with Diff Preview',
-    terminal: '🛡️ Approval Required',
+    fileReads: 'Automatic (Zero Prompts)',
+    fileWrites: 'Approval Card with Diff Preview',
+    terminal: 'Approval Required',
     risk: 'Kernel-Enforced Sandboxing',
     badgeClass: 'active'
   },
   pro: {
-    title: '🟣 Agent Pro Mode (Autonomous Prototyping)',
+    title: 'Agent Pro Mode (Autonomous Prototyping)',
     desc: 'High-autonomy execution inside the workspace boundaries. Reads, edits, symbol maps, and allowlisted test/build commands execute automatically without interruption. Perfect for feature generation and automated refactoring.',
-    fileReads: '⚡ Automatic',
-    fileWrites: '⚡ Automatic (with undo journal)',
-    terminal: '⚡ Safe build/test commands auto-run',
+    fileReads: 'Automatic',
+    fileWrites: 'Automatic (with undo journal)',
+    terminal: 'Safe build/test commands auto-run',
     risk: 'Destructive commands strictly blocked',
     badgeClass: 'pro active'
   },
   user: {
-    title: '🟠 User Mode (Explicit Audit Trail)',
+    title: 'User Mode (Explicit Audit Trail)',
     desc: 'Strict per-operation confirmation. Every file read, directory search, file write, and terminal command requires explicit user approval before the agent proceeds. Maximum transparency for sensitive codebases.',
-    fileReads: '🛡️ Approval Required',
-    fileWrites: '🛡️ Approval Required',
-    terminal: '🛡️ Approval Required',
+    fileReads: 'Approval Required',
+    fileWrites: 'Approval Required',
+    terminal: 'Approval Required',
     risk: 'Complete Manual Verification',
     badgeClass: 'user active'
   }
@@ -372,4 +373,65 @@ function initMockupApprovalDemo() {
       location.reload();
     });
   });
+}
+
+// 10. Dynamic GitHub Release & Asset Sync
+async function initGitHubReleaseSync() {
+  let releaseData = null;
+  try {
+    const res = await fetch('https://api.github.com/repos/daxp472/Orbital-X/releases/latest', {
+      headers: { 'Accept': 'application/vnd.github+json' }
+    });
+    if (res.ok) {
+      releaseData = await res.json();
+    }
+  } catch (e) {
+    console.info('GitHub API fetch failed, falling back to version.json:', e.message);
+  }
+
+  if (!releaseData) {
+    try {
+      const fallbackRes = await fetch('version.json');
+      if (fallbackRes.ok) {
+        const v = await fallbackRes.json();
+        releaseData = {
+          tag_name: v.tag || 'v2.3.8',
+          published_at: v.release_date || '2026-11-12',
+          assets: [
+            { name: 'Orbital.X_2.3.8_x64-setup.exe', browser_download_url: v.download_url, size: 7263535 },
+            { name: 'Orbital.X_2.3.8_portable_win64.zip', browser_download_url: v.portable_zip_url, size: 8900000 },
+            { name: 'orbital-x.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/orbital-x.exe', size: 22291968 },
+            { name: 'Orbital.X_2.3.8_aarch64.dmg', browser_download_url: v.macos_dmg_url, size: 9951370 },
+            { name: 'Orbital.X_aarch64.app.tar.gz', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_aarch64.app.tar.gz', size: 9289705 },
+            { name: 'Orbital.X_2.3.8_amd64.AppImage', browser_download_url: v.linux_appimage_url, size: 90798584 },
+            { name: 'Orbital.X_2.3.8_amd64.deb', browser_download_url: v.linux_deb_url, size: 11100166 }
+          ]
+        };
+      }
+    } catch (_) {}
+  }
+
+  if (!releaseData) return;
+
+  const tag = releaseData.tag_name || 'v2.3.8';
+  const cleanTag = tag.replace(/^v/, '');
+  const pubDate = releaseData.published_at
+    ? new Date(releaseData.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+    : 'Nov 12, 2026';
+
+  document.querySelectorAll('[data-gh-tag]').forEach(el => el.textContent = tag);
+  document.querySelectorAll('[data-gh-ver]').forEach(el => el.textContent = cleanTag);
+  document.querySelectorAll('[data-gh-date]').forEach(el => el.textContent = pubDate);
+
+  if (Array.isArray(releaseData.assets)) {
+    releaseData.assets.forEach(asset => {
+      const mb = (asset.size / (1024 * 1024)).toFixed(1) + ' MB';
+      document.querySelectorAll(`[data-gh-asset="${asset.name}"]`).forEach(link => {
+        if (asset.browser_download_url) link.href = asset.browser_download_url;
+      });
+      document.querySelectorAll(`[data-gh-size="${asset.name}"]`).forEach(span => {
+        span.textContent = mb;
+      });
+    });
+  }
 }

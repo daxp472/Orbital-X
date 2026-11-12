@@ -136,6 +136,10 @@ async function main() {
       path: path.resolve('release/Orbital.X_2.3.8_x64-setup.exe')
     },
     {
+      name: 'Orbital.X_2.3.8_portable_win64.zip',
+      path: path.resolve('release/Orbital.X_2.3.8_portable_win64.zip')
+    },
+    {
       name: 'Orbital.X_aarch64.app.tar.gz',
       path: path.resolve('release/Orbital.X_aarch64.app.tar.gz')
     }

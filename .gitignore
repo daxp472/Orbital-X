@@ -9,6 +9,7 @@ release/*.dmg
 release/*.AppImage
 release/*.deb
 release/*.tar.gz
+release/*.zip
 release/Orbital x 2/
 
 # Tauri & Rust build artifacts

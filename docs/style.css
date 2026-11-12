@@ -2396,3 +2396,379 @@ select:focus-visible {
     white-space: nowrap;
   }
 }
+
+
+/* ==========================================================================
+   Orbital X — Download Center & v2.3.8 Release Highlights Styles
+   Apple HIG & Liquid Glass Desktop Aesthetics
+   ========================================================================== */
+
+/* Download Page Specifics */
+.download-page-hero {
+  padding: 120px 0 60px;
+  text-align: center;
+  position: relative;
+}
+
+.download-os-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: rgba(57, 197, 187, 0.12);
+  border: 1px solid rgba(57, 197, 187, 0.35);
+  border-radius: var(--radius-full);
+  color: var(--accent-cyan);
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 24px;
+}
+
+.download-platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin: 40px 0 60px;
+}
+
+.platform-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  transition: var(--trans);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.platform-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(57, 197, 187, 0.4);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px rgba(57, 197, 187, 0.12);
+}
+
+.platform-card.highlighted {
+  border-color: rgba(57, 197, 187, 0.5);
+  background: linear-gradient(180deg, rgba(57, 197, 187, 0.08) 0%, rgba(13, 18, 28, 0.95) 100%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), 0 0 20px rgba(57, 197, 187, 0.15);
+}
+
+.platform-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.platform-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-cyan);
+}
+
+.platform-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.platform-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 24px;
+}
+
+.download-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.download-option-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: var(--trans);
+}
+
+.download-option-btn:hover {
+  background: rgba(57, 197, 187, 0.15);
+  border-color: rgba(57, 197, 187, 0.4);
+  color: var(--accent-cyan);
+}
+
+.download-option-btn.primary {
+  background: var(--accent-cyan);
+  color: #06090e;
+  font-weight: 600;
+  border-color: var(--accent-cyan);
+}
+
+.download-option-btn.primary:hover {
+  background: #4be0d5;
+  box-shadow: 0 4px 16px rgba(57, 197, 187, 0.35);
+}
+
+.btn-file-meta {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  font-family: var(--font-mono);
+}
+
+/* Portable USB Spotlight Card */
+.portable-spotlight {
+  background: linear-gradient(135deg, rgba(22, 28, 42, 0.9) 0%, rgba(13, 18, 28, 0.95) 100%);
+  border: 1px solid rgba(57, 197, 187, 0.4);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  margin: 60px 0;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.portable-spotlight::before {
+  content: "";
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(57, 197, 187, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.portable-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(48, 209, 88, 0.15);
+  border: 1px solid rgba(48, 209, 88, 0.4);
+  border-radius: var(--radius-full);
+  color: var(--accent-green);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 16px;
+}
+
+.portable-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 40px;
+  align-items: center;
+}
+
+.portable-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.portable-col-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 18px;
+}
+
+.portable-col-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.portable-col-list {
+  list-style: none;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.portable-col-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.portable-col-list li svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+/* What's New v2.3.8 Cards */
+.whatsnew-section {
+  padding: 80px 0;
+}
+
+.whatsnew-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 28px;
+  margin-top: 40px;
+}
+
+.whatsnew-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: var(--trans);
+  backdrop-filter: blur(20px);
+}
+
+.whatsnew-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(57, 197, 187, 0.35);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.whatsnew-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.whatsnew-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(57, 197, 187, 0.1);
+  border: 1px solid rgba(57, 197, 187, 0.25);
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.whatsnew-pill {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--accent-cyan);
+  margin-bottom: 4px;
+}
+
+.whatsnew-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.whatsnew-points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 18px 0;
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+}
+
+.whatsnew-point-row {
+  display: flex;
+  gap: 10px;
+  line-height: 1.5;
+}
+
+.whatsnew-point-label {
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* Verification Checksum Table */
+.checksum-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: rgba(13, 18, 28, 0.6);
+  margin-top: 24px;
+}
+
+.checksum-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.checksum-table th,
+.checksum-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.checksum-table th {
+  background: rgba(255, 255, 255, 0.03);
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.checksum-table tr:last-child td {
+  border-bottom: none;
+}
+
+.checksum-table td.code-cell {
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+/* Responsive adjustments for Download & Whats-New */
+@media (max-width: 900px) {
+  .download-platforms-grid {
+    grid-template-columns: 1fr;
+  }
+  .portable-grid {
+    grid-template-columns: 1fr;
+  }
+  .whatsnew-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .portable-columns {
+    grid-template-columns: 1fr;
+  }
+  .portable-spotlight {
+    padding: 24px 18px;
+  }
+}

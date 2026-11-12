@@ -1,7 +1,11 @@
 {
-  "version": "2.3.6",
-  "tag": "v2.3.6",
-  "release_date": "2026-11-08",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.6/Orbital.X_2.3.6_x64-setup.exe",
-  "changelog": "v2.3.6: Production End-to-End Hardening across all Four Enterprise Architectural Pillars (IsolationEngine with Win32 Job Object sandbox, SemanticCodeGraph with AST Tree-sitter parsers and incremental re-indexing, DiagnosticService with compiler error parser & Hallucination Loop Breaker, and VfsEngine with copy-on-write overlay, atomic checkpoints, and 2PC crash-safe transactions)."
+  "version": "2.3.8",
+  "tag": "v2.3.8",
+  "release_date": "2026-11-12",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_portable_win64.zip",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_aarch64.dmg",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_amd64.deb",
+  "changelog": "v2.3.8: Hybrid Portable Architecture (USB Carrying IDE Environment + Host Compute Power), Software Updates Suite & Native Markdown Release Highlights, Apple HIG Recent Chats Redesign, Developer Diagnostics Suite & Dynamic Version Synchronizer."
 }
