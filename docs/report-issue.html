@@ -88,15 +88,25 @@
       </a>
 
       <ul class="nav-links">
-        <li><a href="index.html">Home</a></li>
-        <li><a href="whats-new.html">What's New</a></li>
-        <li><a href="download.html">Download</a></li>
-        <li><a href="docs.html">Documentation</a></li>
-        <li><a href="report-issue.html" class="active">Report Issue</a></li>
+        <li><a href="index.html#features">Features</a></li>
+        <li><a href="whats-new.html">Updates</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="index.html#models">Hardware</a></li>
       </ul>
 
       <div class="nav-actions">
-        <a href="index.html" class="btn btn-secondary btn-sm">← Back to Site</a>
+        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary btn-sm nav-btn-gh" title="GitHub Repository">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a href="download.html" class="btn btn-primary btn-sm">Download</a>
+        <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation Menu" aria-expanded="false">
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+          <span class="hamburger-bar"></span>
+        </button>
       </div>
     </div>
   </nav>
@@ -104,7 +114,19 @@
   <!-- Page Header -->
   <div class="report-page-header">
     <h1>Report an Issue</h1>
-    <p>Help us improve Orbital X by reporting bugs, feature requests, or other issues.</p>
+    <p>Help us improve Orbital X by reporting bugs, feature requests, or performance diagnostics.</p>
+
+    <div style="max-width: 680px; margin: 24px auto 0; padding: 16px 20px; border-radius: var(--radius-md); background: rgba(57, 197, 187, 0.08); border: 1px solid rgba(57, 197, 187, 0.25); text-align: left; display: flex; gap: 14px; align-items: flex-start;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2" style="flex-shrink: 0; margin-top: 2px;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      </svg>
+      <div style="font-size: 0.88rem; line-height: 1.55; color: var(--text-secondary);">
+        <strong style="color: #fff; display: block; margin-bottom: 2px;">Where do issue reports go?</strong>
+        All submissions are filed directly to the official public <a href="https://github.com/daxp472/Orbital-X/issues" target="_blank" rel="noopener" style="color: var(--accent-cyan); text-decoration: underline;">GitHub Issue Tracker (daxp472/Orbital-X/issues)</a>. Your report and auto-collected system diagnostics are compiled into an official issue template so maintainers can reproduce, track, and resolve it transparently. No private telemetry is sent to external proprietary servers.
+      </div>
+    </div>
   </div>
 
   <!-- Report Issue Form -->
@@ -205,10 +227,12 @@
 
         <!-- Success State -->
         <div class="success-state" id="success-state">
-          <div class="success-icon">✓</div>
-          <h3>Issue Submitted Successfully!</h3>
-          <p>Your issue has been prepared for submission. Click below to create a GitHub issue.</p>
-          <a href="" id="github-issue-link" target="_blank" rel="noopener" class="copy-issue-btn">Open GitHub Issue</a>
+          <div class="success-icon" style="display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; margin: 0 auto 16px; border-radius: 50%; background: rgba(57, 197, 187, 0.15); border: 1px solid rgba(57, 197, 187, 0.3);">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3>Issue Ready for Submission!</h3>
+          <p>Your diagnostic report has been compiled into GitHub Markdown. Click below to open and submit the issue in the official repository.</p>
+          <a href="" id="github-issue-link" target="_blank" rel="noopener" class="copy-issue-btn">Open GitHub Issue ↗</a>
           <div style="margin-top: 16px;">
             <a href="index.html" class="back-link">← Back to Website</a>
           </div>
@@ -217,6 +241,33 @@
     </div>
   </section>
 
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <img src="logo.png" alt="Orbital X" style="width: 24px; height: 24px; border-radius: 50%;">
+            <span style="font-weight: 700; color: #fff;">Orbital X</span>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;">v2.3.8</span>
+          </div>
+          <div class="footer-copy">
+            Open-Source Community Desktop IDE Project. Licensed under the MIT License.
+          </div>
+        </div>
+
+        <div class="footer-links">
+          <a href="index.html">Home</a>
+          <a href="whats-new.html">What's New</a>
+          <a href="download.html">Download</a>
+          <a href="docs.html">Documentation</a>
+          <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
   <script>
     // Auto-detect system information
     function detectSystemInfo() {
@@ -224,7 +275,7 @@
       const userAgent = navigator.userAgent || navigator.vendor || window.opera;
       let os = 'Unknown';
 
-      if (/windows/nti /i.test(userAgent)) os = 'Windows';
+      if (/windows nt/i.test(userAgent)) os = 'Windows';
       else if (/mac/i.test(userAgent)) os = 'macOS';
       else if (/linux/i.test(userAgent)) os = 'Linux';
       else if (/android/i.test(userAgent)) os = 'Android';

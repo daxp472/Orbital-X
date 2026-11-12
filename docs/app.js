@@ -140,7 +140,7 @@ function initCopyButtons() {
       try {
         await navigator.clipboard.writeText(textToCopy);
         const originalText = btn.textContent;
-        btn.textContent = '✓ Copied!';
+        btn.textContent = 'Copied';
         btn.style.borderColor = 'var(--accent-cyan)';
         btn.style.color = '#ffffff';
         setTimeout(() => {
@@ -190,9 +190,9 @@ function initHardwareAdvisor() {
   function updateFit() {
     // Update summary text
     let summaryDesc = 'Balanced Developer Rig';
-    if (selectedRAM < 16) summaryDesc = '⚠️ Insufficient RAM (Upgrade to 16GB Recommended)';
-    else if (selectedVRAM >= 16 && selectedRAM >= 32) summaryDesc = '🚀 High-Performance Workstation';
-    else if (selectedVRAM >= 12) summaryDesc = '⚡ Excellent GPU Accelerated Machine';
+    if (selectedRAM < 16) summaryDesc = 'Insufficient RAM (Upgrade to 16GB Recommended)';
+    else if (selectedVRAM >= 16 && selectedRAM >= 32) summaryDesc = 'High-Performance Workstation';
+    else if (selectedVRAM >= 12) summaryDesc = 'Excellent GPU Accelerated Machine';
 
     if (summaryText) {
       summaryText.textContent = `Hardware: ${selectedVRAM} GB VRAM • ${selectedRAM} GB RAM (${summaryDesc})`;
