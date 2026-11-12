@@ -2168,8 +2168,28 @@ async fn get_ollama_models(endpoint: Option<String>) -> Result<Vec<String>, Stri
 // ============================================================================
 
 #[tauri::command]
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
 fn is_portable_mode() -> bool {
     portable::is_portable()
+}
+
+#[tauri::command]
+fn get_portable_status() -> Result<portable::PortableStatus, String> {
+    Ok(portable::get_status())
+}
+
+#[tauri::command]
+fn sync_project_memory_to_portable(workspace_path: String) -> Result<portable::ProjectSyncResult, String> {
+    portable::sync_workspace_memory_to_portable(&workspace_path)
+}
+
+#[tauri::command]
+fn sync_project_memory_from_portable(workspace_path: String) -> Result<portable::ProjectSyncResult, String> {
+    portable::sync_workspace_memory_from_portable(&workspace_path)
 }
 
 #[tauri::command]
@@ -2192,10 +2212,9 @@ fn load_chat_sessions() -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn save_chat_sessions(sessions: serde_json::Value) -> Result<(), String> {
     let path = chat_sessions_path();
-    let tmp = path.with_extension("json.tmp");
-    let serialized = serde_json::to_string(&sessions).map_err(|e| e.to_string())?;
-    std::fs::write(&tmp, serialized).map_err(|e| format!("Failed to write chat sessions: {}", e))?;
-    std::fs::rename(&tmp, &path).map_err(|e| format!("Failed to finalize chat sessions: {}", e))?;
+    let serialized = serde_json::to_string_pretty(&sessions).map_err(|e| e.to_string())?;
+    portable::safe_atomic_write(&path, serialized.as_bytes())
+        .map_err(|e| format!("Failed to safely write chat sessions: {}", e))?;
     Ok(())
 }
 
@@ -2550,7 +2569,7 @@ fn detect_gpus() -> Vec<GpuInfo> {
 async fn check_for_updates() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.7")
+        .user_agent("OrbitalX-IDE/2.3.8")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -2616,7 +2635,7 @@ async fn download_update(
     use futures_util::StreamExt;
 
     let client = reqwest::Client::builder()
-        .user_agent("OrbitalX-IDE/2.3.7")
+        .user_agent("OrbitalX-IDE/2.3.8")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client.get(&url).send().await.map_err(|e| format!("Download failed: {}", e))?;
@@ -2836,7 +2855,7 @@ fn notify_native(app: AppHandle, title: String, body: String) -> Result<(), Stri
 async fn check_latest_release() -> Result<serde_json::Value, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent("OrbitalX-IDE/2.3.7")
+        .user_agent("OrbitalX-IDE/2.3.8")
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
@@ -2869,6 +2888,7 @@ async fn check_latest_release() -> Result<serde_json::Value, String> {
 
     Ok(serde_json::json!({
         "tag": tag,
+        "current_version": env!("CARGO_PKG_VERSION"),
         "url": json.get("html_url").and_then(|t| t.as_str()).unwrap_or_default(),
         "name": json.get("name").and_then(|t| t.as_str()).unwrap_or_default(),
         "changelog": json.get("body").and_then(|t| t.as_str()).unwrap_or(""),
@@ -3065,9 +3085,13 @@ pub fn run() {
             set_memory_importance,
             list_checkpoints,
             notify_native,
+            get_app_version,
             check_latest_release,
             check_for_updates,
             is_portable_mode,
+            get_portable_status,
+            sync_project_memory_to_portable,
+            sync_project_memory_from_portable,
             download_update,
             install_update,
             get_workspace_stats,

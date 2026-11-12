@@ -2272,6 +2272,66 @@ function setupDeveloperOptions() {
       }
     });
 
+    // 4b. Hybrid Portable Environment Inspector & Knowledge Sync
+    const updatePortableStatusUI = async () => {
+      try {
+        const status = await invoke('get_portable_status');
+        const badge = document.getElementById('dev-portable-status-badge');
+        const pathElem = document.getElementById('dev-portable-root-path');
+        const lockElem = document.getElementById('dev-portable-lock-status');
+        const countElem = document.getElementById('dev-portable-sync-count');
+
+        if (badge) {
+          badge.textContent = status.is_portable ? 'PORTABLE (USB)' : 'HOST INSTALLED';
+          badge.style.color = status.is_portable ? 'var(--accent-green)' : 'var(--accent-cyan)';
+          badge.style.borderColor = status.is_portable ? 'rgba(48, 209, 88, 0.4)' : 'rgba(57, 197, 187, 0.4)';
+        }
+        if (pathElem) pathElem.textContent = status.portable_root || 'None (Running from standard host storage)';
+        if (lockElem) lockElem.textContent = status.lock_acquired ? 'Guarded (Lock Active)' : (status.is_portable ? 'No Lock' : 'N/A (Host Mode)');
+        if (countElem) countElem.textContent = `${status.synced_projects_count || 0} project memory backup(s)`;
+      } catch (err) {
+        console.warn('Failed to retrieve portable status:', err);
+      }
+    };
+
+    updatePortableStatusUI();
+    document.getElementById('btn-dev-refresh-portable')?.addEventListener('click', () => {
+      updatePortableStatusUI();
+      showToast('✓ Portable environment status refreshed', 'info', 1800);
+    });
+
+    document.getElementById('btn-dev-sync-to-portable')?.addEventListener('click', async () => {
+      const activeWs = appState.workspace?.rootPath;
+      if (!activeWs) {
+        showToast('No active workspace folder opened to sync', 'warning', 2500);
+        return;
+      }
+      try {
+        showToast('Syncing workspace .orbital memory to portable store…', 'info', 1500);
+        const res = await invoke('sync_project_memory_to_portable', { projectPath: activeWs, portableRoot: null });
+        showToast(`✓ Memory synced to portable storage (${res.files_synced} files)`, 'success', 3000);
+        updatePortableStatusUI();
+      } catch (e) {
+        showToast('Sync failed: ' + e, 'error', 3500);
+      }
+    });
+
+    document.getElementById('btn-dev-sync-from-portable')?.addEventListener('click', async () => {
+      const activeWs = appState.workspace?.rootPath;
+      if (!activeWs) {
+        showToast('No active workspace folder opened to restore', 'warning', 2500);
+        return;
+      }
+      try {
+        showToast('Restoring workspace memory from portable store…', 'info', 1500);
+        const res = await invoke('sync_project_memory_from_portable', { projectPath: activeWs, portableRoot: null });
+        showToast(`✓ Workspace memory restored (${res.files_synced} files)`, 'success', 3000);
+        updatePortableStatusUI();
+      } catch (e) {
+        showToast('Restore failed: ' + e, 'error', 3500);
+      }
+    });
+
     // 5. Test Core IPC Ping
     document.getElementById('btn-dev-test-ipc')?.addEventListener('click', async () => {
       const badge = document.getElementById('dev-ipc-latency-badge');
@@ -2332,9 +2392,16 @@ function setupDeveloperOptions() {
 
     // 9. Copy Diagnostics JSON
     document.getElementById('btn-dev-copy-diag')?.addEventListener('click', async () => {
+      let resolvedVersion = '2.3.8';
+      try {
+        const { resolveCurrentVersion } = await import('./updater.js');
+        resolvedVersion = await resolveCurrentVersion();
+      } catch (e) {
+        // Fallback to latest standard version
+      }
       const diag = {
         product: 'Orbital X',
-        version: '2.3.6',
+        version: resolvedVersion,
         userAgent: navigator.userAgent,
         agentMode: appState.agentMode,
         theme: appState.theme,

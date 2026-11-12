@@ -48,7 +48,7 @@ function initMobileNav() {
   });
 }
 
-// 1. Detect User OS & update main CTA with verified v2.3.7 release URLs
+// 1. Detect User OS & update main CTA with verified v2.3.8 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -58,16 +58,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.7/Orbital.X_2.3.7_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_x64-setup.exe';
   } else if (ua.includes('mac')) {
     ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.7/Orbital.X_2.3.7_aarch64.dmg';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_aarch64.dmg';
   } else if (ua.includes('linux')) {
     ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.7/Orbital.X_2.3.7_amd64.AppImage';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_amd64.AppImage';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.3.7)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.3.7';
+    ctaLabel.textContent = 'Download Orbital X (v2.3.8)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.3.8';
   }
 }
 
