@@ -663,10 +663,16 @@ function setupEditorSettingsUI() {
           <option value="openai">OpenAI / compatible endpoint</option>
         </select>
       </div>
+      <div class="form-group" style="margin-top: 8px; margin-bottom: 0;">
+        <label class="form-label">Dedicated Lightweight Model</label>
+        <input type="text" class="text-input" id="cfg-inline-model" placeholder="e.g. qwen2.5-coder:1.5b" style="width: 100%; font-family: var(--font-mono); font-size: 11px;" />
+        <span style="font-size: 10px; color: var(--text-muted); display: block; margin-top: 3px;">Separate lightweight 1.5B/3B model delivers ~1-2s suggestions without interrupting ongoing agent chats.</span>
+      </div>
     `;
     modelsPane.appendChild(ic);
     ic.querySelector('#cfg-inline-complete').addEventListener('change', applyFromUI);
     ic.querySelector('#cfg-inline-provider').addEventListener('change', applyFromUI);
+    ic.querySelector('#cfg-inline-model').addEventListener('input', applyFromUI);
   }
 
   loadEditorSettingsIntoUI();
@@ -698,6 +704,7 @@ function loadEditorSettingsIntoUI() {
     const ic = state.settings.inlineComplete || {};
     check('cfg-inline-complete', ic.enabled);
     set('cfg-inline-provider', ic.provider);
+    set('cfg-inline-model', ic.model || 'qwen2.5-coder:1.5b');
     check('cfg-inline-cloud', ic.enableCloudSuggestions);
   });
 }
@@ -731,9 +738,10 @@ function applyFromUI() {
     s.letterSpacing = num('cfg-letter-spacing', s.letterSpacing);
     s.fontLigatures = val('cfg-font-ligatures', s.fontLigatures);
 
-    state.settings.inlineComplete = state.settings.inlineComplete || { enabled: false, provider: 'ollama', enableCloudSuggestions: false };
+    state.settings.inlineComplete = state.settings.inlineComplete || { enabled: false, provider: 'ollama', enableCloudSuggestions: false, model: 'qwen2.5-coder:1.5b' };
     state.settings.inlineComplete.enabled = val('cfg-inline-complete', state.settings.inlineComplete.enabled);
     state.settings.inlineComplete.provider = val('cfg-inline-provider', state.settings.inlineComplete.provider);
+    state.settings.inlineComplete.model = val('cfg-inline-model', state.settings.inlineComplete.model || 'qwen2.5-coder:1.5b');
     state.settings.inlineComplete.enableCloudSuggestions = val('cfg-inline-cloud', state.settings.inlineComplete.enableCloudSuggestions || false);
     try {
       localStorage.setItem('orbital_inline_complete', JSON.stringify(state.settings.inlineComplete));

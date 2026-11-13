@@ -2110,7 +2110,7 @@ function initProductionHardening() {
   });
   window.addEventListener('orbital:agent-run-finished', (e) => {
     const steps = e.detail?.steps || 0;
-    recordActivity(`🎯 Agent task run completed (${steps} steps finished)`, 'success', { category: 'milestone' });
+    recordActivity(`Agent task run completed (${steps} steps finished)`, 'success', { category: 'milestone' });
     if (isWindowHidden()) {
       notifyNative('Orbital X', `✅ Agent task completed (${steps} steps)`);
     }

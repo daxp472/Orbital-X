@@ -452,6 +452,11 @@ function bindEditorBase(ed, panel) {
       updateBreadcrumbFor(panel);
     }
   });
+
+  // Explicit Tab commit keybinding for inline ghost-text suggestions
+  ed.addCommand(monaco.KeyCode.Tab, () => {
+    ed.trigger('keyboard', 'editor.action.inlineSuggest.commit', {});
+  }, 'inlineSuggestionVisible');
 }
 
 // ---------------------------------------------------------------------------
@@ -640,6 +645,9 @@ function getLocalSuggestion(prefix, suffix, lineContent, language) {
   return null;
 }
 
+// LRU completion cache for ultra-low latency (<20ms) on repeated or backspaced contexts
+const inlineCache = new Map();
+
 function registerInlineCompletions() {
   if (inlineCompletionsRegistered) return;
   inlineCompletionsRegistered = true;
@@ -653,12 +661,12 @@ function registerInlineCompletions() {
       const lineContent = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
       if (!lineContent.trim() && position.column === 1) return { items: [] };
 
-      // Responsive 180ms debounce (feels instant like Copilot without spamming backend)
+      // Responsive 140ms debounce for rapid typing without backend flooding
       const mySeq = ++inlineCompletionSeq;
       let isCancelled = false;
       const cancelSub = token?.onCancellationRequested?.(() => { isCancelled = true; });
 
-      await new Promise(r => setTimeout(r, 180));
+      await new Promise(r => setTimeout(r, 140));
       if (isCancelled || mySeq !== inlineCompletionSeq || token?.isCancellationRequested) {
         cancelSub?.dispose?.();
         return { items: [] };
@@ -666,16 +674,28 @@ function registerInlineCompletions() {
 
       const offset = model.getOffsetAt(position);
       const full = model.getValue();
-      const prefix = full.slice(Math.max(0, offset - 1000), offset);
-      const suffix = full.slice(offset, Math.min(full.length, offset + 300));
+      // Compact context window: 400 chars prefix, 120 chars suffix (dramatically lowers prefill time)
+      const prefix = full.slice(Math.max(0, offset - 400), offset);
+      const suffix = full.slice(offset, Math.min(full.length, offset + 120));
       const language = model.getLanguageId();
 
+      // Check cache first
+      const cacheKey = `${language}:${prefix.slice(-150)}:${suffix.slice(0, 40)}`;
+      const cached = inlineCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < 30000)) {
+        cancelSub?.dispose?.();
+        return {
+          items: [{
+            insertText: cached.text,
+            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+          }]
+        };
+      }
+
       const provider = (state.ai.provider || 'ollama').toLowerCase();
-      // Requirement: local Ollama enabled by default; cloud providers optional & configurable to prevent unexpected API costs
       const isCloudProvider = provider !== 'ollama';
       if (isCloudProvider && !cfg.enableCloudSuggestions) {
         cancelSub?.dispose?.();
-        // Fallback to instant local syntax predictive engine
         const fallback = getLocalSuggestion(prefix, suffix, lineContent, language);
         if (fallback) {
           return {
@@ -688,46 +708,45 @@ function registerInlineCompletions() {
         return { items: [] };
       }
 
+      // Dedicated lightweight 1.5B/3B model configuration separated from heavy agent model
+      const inlineModel = cfg.model || (state.ai.speculative?.enabled ? state.ai.speculative.draftModel : 'qwen2.5-coder:1.5b');
+
       const indicator = document.getElementById('sb-complete-indicator');
-      if (indicator) indicator.style.display = 'inline-flex';
+      if (indicator) {
+        indicator.style.display = 'inline-flex';
+        indicator.textContent = '◍ completing…';
+      }
+
+      const t0 = performance.now();
 
       try {
-        const spec = state.ai.speculative || {};
         let text = '';
+        const aiPromise = invoke('complete_code', {
+          provider,
+          apiKey: state.ai.keys[provider] || state.ai.apiKey || '',
+          model: inlineModel,
+          baseUrl: provider === 'ollama' ? (state.ai.endpoint || 'http://localhost:11434') : (state.ai.openaiBaseUrl || null),
+          prefix,
+          suffix,
+          language,
+        });
 
-        if (spec.enabled && spec.draftModel && provider === 'ollama') {
-          try {
-            const res = await invoke('speculative_complete_code', {
-              draftModel: spec.draftModel,
-              verifierModel: spec.verifierModel || state.ai.model || 'qwen2.5-coder:7b',
-              baseUrl: state.ai.endpoint || 'http://localhost:11434',
-              prefix,
-              suffix,
-              language,
-              requestId: String(mySeq),
-            });
-            text = (res && (res.completion || res.final || res.draft)) || '';
-          } catch (_) {}
-        } else {
-          const aiPromise = invoke('complete_code', {
-            provider,
-            apiKey: state.ai.keys[provider] || state.ai.apiKey || '',
-            model: state.ai.model || '',
-            baseUrl: provider === 'ollama' ? (state.ai.endpoint || 'http://localhost:11434') : (state.ai.openaiBaseUrl || null),
-            prefix,
-            suffix,
-            language,
-          });
-
-          const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 3000));
-          const res = await Promise.race([aiPromise, timeoutPromise]);
-          if (res && res.completion) {
-            text = res.completion;
-          }
+        // Hard timeout at 2.4s to guarantee responsiveness
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 2400));
+        const res = await Promise.race([aiPromise, timeoutPromise]);
+        if (res && res.completion) {
+          text = res.completion;
         }
 
         if (isCancelled || mySeq !== inlineCompletionSeq || token?.isCancellationRequested) {
           return { items: [] };
+        }
+
+        // Measure actual latency
+        const latencyMs = Math.round(performance.now() - t0);
+        if (indicator) {
+          indicator.textContent = `◍ ${latencyMs}ms`;
+          indicator.title = `Inline suggestion latency: ${latencyMs}ms (${inlineModel})`;
         }
 
         // If backend was slow or empty, fall back to local syntax predictive engine
@@ -735,7 +754,7 @@ function registerInlineCompletions() {
           text = getLocalSuggestion(prefix, suffix, lineContent, language) || '';
         }
 
-        if (!text || text.length > 600) return { items: [] };
+        if (!text || text.length > 500) return { items: [] };
 
         // Clean up completion string: strip markdown fences and leading blank lines
         text = text.replace(/^\`\`\`[a-zA-Z0-9_-]*\r?\n?/, '').replace(/\r?\n?\`\`\`$/, '');
@@ -754,6 +773,13 @@ function registerInlineCompletions() {
           text = text.substring(afterCursor.length);
         }
         if (!text || !text.trim()) return { items: [] };
+
+        // Save in cache (keep max 100 entries)
+        if (inlineCache.size > 100) {
+          const oldest = inlineCache.keys().next().value;
+          inlineCache.delete(oldest);
+        }
+        inlineCache.set(cacheKey, { text, timestamp: Date.now() });
 
         return {
           items: [
@@ -776,7 +802,12 @@ function registerInlineCompletions() {
         return { items: [] };
       } finally {
         cancelSub?.dispose?.();
-        if (indicator) indicator.style.display = 'none';
+        // Hide indicator after 1.8s
+        setTimeout(() => {
+          if (indicator && inlineCompletionSeq === mySeq) {
+            indicator.style.display = 'none';
+          }
+        }, 1800);
       }
     },
     freeInlineCompletions() { /* no cached state */ },
@@ -2052,59 +2083,256 @@ function escapeAttr(s) {
 }
 
 // ---------------------------------------------------------------------------
-// Diff editor (unchanged behavior)
+// Transactional VFS In-Editor Review System (VS Code / Cursor Style)
 // ---------------------------------------------------------------------------
 
-let diffEditorInstance = null;
+const pendingVfsReviews = new Map(); // filePath -> { filePath, oldContent, newContent, decorations, editor, addedCount, deletedCount }
+let vfsReviewBarElement = null;
 
-export function openDiffModal(filePath, oldContent, newContent, onAccept, onReject) {
-  const modal = document.getElementById('modal-diff-review');
-  const container = document.getElementById('diff-editor-container');
-  const titleElem = document.getElementById('diff-modal-title');
-  const statsElem = document.getElementById('diff-stats-text');
+function ensureVfsReviewBar() {
+  if (vfsReviewBarElement && document.body.contains(vfsReviewBarElement)) {
+    return vfsReviewBarElement;
+  }
+  const bar = document.createElement('div');
+  bar.id = 'vfs-in-editor-review-bar';
+  bar.className = 'vfs-in-editor-review-bar';
+  bar.style.display = 'none';
+  bar.innerHTML = `
+    <div class="vfs-bar-info">
+      <svg class="vfs-bar-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      <span class="vfs-bar-title">AI Changes Pending Review: <strong id="vfs-bar-filename">file</strong></span>
+      <span class="vfs-bar-stats" id="vfs-bar-stats">+0 / -0</span>
+    </div>
+    <div class="vfs-bar-actions">
+      <button class="btn btn-sm btn-vfs-accept" id="btn-vfs-bar-accept" title="Accept changes for this file (commits to disk)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        <span>Accept</span>
+      </button>
+      <button class="btn btn-sm btn-vfs-reject" id="btn-vfs-bar-reject" title="Reject changes for this file (reverts to original)">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        <span>Reject</span>
+      </button>
+      <div class="vfs-bar-sep"></div>
+      <button class="btn btn-sm btn-vfs-all" id="btn-vfs-bar-accept-all" title="Accept all pending file changes">
+        <span>Accept All (<span id="vfs-bar-total-count">1</span>)</span>
+      </button>
+      <button class="btn btn-sm btn-vfs-all" id="btn-vfs-bar-reject-all" title="Reject all pending file changes">
+        <span>Reject All</span>
+      </button>
+    </div>
+  `;
 
-  if (!modal || !container) return;
-
-  const filename = filePath.split(/[/\\]/).pop();
-  titleElem.textContent = `Review Proposed Changes: ${filename}`;
-
-  modal.style.display = 'flex';
-
-  if (!diffEditorInstance) {
-    diffEditorInstance = monaco.editor.createDiffEditor(container, {
-      theme: 'orbital-dark-theme',
-      automaticLayout: true,
-      readOnly: true,
-      fontSize: 13,
-      fontFamily: "'JetBrains Mono', monospace",
-    });
+  // Place bar above editor container inside editor-column
+  const container = document.getElementById('editor-container-left') || document.querySelector('.editor-column');
+  if (container && container.parentNode) {
+    container.parentNode.insertBefore(bar, container);
+  } else {
+    document.body.appendChild(bar);
   }
 
-  const lang = detectLanguage(filename);
-  const originalModel = monaco.editor.createModel(oldContent, lang);
-  const modifiedModel = monaco.editor.createModel(newContent, lang);
-
-  diffEditorInstance.setModel({
-    original: originalModel,
-    modified: modifiedModel,
+  // Action listeners
+  bar.querySelector('#btn-vfs-bar-accept').addEventListener('click', () => {
+    const activePath = getActiveTabPath();
+    if (activePath && pendingVfsReviews.has(activePath)) {
+      acceptVfsFile(activePath);
+    } else if (pendingVfsReviews.size > 0) {
+      acceptVfsFile(pendingVfsReviews.keys().next().value);
+    }
   });
 
-  const acceptBtn = document.getElementById('btn-accept-diff');
-  const rejectBtn = document.getElementById('btn-reject-diff');
-  const closeBtn = document.getElementById('btn-close-diff-modal');
+  bar.querySelector('#btn-vfs-bar-reject').addEventListener('click', () => {
+    const activePath = getActiveTabPath();
+    if (activePath && pendingVfsReviews.has(activePath)) {
+      rejectVfsFile(activePath);
+    } else if (pendingVfsReviews.size > 0) {
+      rejectVfsFile(pendingVfsReviews.keys().next().value);
+    }
+  });
 
-  const cleanup = () => {
-    modal.style.display = 'none';
-    acceptBtn.onclick = null;
-    rejectBtn.onclick = null;
-    closeBtn.onclick = null;
-    originalModel.dispose();
-    modifiedModel.dispose();
-  };
+  bar.querySelector('#btn-vfs-bar-accept-all').addEventListener('click', () => {
+    acceptAllVfsFiles();
+  });
 
-  acceptBtn.onclick = () => { cleanup(); if (onAccept) onAccept(); };
-  rejectBtn.onclick = () => { cleanup(); if (onReject) onReject(); };
-  closeBtn.onclick = () => { cleanup(); if (onReject) onReject(); };
+  bar.querySelector('#btn-vfs-bar-reject-all').addEventListener('click', () => {
+    rejectAllVfsFiles();
+  });
+
+  vfsReviewBarElement = bar;
+  return bar;
+}
+
+function updateVfsReviewBarUI(targetPath = null) {
+  const bar = ensureVfsReviewBar();
+  if (pendingVfsReviews.size === 0) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+  const activePath = targetPath || getActiveTabPath() || pendingVfsReviews.keys().next().value;
+  const review = pendingVfsReviews.get(activePath);
+
+  const filenameEl = bar.querySelector('#vfs-bar-filename');
+  const statsEl = bar.querySelector('#vfs-bar-stats');
+  const countEl = bar.querySelector('#vfs-bar-total-count');
+
+  if (countEl) countEl.textContent = String(pendingVfsReviews.size);
+
+  if (review) {
+    filenameEl.textContent = activePath.split(/[/\\]/).pop();
+    statsEl.textContent = `+${review.addedCount} / -${review.deletedCount} lines`;
+  } else {
+    filenameEl.textContent = `${pendingVfsReviews.size} files modified`;
+    statsEl.textContent = 'Review pending';
+  }
+}
+
+export function showVfsFileReview(filePath, oldContent, newContent, diff = null) {
+  const filename = filePath.split(/[/\\]/).pop();
+
+  // 1. Open or focus file tab with the new proposed content in Monaco
+  openFileInTab({
+    name: filename,
+    path: filePath,
+    content: newContent,
+    language: detectLanguage(filename),
+  });
+
+  const ed = editors[getActivePanel()];
+  const model = ed?.getModel();
+  if (!ed || !model) return;
+
+  // 2. Compute lines added and modified
+  const oldLines = oldContent.split('\n');
+  const newLines = newContent.split('\n');
+  const oldSet = new Set(oldLines);
+
+  const decorations = [];
+  let addedCount = 0;
+
+  for (let i = 0; i < newLines.length; i++) {
+    const line = newLines[i];
+    if (!oldSet.has(line)) {
+      addedCount++;
+      decorations.push({
+        range: new monaco.Range(i + 1, 1, i + 1, 1),
+        options: {
+          isWholeLine: true,
+          className: 'inline-diff-add',
+          overviewRuler: {
+            color: '#30d158',
+            position: monaco.editor.OverviewRulerPosition.Right,
+          },
+        },
+      });
+    }
+  }
+
+  // Apply decorations
+  const appliedDecorations = ed.deltaDecorations([], decorations);
+  const deletedCount = Math.max(0, oldLines.length - (newLines.length - addedCount));
+
+  pendingVfsReviews.set(filePath, {
+    filePath,
+    oldContent,
+    newContent,
+    decorations: appliedDecorations,
+    editor: ed,
+    addedCount,
+    deletedCount,
+  });
+
+  // Reveal first changed line
+  if (decorations.length > 0) {
+    ed.revealLineInCenter(decorations[0].range.startLineNumber);
+  }
+
+  updateVfsReviewBarUI(filePath);
+}
+
+export async function acceptVfsFile(filePath) {
+  const review = pendingVfsReviews.get(filePath);
+  if (!review) return;
+
+  // Clear decorations
+  if (review.editor && review.decorations) {
+    review.editor.deltaDecorations(review.decorations, []);
+  }
+
+  // Save to disk
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('save_file', {
+      path: filePath,
+      content: review.newContent,
+      description: 'Accepted AI Changes via VFS Review'
+    });
+    try { await invoke('vfs_commit_transaction', {}); } catch (_) {}
+  } catch (e) {
+    console.error("VFS accept error:", e);
+  }
+
+  pendingVfsReviews.delete(filePath);
+  updateVfsReviewBarUI();
+  const { showToast } = await import('../services/notifications.js');
+  showToast(`Accepted changes in ${filePath.split(/[/\\]/).pop()}`, 'success', 2200);
+}
+
+export async function rejectVfsFile(filePath) {
+  const review = pendingVfsReviews.get(filePath);
+  if (!review) return;
+
+  // Clear decorations
+  if (review.editor && review.decorations) {
+    review.editor.deltaDecorations(review.decorations, []);
+  }
+
+  // Revert model content to original code
+  const ed = review.editor || editors[getActivePanel()];
+  if (ed && ed.getModel()) {
+    ed.getModel().setValue(review.oldContent);
+  }
+
+  // Discard in VFS
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    await invoke('vfs_discard_changes', { path: filePath });
+  } catch (_) {}
+
+  pendingVfsReviews.delete(filePath);
+  updateVfsReviewBarUI();
+  const { showToast } = await import('../services/notifications.js');
+  showToast(`Rejected changes in ${filePath.split(/[/\\]/).pop()}`, 'info', 2200);
+}
+
+export async function acceptAllVfsFiles() {
+  const paths = Array.from(pendingVfsReviews.keys());
+  for (const path of paths) {
+    await acceptVfsFile(path);
+  }
+  try {
+    const { commitVfsAll } = await import('../services/tauri.js');
+    await commitVfsAll();
+  } catch (_) {}
+  const { showToast } = await import('../services/notifications.js');
+  showToast('Accepted all pending file changes', 'success', 2500);
+}
+
+export async function rejectAllVfsFiles() {
+  const paths = Array.from(pendingVfsReviews.keys());
+  for (const path of paths) {
+    await rejectVfsFile(path);
+  }
+  try {
+    const { rollbackVfsAll } = await import('../services/tauri.js');
+    await rollbackVfsAll();
+  } catch (_) {}
+  const { showToast } = await import('../services/notifications.js');
+  showToast('Rejected all pending file changes', 'info', 2500);
+}
+
+export function hasPendingVfsReviews() {
+  return pendingVfsReviews.size > 0;
 }
 
 export function previewVfsDiff(diff, onCommit, onRollback) {
@@ -2113,29 +2341,10 @@ export function previewVfsDiff(diff, onCommit, onRollback) {
   const oldContent = diff.original_content ?? '';
   const newContent = diff.shadow_content ?? '';
 
-  openDiffModal(
-    filePath,
-    oldContent,
-    newContent,
-    async () => {
-      if (onCommit) {
-        await onCommit();
-      } else {
-        const { commitVfsAll } = await import('../services/tauri.js');
-        await commitVfsAll();
-      }
-      const { updateVfsStatusIndicator } = await import('../app.js');
-      updateVfsStatusIndicator();
-    },
-    async () => {
-      if (onRollback) {
-        await onRollback();
-      } else {
-        const { rollbackVfsAll } = await import('../services/tauri.js');
-        await rollbackVfsAll();
-      }
-      const { updateVfsStatusIndicator } = await import('../app.js');
-      updateVfsStatusIndicator();
-    }
-  );
+  // Show in-editor transactional review instead of blocking modal
+  showVfsFileReview(filePath, oldContent, newContent, diff);
+}
+
+export function openDiffModal(filePath, oldContent, newContent, onAccept, onReject) {
+  showVfsFileReview(filePath, oldContent, newContent);
 }

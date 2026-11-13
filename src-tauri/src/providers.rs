@@ -368,7 +368,7 @@ impl ProviderService {
             "ollama" => {
                 let url = base_url.unwrap_or_else(|| "http://127.0.0.1:11434".into());
                 let normalized_url = url.replace("localhost", "127.0.0.1");
-                let target_model = if model.is_empty() { "qwen2.5-coder:7b" } else { model };
+                let target_model = if model.is_empty() { "qwen2.5-coder:1.5b" } else { model };
 
                 // First attempt: FIM (Fill-In-The-Middle) via /api/generate
                 let fim_payload = serde_json::json!({
@@ -378,9 +378,9 @@ impl ProviderService {
                     "stream": false,
                     "keep_alive": "15m",
                     "options": {
-                        "num_predict": 48,
+                        "num_predict": 36,
                         "temperature": 0.1,
-                        "stop": ["\n\n", "```", "<|endoftext|>", "<|fim_pad|>"]
+                        "stop": ["\n\n", "\r\n\r\n", "```", "<|endoftext|>", "<|fim_pad|>"]
                     }
                 });
 
@@ -803,6 +803,33 @@ impl ProviderService {
                             "content": m.content,
                             "tool_calls": calls_json
                         }));
+                    } else if let Some(imgs) = &m.images {
+                        if !imgs.is_empty() {
+                            let mut parts = vec![serde_json::json!({
+                                "type": "text",
+                                "text": m.content
+                            })];
+                            for img in imgs {
+                                let url = if img.starts_with("data:") {
+                                    img.clone()
+                                } else {
+                                    format!("data:image/png;base64,{}", img.trim())
+                                };
+                                parts.push(serde_json::json!({
+                                    "type": "image_url",
+                                    "image_url": { "url": url }
+                                }));
+                            }
+                            openai_msgs.push(serde_json::json!({
+                                "role": m.role,
+                                "content": parts
+                            }));
+                        } else {
+                            openai_msgs.push(serde_json::json!({
+                                "role": m.role,
+                                "content": m.content
+                            }));
+                        }
                     } else {
                         openai_msgs.push(serde_json::json!({
                             "role": m.role,
@@ -937,6 +964,40 @@ impl ProviderService {
                             "role": "assistant",
                             "content": content_blocks
                         }));
+                    } else if let Some(imgs) = &m.images {
+                        if !imgs.is_empty() {
+                            let mut content_blocks = Vec::new();
+                            if !m.content.is_empty() {
+                                content_blocks.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": m.content
+                                }));
+                            }
+                            for img in imgs {
+                                let clean_b64 = if let Some(idx) = img.find(";base64,") {
+                                    &img[idx + 8..]
+                                } else {
+                                    img.as_str()
+                                };
+                                content_blocks.push(serde_json::json!({
+                                    "type": "image",
+                                    "source": {
+                                        "type": "base64",
+                                        "media_type": "image/png",
+                                        "data": clean_b64.trim()
+                                    }
+                                }));
+                            }
+                            anthropic_msgs.push(serde_json::json!({
+                                "role": m.role,
+                                "content": content_blocks
+                            }));
+                        } else {
+                            anthropic_msgs.push(serde_json::json!({
+                                "role": m.role,
+                                "content": m.content
+                            }));
+                        }
                     } else {
                         anthropic_msgs.push(serde_json::json!({
                             "role": m.role,
@@ -1053,9 +1114,25 @@ impl ProviderService {
                 let mut gemini_contents: Vec<serde_json::Value> = Vec::new();
                 for m in &messages {
                     let role = if m.role == "assistant" { "model" } else { "user" };
+                    let mut parts = vec![serde_json::json!({"text": m.content})];
+                    if let Some(imgs) = &m.images {
+                        for img in imgs {
+                            let clean_b64 = if let Some(idx) = img.find(";base64,") {
+                                &img[idx + 8..]
+                            } else {
+                                img.as_str()
+                            };
+                            parts.push(serde_json::json!({
+                                "inline_data": {
+                                    "mime_type": "image/png",
+                                    "data": clean_b64.trim()
+                                }
+                            }));
+                        }
+                    }
                     gemini_contents.push(serde_json::json!({
                         "role": role,
-                        "parts": [{"text": m.content}]
+                        "parts": parts
                     }));
                 }
 
@@ -1155,7 +1232,14 @@ pub fn build_ollama_payload(
                 if let Some(imgs) = &m.images {
                     let img_vals: Vec<serde_json::Value> = imgs
                         .iter()
-                        .map(|s| serde_json::Value::String(s.clone()))
+                        .map(|s| {
+                            let clean_b64 = if let Some(idx) = s.find(";base64,") {
+                                &s[idx + 8..]
+                            } else {
+                                s.as_str()
+                            };
+                            serde_json::Value::String(clean_b64.trim().to_string())
+                        })
                         .collect();
                     msg_obj["images"] = serde_json::Value::Array(img_vals);
                 }

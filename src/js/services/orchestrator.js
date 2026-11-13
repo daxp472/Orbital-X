@@ -294,7 +294,7 @@ export function updateTaskState(plan, taskId, newStatus, evidence = '', notes = 
     plan.status = 'completed';
     plan.completedAt = Date.now();
     import('./notifications.js').then(m => {
-      m.recordActivity(`🎯 Plan Completed: "${plan.title}" (${plan.tasks.length}/${plan.tasks.length} tasks finished)`, 'success', { category: 'milestone' });
+      m.recordActivity(`Plan Completed: "${plan.title}" (${plan.tasks.length}/${plan.tasks.length} tasks finished)`, 'success', { category: 'milestone' });
     });
   } else if (hasFailed) {
     plan.status = 'failed';

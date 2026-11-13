@@ -4,12 +4,14 @@
 
 import { state, notify, persistState } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
-import { openDiffModal, openFileInTab } from '../editor/monaco.js';
+import { openDiffModal, openFileInTab, showVfsFileReview } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
 import { handleLikeResponse, handleDislikeResponse, getFeedbackDirectivesForPrompt, getFeedbackData } from '../services/feedback.js';
 import { openTaskListModal } from './task-list.js';
 import { getActiveEvidenceLedger, resetActiveEvidenceLedger, renderEvidenceBadge } from '../services/evidence-engine.js';
 import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
+import { renderOrbitalErrorCard, parseOrbitalError } from '../services/errors.js';
+import { getDragSession } from './file-tree.js';
 
 // Dynamic module-level proxy ensuring evidenceLedger is permanently in scope throughout agent.js
 const evidenceLedger = new Proxy({}, {
@@ -41,6 +43,68 @@ let liveActivityTimerId = null;
 let liveActivityStartTime = null;
 // Id of the currently in-flight agent turn, used to cancel it from the Stop button
 let activeTurnId = null;
+
+// Screenshot & Image Attachment state for multimodal vision turns
+let pendingImages = []; // { id, name, base64, dataUrl, size }
+
+export function clearImages() {
+  pendingImages = [];
+  renderAttachmentChips();
+}
+
+export function isVisionCapableModel(provider, model) {
+  const p = (provider || state.ai?.provider || '').toLowerCase();
+  const m = (model || state.ai?.model || '').toLowerCase();
+  if (p === 'anthropic' || p === 'gemini') return true;
+  if (p === 'openai') {
+    return m.includes('4o') || m.includes('vision') || m.includes('turbo');
+  }
+  if (p === 'ollama') {
+    return /(vision|llava|moondream|bakllava|minicpm|qwen2-vl|qwen2.5-vl)/i.test(m);
+  }
+  return false;
+}
+
+export async function processAndAttachImage(fileOrBlob, name = 'screenshot.png') {
+  if (!fileOrBlob) return;
+  if (fileOrBlob.size > 8 * 1024 * 1024) {
+    showToast('Image exceeds 8MB limit', 'warning', 3000);
+    return;
+  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      const base64 = typeof dataUrl === 'string' && dataUrl.includes(';base64,') ? dataUrl.split(';base64,')[1] : dataUrl;
+      const imgObj = {
+        id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: name || 'screenshot.png',
+        dataUrl,
+        base64,
+        size: fileOrBlob.size,
+      };
+      pendingImages.push(imgObj);
+      renderAttachmentChips();
+      resolve(imgObj);
+    };
+    reader.onerror = () => {
+      showToast('Failed to load image', 'error', 2500);
+      resolve(null);
+    };
+    reader.readAsDataURL(fileOrBlob);
+  });
+}
+
+export function displayOrbitalError(err, context = {}) {
+  const errorObj = parseOrbitalError(err, context);
+  const card = renderOrbitalErrorCard(errorObj);
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    timeline.appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth' });
+  }
+  return card;
+}
 
 export function initAgent() {
   const sendBtn = document.getElementById('btn-agent-send');
@@ -209,16 +273,16 @@ function initChatDropZone() {
   let dragDepth = 0;
 
   panel.addEventListener('dragenter', (e) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
     e.preventDefault();
     dragDepth++;
     panel.classList.add('chat-drop-zone');
   });
 
   panel.addEventListener('dragover', (e) => {
-    if (!e.dataTransfer?.types?.includes('Files')) return;
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   });
 
   panel.addEventListener('dragleave', (e) => {
@@ -233,25 +297,49 @@ function initChatDropZone() {
     dragDepth = 0;
     panel.classList.remove('chat-drop-zone');
 
+    // 1. Check if dropped from internal file tree
+    const internalSession = getDragSession?.();
+    const orbitalPath = e.dataTransfer?.getData('application/orbital-path') || internalSession?.path;
+    if (orbitalPath) {
+      const input = document.getElementById('agent-input');
+      if (input) {
+        const tag = `@${orbitalPath} `;
+        if (!input.value.includes(tag.trim())) {
+          input.value = input.value ? `${input.value.trimEnd()} ${tag}` : tag;
+          input.focus();
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          showToast(`Tagged @${orbitalPath} to agent prompt`, 'success', 2200);
+        }
+      }
+      return;
+    }
+
+    // 2. Check external OS files / screenshots dropped
     const files = [...(e.dataTransfer?.files || [])];
     if (files.length === 0) return;
 
+    let attachedCount = 0;
     for (const file of files.slice(0, 5)) {
-      try {
-        // Read as text (binary files will have replacement chars, still useful)
-        const text = await file.text();
-        if (text.length > 500_000) {
-          showToast(`${file.name} is too large to attach (500KB limit)`, 'warning', 3000);
-          continue;
+      if (file.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(file.name)) {
+        await processAndAttachImage(file, file.name);
+        attachedCount++;
+      } else {
+        try {
+          const text = await file.text();
+          if (text.length > 500_000) {
+            showToast(`${file.name} is too large to attach (500KB limit)`, 'warning', 3000);
+            continue;
+          }
+          pendingAttachments.push({ kind: 'drop', label: file.name, content: text });
+          attachedCount++;
+        } catch (err) {
+          showToast(`Could not read ${file.name}: ${err}`, 'error', 2800);
         }
-        pendingAttachments.push({ kind: 'drop', label: file.name, content: text });
-      } catch (err) {
-        showToast(`Could not read ${file.name}: ${err}`, 'error', 2800);
       }
     }
-    if (pendingAttachments.length > 0) {
+    if (attachedCount > 0) {
       renderAttachmentChips();
-      showToast(`${files.length} file(s) attached — send your message to include them`, 'success', 2800);
+      showToast(`${attachedCount} item(s) attached — send your message to include them`, 'success', 2800);
     }
   });
 }
@@ -261,6 +349,22 @@ function initChatDropZone() {
   attachBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
     openAttachmentMenu(e);
+  });
+
+  // Screenshot & Image attachment button and file picker
+  const imgBtn = document.getElementById('btn-composer-image');
+  const imgInput = document.getElementById('composer-image-input');
+  imgBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    imgInput?.click();
+  });
+  imgInput?.addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    for (const file of files) {
+      await processAndAttachImage(file, file.name);
+    }
+    imgInput.value = '';
   });
 
   // H6: richer mode pill tooltip + last-change timestamp
@@ -293,6 +397,22 @@ function initChatDropZone() {
       inputElem.style.height = Math.min(inputElem.scrollHeight, 180) + 'px';
       updateTokenEstimate(inputElem.value);
       handleComposerInput(inputElem);
+    });
+
+    // Clipboard screenshot & image paste handler (Ctrl+V)
+    inputElem.addEventListener('paste', async (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type && item.type.startsWith('image/')) {
+          e.preventDefault();
+          const blob = item.getAsFile();
+          if (blob) {
+            await processAndAttachImage(blob, `screenshot-${Date.now().toString().slice(-4)}.png`);
+            showToast('Screenshot attached to prompt', 'success', 2200);
+          }
+        }
+      }
     });
   }
 
@@ -601,8 +721,10 @@ function attachMessageActions(card, { role, messageId, getText, onEdit, onRegene
   buttons.push(`<button class="msg-action" data-act="copy" title="Copy message" aria-label="Copy message">${ICON_SVG.copy}</button>`);
   if (role === 'user' && onEdit) buttons.push(`<button class="msg-action" data-act="edit" title="Edit and re-run" aria-label="Edit message">${ICON_SVG.edit}</button>`);
   if (role === 'assistant' && onRegenerate) buttons.push(`<button class="msg-action" data-act="regen" title="Regenerate response" aria-label="Regenerate response">${ICON_SVG.regen}</button>`);
-  buttons.push(`<button class="msg-action" data-act="up" title="Good response" aria-label="Good response">${ICON_SVG.up}</button>`);
-  buttons.push(`<button class="msg-action" data-act="down" title="Bad response" aria-label="Bad response">${ICON_SVG.down}</button>`);
+  if (role === 'assistant') {
+    buttons.push(`<button class="msg-action" data-act="up" title="Good response" aria-label="Good response">${ICON_SVG.up}</button>`);
+    buttons.push(`<button class="msg-action" data-act="down" title="Bad response" aria-label="Bad response">${ICON_SVG.down}</button>`);
+  }
   buttons.push(`<button class="msg-action" data-act="speak" title="Read aloud" aria-label="Read aloud">${ICON_SVG.speak}</button>`);
 
   bar.innerHTML = buttons.join('');
@@ -726,7 +848,7 @@ function beginEditUserMessage(messageId) {
     try {
       await runAgentLoop(enriched);
     } catch (err) {
-      appendTimelineCard('assistant', `❌ Error: ${err}`);
+      displayOrbitalError(err);
     } finally {
       isLoopRunning = false;
       setAgentBusy(false);
@@ -789,6 +911,10 @@ function openAttachmentMenu(e) {
     { label: 'Current file', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', kind: 'current-file' },
     { label: 'File by path…', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', kind: 'file' },
     { label: 'Code selection', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>', kind: 'selection' },
+    { label: 'Diagnostics & Problems', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>', kind: 'diagnostics' },
+    { label: 'Project Dependencies', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>', kind: 'env-deps' },
+    { label: 'Architecture Graph', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6"/><rect x="16" y="2" width="6" height="6"/><rect x="9" y="16" width="6" height="6"/><line x1="5" y1="8" x2="12" y2="16"/><line x1="19" y1="8" x2="12" y2="16"/></svg>', kind: 'semantic-graph' },
+    { label: 'Working Memories', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', kind: 'memory' },
     { label: 'Terminal output', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>', kind: 'terminal' },
     { label: 'Git diff', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>', kind: 'git-diff' },
     { label: 'Folder tree', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>', kind: 'folder' },
@@ -897,12 +1023,22 @@ async function handleSend() {
     }
   }
 
+  // Vision capability check for image attachments
+  const hasImages = pendingImages.length > 0;
+  if (hasImages && !isVisionCapableModel(state.ai?.provider, state.ai?.model)) {
+    displayOrbitalError(`Active model "${state.ai?.model || 'default'}" does not support vision input`, { visionRequired: true });
+    return;
+  }
+
   inputElem.value = '';
   inputElem.style.height = 'auto';
   updateTokenEstimate('');
   const now = Date.now();
   const userMid = newMessageId();
-  appendTimelineCard('user', promptText, now, { messageId: userMid });
+
+  // Capture attached image thumbnails for rendering in user message card
+  const currentImages = pendingImages.map(img => img.dataUrl || img.base64);
+  appendTimelineCard('user', promptText, now, { messageId: userMid, images: currentImages });
 
   // H5: append any queued context attachments
   let attachmentBlock = '';
@@ -922,12 +1058,17 @@ async function handleSend() {
     clearAttachments();
   }
 
-  state.conversation.push({
+  const userMsg = {
     role: 'user',
     content: enrichedPrompt,
     timestamp: now,
     mid: userMid,
-  });
+  };
+  if (hasImages) {
+    userMsg.images = pendingImages.map(img => img.base64);
+    clearImages();
+  }
+  state.conversation.push(userMsg);
 
   // Record user instruction/decision in execution memory so the model never re-asks questions
   activeExecutionMemory.userDecisions.push({
@@ -964,7 +1105,7 @@ async function handleSend() {
     }
   } catch (err) {
     console.error("Agent error:", err);
-    appendTimelineCard('assistant', `❌ Error: ${err}`);
+    displayOrbitalError(err);
   } finally {
     isLoopRunning = false;
     setAgentBusy(false);
@@ -1211,6 +1352,46 @@ export async function addAttachment(kind) {
       })(tree, '', 0);
       item.label = 'workspace tree (depth 2)';
       item.content = lines.join('\n');
+    } else if (kind === 'diagnostics') {
+      const diag = await invoke('execute_tool', { name: 'get_diagnostics', arguments: {}, mode: state.agentMode }).catch(() => null);
+      if (!diag || (Array.isArray(diag) && diag.length === 0)) {
+        showToast('No active diagnostics or syntax issues detected', 'info', 2200);
+        return;
+      }
+      item.label = 'workspace diagnostics';
+      item.content = typeof diag === 'string' ? diag : JSON.stringify(diag, null, 2);
+    } else if (kind === 'env-deps') {
+      let pkgContent = '';
+      try {
+        const pkg = await invoke('read_file', { path: 'package.json' });
+        if (pkg?.content) pkgContent += `=== package.json ===\n${pkg.content}\n\n`;
+      } catch (_) {}
+      try {
+        const cargo = await invoke('read_file', { path: 'Cargo.toml' });
+        if (cargo?.content) pkgContent += `=== Cargo.toml ===\n${cargo.content}\n\n`;
+      } catch (_) {}
+      if (!pkgContent) {
+        showToast('No package.json or Cargo.toml found in root', 'info', 2200);
+        return;
+      }
+      item.label = 'project dependencies';
+      item.content = pkgContent;
+    } else if (kind === 'semantic-graph') {
+      const graph = await invoke('get_semantic_graph', {}).catch(() => null);
+      if (!graph) {
+        showToast('Semantic architecture graph not initialized yet', 'info', 2200);
+        return;
+      }
+      item.label = 'semantic architecture graph';
+      item.content = typeof graph === 'string' ? graph : JSON.stringify(graph, null, 2);
+    } else if (kind === 'memory') {
+      const memories = await invoke('list_memories', {}).catch(() => []);
+      if (!memories || memories.length === 0) {
+        showToast('No stored memories in project library', 'info', 2200);
+        return;
+      }
+      item.label = 'project working memories';
+      item.content = JSON.stringify(memories, null, 2);
     }
   } catch (e) {
     showToast(`Attachment failed: ${e}`, 'error', 2800);
@@ -1247,10 +1428,18 @@ function renderAttachmentChips() {
   if (!host) {
     host = document.createElement('div');
     host.id = 'attachment-chips';
-    host.style.cssText = 'display: flex; flex-wrap: wrap; gap: 4px; padding: 0 10px 6px;';
+    host.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 10px 6px; align-items: center;';
     composer.insertBefore(host, composer.firstChild);
   }
   host.innerHTML = '';
+
+  if (pendingAttachments.length === 0 && pendingImages.length === 0) {
+    host.style.display = 'none';
+    return;
+  }
+  host.style.display = 'flex';
+
+  // Render text / context attachment chips
   for (const a of pendingAttachments) {
     const chip = document.createElement('span');
     chip.className = 'attachment-chip';
@@ -1258,6 +1447,23 @@ function renderAttachmentChips() {
     chip.innerHTML = `📎 <span>${escapeHtml(a.label)}</span> <button class="chip-x" title="Remove">×</button>`;
     chip.querySelector('.chip-x').addEventListener('click', () => {
       pendingAttachments = pendingAttachments.filter(x => x !== a);
+      renderAttachmentChips();
+    });
+    host.appendChild(chip);
+  }
+
+  // Render image thumbnail chips
+  for (const img of pendingImages) {
+    const chip = document.createElement('span');
+    chip.className = 'attachment-chip attachment-chip-image';
+    chip.style.cssText = 'display: inline-flex; align-items: center; gap: 6px; background: rgba(57, 197, 187, 0.12); border: 1px solid rgba(57, 197, 187, 0.35); border-radius: 6px; padding: 2px 6px; font-size: 11px;';
+    chip.innerHTML = `
+      <img src="${img.dataUrl}" alt="${escapeHtml(img.name)}" style="width: 20px; height: 20px; object-fit: cover; border-radius: 3px;" />
+      <span style="max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(img.name)}</span>
+      <button class="chip-x" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 2px;" title="Remove image">×</button>
+    `;
+    chip.querySelector('.chip-x').addEventListener('click', () => {
+      pendingImages = pendingImages.filter(x => x !== img);
       renderAttachmentChips();
     });
     host.appendChild(chip);
@@ -1789,7 +1995,7 @@ STRATEGY:
       liveCard?.fail(`Connection error: ${err}`);
       consecutiveErrors++;
       if (consecutiveErrors >= 3) {
-        appendTimelineCard('assistant', `❌ Agent stopped after ${consecutiveErrors} consecutive request failures. Last error: ${err}`);
+        displayOrbitalError(err);
         break;
       }
       // Brief backoff, then retry — no error text is written into the
@@ -2937,7 +3143,15 @@ async function processToolCallWithPolicy(toolCall) {
     }
 
     // If writing a file succeeded, notify listeners and open or refresh it in Monaco
-    if (name === 'write_file' && args.path) {
+    if (output && output.staged_in_vfs && args.path) {
+      try {
+        const originalFile = await invoke('read_file', { path: args.path }).catch(() => ({ content: '' }));
+        showVfsFileReview(args.path, originalFile?.content || '', args.content || '', output.diff);
+        showToast(`Staged in VFS Review: ${args.path.split(/[/\\]/).pop()}`, 'info', 2800);
+      } catch (vfsErr) {
+        console.warn('Failed to launch VFS file review in Monaco:', vfsErr);
+      }
+    } else if (name === 'write_file' && args.path) {
       window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
       showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
       try {
@@ -3534,6 +3748,29 @@ export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}
   renderThinkingSection(card, thinking);
   bodyEl.innerHTML = formatMarkdown(display);
   enhanceRenderedBody(bodyEl);
+
+  // Render attached screenshot & image gallery
+  if (opts.images && Array.isArray(opts.images) && opts.images.length > 0) {
+    const gallery = document.createElement('div');
+    gallery.className = 'timeline-image-gallery';
+    gallery.style.cssText = 'display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;';
+    for (const img of opts.images) {
+      const src = img.startsWith('data:') ? img : `data:image/png;base64,${img}`;
+      const imgEl = document.createElement('img');
+      imgEl.src = src;
+      imgEl.alt = 'Attached screenshot';
+      imgEl.style.cssText = 'max-height: 160px; max-width: 240px; border-radius: 6px; border: 1px solid var(--border-subtle); object-fit: contain; cursor: pointer; transition: transform 0.15s ease; background: #000;';
+      imgEl.title = 'Click to preview full size';
+      imgEl.addEventListener('click', () => {
+        const w = window.open('');
+        if (w) {
+          w.document.write(`<body style="margin:0;background:#0d1117;display:flex;align-items:center;justify-content:center;height:100vh;"><img src="${src}" style="max-width:95vw;max-height:95vh;object-fit:contain;border-radius:4px;box-shadow:0 8px 30px rgba(0,0,0,0.5);"/></body>`);
+        }
+      });
+      gallery.appendChild(imgEl);
+    }
+    card.insertBefore(gallery, card.querySelector('.msg-action-bar') || null);
+  }
 
   attachMessageActions(card, {
     role,
