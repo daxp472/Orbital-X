@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>What's New in Orbital X v2.3.8 — Release Highlights &amp; Features</title>
-  <meta name="description" content="Explore the new features in Orbital X v2.3.8: Hybrid Portable Environment on USB, redesigned Updates Suite with native Markdown viewer, Recent Chats manager, and audited developer diagnostics.">
+  <title>What's New in Orbital X v2.3.9 — Release Highlights &amp; Features</title>
+  <meta name="description" content="Explore the new features in Orbital X v2.3.9: High-Speed Inline Code Suggestions (<2s latency), Screenshot-to-Agent Multimodal Intelligence, Transactional VFS Code Review, Dedicated OX Error Framework, and Apple HIG Notifications.">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="stylesheet" href="style.css">
-  <meta property="og:title" content="What's New in Orbital X v2.3.8">
-  <meta property="og:description" content="Hybrid Portable USB Architecture, Redesigned Updates Suite, Recent Chats Manager, and Kernel Diagnostics.">
+  <meta property="og:title" content="What's New in Orbital X v2.3.9">
+  <meta property="og:description" content="High-speed inline code suggestions, visual multimodal intelligence, transactional VFS in-editor review, and structured error handling.">
   <meta property="og:image" content="https://daxp472.github.io/Orbital-X/logo.png">
-  <meta property="og:type" content="article">
+  <meta property="og:type" content="website">
   <meta name="theme-color" content="#07090e">
 </head>
 <body>
@@ -21,12 +21,13 @@
       <a href="index.html" class="nav-brand" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
         <img src="logo.png" alt="Orbital X" style="width: 28px; height: 28px; border-radius: 50%;">
         <span style="font-weight: 700; color: #fff; font-size: 1.05rem;">Orbital X</span>
-        <span class="nav-version-pill" data-gh-tag>v2.3.8</span>
+        <span class="nav-version-pill" data-gh-tag>v2.3.9</span>
       </a>
 
       <ul class="nav-links">
         <li><a href="index.html#features">Features</a></li>
-        <li><a href="whats-new.html" class="active" style="color: var(--accent-cyan);">Updates</a></li>
+        <li><a href="whats-new.html" style="color: var(--accent-cyan);">Updates</a></li>
+        <li><a href="download.html">Download</a></li>
         <li><a href="docs.html">Docs</a></li>
         <li><a href="index.html#models">Hardware</a></li>
       </ul>
@@ -40,12 +41,6 @@
         </a>
         <a href="download.html" class="btn btn-primary btn-sm">Download</a>
       </div>
-
-      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation Menu">
-        <span class="hamburger-bar"></span>
-        <span class="hamburger-bar"></span>
-        <span class="hamburger-bar"></span>
-      </button>
     </div>
   </nav>
 
@@ -54,19 +49,19 @@
     <div class="container">
       <div class="download-os-pill">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        <span>Release Highlights • <strong data-gh-tag>v2.3.8</strong></span>
+        <span>Release Highlights • <strong data-gh-tag>v2.3.9</strong></span>
       </div>
 
       <h1 style="font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px;">
-        What's New in Orbital X v2.3.8
+        What's New in Orbital X v2.3.9
       </h1>
       <p style="font-size: 1.15rem; color: var(--text-secondary); max-width: 720px; margin: 0 auto;">
-        Welcome to Orbital X v2.3.8. This release introduces a breakthrough Hybrid Portable Architecture, a redesigned Updates Suite with native release highlights, an upgraded Recent Conversations manager, and an audited Developer Diagnostic Suite.
+        Welcome to Orbital X v2.3.9. This release delivers high-speed inline code suggestions (<2s latency), screenshot-to-agent multimodal intelligence, transactional VFS in-editor diff review, dedicated structured error handling, and Apple HIG notification center design.
       </p>
 
       <div style="display: flex; justify-content: center; gap: 14px; margin-top: 30px;">
-        <a href="download.html" class="btn btn-primary" style="padding: 12px 24px;">Download v2.3.8</a>
-        <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.3.8" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 12px 24px;">View on GitHub ↗</a>
+        <a href="download.html" class="btn btn-primary" style="padding: 12px 24px;">Download v2.3.9</a>
+        <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.3.9" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 12px 24px;">View on GitHub ↗</a>
       </div>
     </div>
   </header>
@@ -75,148 +70,226 @@
   <main class="container whatsnew-section">
     <div class="whatsnew-grid">
 
-      <!-- Feature 1: Hybrid Portable Architecture -->
+      <!-- Feature 1: High-Speed Inline Code Suggestions -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-                <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Core Architectural Milestone</div>
-              <div class="whatsnew-title">Hybrid Portable Workstation on Any USB Drive</div>
+              <div class="whatsnew-pill">Performance &amp; Ergonomics</div>
+              <div class="whatsnew-title">High-Speed Inline Code Suggestions (&lt;2s Latency)</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Carry your entire personalized IDE environment (theme, font, settings, extensions, community skills, agent instructions, and portable chats) on a USB drive under <code>Data/.orbital/</code>.</span>
+              <span>Decoupled completion inference from primary chat reasoning. Configure a dedicated lightweight model (e.g. <code>qwen2.5-coder:1.5b</code>) for ghost text completions that never interrupts ongoing agent conversations.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Host computers provide raw power (Ollama models, GPUs, RAM, compilers). Project workspaces keep their own local <code>.orbital/</code> memory, with 1-click dual sync to the USB drive.</span>
+              <span>Tight completion budgets (36 tokens) and targeted context (400 chars prefix / 120 chars suffix) backed by an in-memory LRU cache (&lt;20ms for repeated tokens) and immediate keystroke cancellation.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Hop between home desktops, office workstations, and laptops seamlessly. Plug in your USB and your customized AI IDE is ready with zero setup.</span>
+              <span>Accept inline ghost text instantly with native Monaco <code>Tab</code> keybinding. Live millisecond latency telemetry streams to the status bar (#sb-complete-indicator).</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Never leaves traces on host storage. If the USB drive is unplugged, your project knowledge remains safe on your host computer.</span>
+              <span>Eliminates 10-second completion stalls. You get fast, consistent suggestions engineered specifically for local hardware constraints.</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feature 2: Software Updates Suite -->
+      <!-- Feature 2: Screenshot-to-Agent Multimodal Intelligence -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Design &amp; Release Intelligence</div>
-              <div class="whatsnew-title">Redesigned Updates Suite &amp; Native Markdown Viewer</div>
+              <div class="whatsnew-pill">Multimodal Visual Intelligence</div>
+              <div class="whatsnew-title">Screenshot-to-Agent &amp; Visual Debugging</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Apple HIG-compliant Updates center with dynamic metrics tiles (Installed Version, Latest Stable, Release Channel, and Runtime Mode).</span>
+              <span>Paste screenshots directly from clipboard into the prompt composer (<code>Ctrl+V</code>), drag and drop image files, or use the dedicated image attachment button with 1-click thumbnail previews.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Eliminated internal development report clutter. Users now enjoy polished release highlights rendered directly in safe native Markdown.</span>
+              <span>Honest model validation with <code>OX-415</code> error guidance. If a text-only model is selected, the IDE guides you to a vision-capable model (Ollama <code>llama3.2-vision</code>, <code>gpt-4o</code>, <code>claude-3-5-sonnet</code>, <code>gemini-2.0-flash</code>) instead of hallucinating.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Completely eliminates the version mismatch bug. Installed versions are dynamically verified against the native desktop binary, stopping false update prompts.</span>
+              <span>Debug CSS visual bugs, inspect mockups, and troubleshoot UI layout defects by showing the agent the exact screen render. Attached images render directly in chat with full-screen zoom.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Clean, confident software upgrades with live download progress streaming and instant release note readability.</span>
+              <span>Full visual intelligence integrated into local and cloud workflows without clunky file dialogues or fake image understanding.</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feature 3: Recent Chats Redesign -->
+      <!-- Feature 3: Transactional VFS In-Editor Review -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Conversation Productivity</div>
-              <div class="whatsnew-title">Recent Chats Interface &amp; Fast Session Filters</div>
+              <div class="whatsnew-pill">Transactional Code Integrity</div>
+              <div class="whatsnew-title">In-Editor VFS Review &amp; Diff Acceptance Bar</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Integrated search bar and category tabs (Active, Pinned, Archived) with real-time conversation filtering.</span>
+              <span>Docked top-mounted review bar inside Monaco displaying filename, added lines (+green), and removed lines (-red) before changes are written to disk.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Replaced emoji controls with crisp SVG vector icons for Pinning, Archiving, Exporting, and Deleting chat sessions.</span>
+              <span>AI-proposed modifications are staged inside the Virtual File System shadow layer. Interactive inline green/red diff highlights appear directly inside the active editor view.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Quickly jump back to vital debugging sessions or prompt threads without scrolling through endless chat history.</span>
+              <span>Review changes line-by-line. Click <code>[Accept]</code> to commit changes to disk or <code>[Reject]</code> to revert to original code without touching git working state.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Keeps your workspace clean, focused, and organized across multi-day coding sprints.</span>
+              <span>Zero unverified edits. You retain complete human-in-the-loop control over every file the agent attempts to modify.</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feature 4: Developer Diagnostics Suite -->
+      <!-- Feature 4: Dedicated OX Structured Error Framework -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Developer &amp; Runtime Tools</div>
-              <div class="whatsnew-title">Audited Developer Options &amp; Security Simulator</div>
+              <div class="whatsnew-pill">Developer Diagnostic Suite</div>
+              <div class="whatsnew-title">Structured OX Error Framework &amp; 1-Click Fixes</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Live Hybrid Portable Environment Inspector displaying USB mount roots, crash lock guard status, and synced project backups.</span>
+              <span>Standardized error codes across the entire IDE: <code>OX-101</code> (Syntax &amp; Diagnostics), <code>OX-403</code> (Sandbox Policy), <code>OX-409</code> (VFS Conflicts), <code>OX-415</code> (Vision Required), and <code>OX-503</code> (Ollama Daemon Offline).</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Connected every control in Developer Options to real native Tauri APIs: live IPC round-trip latency benchmarks, Kernel security simulator, and state exporters.</span>
+              <span>Replaced raw stack traces with actionable error cards featuring plain-English explanations, 1-click remediation buttons, clipboard export, and collapsible technical logs.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Verify your backend performance with live sub-millisecond IPC benchmarks and test permission boundaries on arbitrary files.</span>
+              <span>Instantly test Ollama connectivity, switch sandbox safety modes, or auto-fix compiler errors without searching docs or opening external terminals.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Zero non-functional or decorative placeholder controls. Every button provides actionable diagnostic power.</span>
+              <span>Turns cryptic runtime errors into guided, self-healing developer workflows directly inside the IDE timeline.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 5: Apple HIG Liquid Glass Notification Center -->
+      <div class="whatsnew-card">
+        <div>
+          <div class="whatsnew-header">
+            <div class="whatsnew-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="whatsnew-pill">Apple HIG UI/UX Redesign</div>
+              <div class="whatsnew-title">Liquid Glass Activity &amp; Notification Center</div>
+            </div>
+          </div>
+
+          <div class="whatsnew-points">
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What's New:</span>
+              <span>28px backdrop blur vibrancy, squircle category badges, Apple-style segmented filter track (All, Build, Security, Agent), and clean empty/loading states.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What Changed:</span>
+              <span>Completely eliminated emoji UI in favor of crisp SVG vector icons, subtle borders, refined card typography, and reliable Clear All / dismiss interactions.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">How It Helps:</span>
+              <span>Track background builds, security sandbox decisions, and agent operations without visual noise or permanent unnecessary scrollbars.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">Why It Matters:</span>
+              <span>Developer-grade notification experience comparable to macOS native utilities, VS Code, and Cursor.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 6: Explorer DND & Context Staging -->
+      <div class="whatsnew-card">
+        <div>
+          <div class="whatsnew-header">
+            <div class="whatsnew-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <div class="whatsnew-pill">Productivity &amp; Context Staging</div>
+              <div class="whatsnew-title">File Explorer Drag-and-Drop &amp; Rich Staging</div>
+            </div>
+          </div>
+
+          <div class="whatsnew-points">
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What's New:</span>
+              <span>Drag any file or folder from the Explorer tree directly into the chat prompt composer to automatically tag <code>@path</code> in your message.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What Changed:</span>
+              <span>Extended non-file context staging: stage package dependencies (<code>package.json</code>, <code>Cargo.toml</code>), compiler diagnostics, and working memory buffers to local models with one click.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">How It Helps:</span>
+              <span>Target local LLM attention precisely to relevant files and dependencies, minimizing context bloat and maximizing reasoning accuracy.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">Why It Matters:</span>
+              <span>Provides small 7B/14B parameter local models with dense, high-signal information for superior code generation.</span>
             </div>
           </div>
         </div>
@@ -228,7 +301,7 @@
     <div style="margin-top: 60px; padding: 40px; background: linear-gradient(135deg, rgba(13, 18, 28, 0.9) 0%, rgba(22, 28, 42, 0.8) 100%); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); text-align: center;">
       <h3 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 12px;">Experience the next level of private AI coding.</h3>
       <p style="font-size: 1rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto 24px;">
-        Download Orbital X v2.3.8 today. Choose the official installer for your operating system or try the zero-install Portable USB package.
+        Download Orbital X v2.3.9 today. Choose the official installer for your operating system or try the zero-install Portable USB package.
       </p>
       <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
         <a href="download.html" class="btn btn-primary" style="padding: 12px 28px;">Open Download Center</a>
@@ -245,7 +318,7 @@
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
             <img src="logo.png" alt="Orbital X" style="width: 24px; height: 24px; border-radius: 50%;">
             <span style="font-weight: 700; color: #fff;">Orbital X</span>
-            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;" data-gh-tag>v2.3.8</span>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;" data-gh-tag>v2.3.9</span>
           </div>
           <div class="footer-copy">
             Open-Source Community Desktop IDE Project. Licensed under the MIT License.
@@ -266,4 +339,3 @@
   <script src="app.js"></script>
 </body>
 </html>
-

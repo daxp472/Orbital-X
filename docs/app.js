@@ -49,7 +49,7 @@ function initMobileNav() {
   });
 }
 
-// 1. Detect User OS & update main CTA with verified v2.3.8 release URLs
+// 1. Detect User OS & update main CTA with verified v2.3.9 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -59,16 +59,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_x64-setup.exe';
   } else if (ua.includes('mac')) {
     ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_aarch64.dmg';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_aarch64.dmg';
   } else if (ua.includes('linux')) {
     ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_2.3.8_amd64.AppImage';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_amd64.AppImage';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.3.8)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.3.8';
+    ctaLabel.textContent = 'Download Orbital X (v2.3.9)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.3.9';
   }
 }
 
@@ -395,16 +395,16 @@ async function initGitHubReleaseSync() {
       if (fallbackRes.ok) {
         const v = await fallbackRes.json();
         releaseData = {
-          tag_name: v.tag || 'v2.3.8',
-          published_at: v.release_date || '2026-11-12',
+          tag_name: v.tag || 'v2.3.9',
+          published_at: v.release_date || '2026-11-13',
           assets: [
-            { name: 'Orbital.X_2.3.8_x64-setup.exe', browser_download_url: v.download_url, size: 7263535 },
-            { name: 'Orbital.X_2.3.8_portable_win64.zip', browser_download_url: v.portable_zip_url, size: 8900000 },
-            { name: 'orbital-x.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/orbital-x.exe', size: 22291968 },
-            { name: 'Orbital.X_2.3.8_aarch64.dmg', browser_download_url: v.macos_dmg_url, size: 9951370 },
-            { name: 'Orbital.X_aarch64.app.tar.gz', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.8/Orbital.X_aarch64.app.tar.gz', size: 9289705 },
-            { name: 'Orbital.X_2.3.8_amd64.AppImage', browser_download_url: v.linux_appimage_url, size: 90798584 },
-            { name: 'Orbital.X_2.3.8_amd64.deb', browser_download_url: v.linux_deb_url, size: 11100166 }
+            { name: 'Orbital.X_2.3.9_x64-setup.exe', browser_download_url: v.download_url, size: 7254556 },
+            { name: 'Orbital.X_2.3.9_portable_win64.zip', browser_download_url: v.portable_zip_url, size: 8915124 },
+            { name: 'orbital-x.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/orbital-x.exe', size: 22263808 },
+            { name: 'Orbital.X_2.3.9_aarch64.dmg', browser_download_url: v.macos_dmg_url, size: 9951370 },
+            { name: 'Orbital.X_aarch64.app.tar.gz', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_aarch64.app.tar.gz', size: 9289705 },
+            { name: 'Orbital.X_2.3.9_amd64.AppImage', browser_download_url: v.linux_appimage_url, size: 90798584 },
+            { name: 'Orbital.X_2.3.9_amd64.deb', browser_download_url: v.linux_deb_url, size: 11100166 }
           ]
         };
       }
@@ -413,11 +413,11 @@ async function initGitHubReleaseSync() {
 
   if (!releaseData) return;
 
-  const tag = releaseData.tag_name || 'v2.3.8';
+  const tag = releaseData.tag_name || 'v2.3.9';
   const cleanTag = tag.replace(/^v/, '');
   const pubDate = releaseData.published_at
     ? new Date(releaseData.published_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-    : 'Nov 12, 2026';
+    : 'Nov 13, 2026';
 
   document.querySelectorAll('[data-gh-tag]').forEach(el => el.textContent = tag);
   document.querySelectorAll('[data-gh-ver]').forEach(el => el.textContent = cleanTag);
