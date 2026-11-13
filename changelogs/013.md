@@ -62,3 +62,4 @@ Orbital X v2.3.9 delivers major upgrades across inline code completions, visual 
 - **Docked In-Editor Review Bar**: Top-mounted review bar displaying filename, line addition count, and line deletion count.
 - **Inline Line Highlight Decorations**: Green highlights for added lines and red highlights for removed lines.
 - **Per-File & Batch Review Controls**: `[Accept]`, `[Reject]`, `[Accept All]`, and `[Reject All]` controls integrated with the Virtual File System shadow overlay.
+
