@@ -8,7 +8,7 @@
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
 
-export let CURRENT_VERSION = '2.3.9';
+export let CURRENT_VERSION = '2.4.0';
 
 // Dynamically resolve application version from Tauri backend
 export async function resolveCurrentVersion() {

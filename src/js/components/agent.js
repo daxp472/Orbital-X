@@ -43,6 +43,8 @@ let liveActivityTimerId = null;
 let liveActivityStartTime = null;
 // Id of the currently in-flight agent turn, used to cancel it from the Stop button
 let activeTurnId = null;
+// Active singular turn container card — encapsulates tool steps and final narrative into a single card
+let activeTurnCard = null;
 
 // Screenshot & Image Attachment state for multimodal vision turns
 let pendingImages = []; // { id, name, base64, dataUrl, size }
@@ -172,13 +174,18 @@ export function initAgent() {
     });
   }
 
-  // Live token estimate counter below input
+  // Live token estimate counter in composer bottom bar
   let tokenCounter = document.getElementById('composer-token-counter');
   if (!tokenCounter && inputElem) {
     tokenCounter = document.createElement('div');
     tokenCounter.id = 'composer-token-counter';
     tokenCounter.className = 'composer-token-counter';
-    inputElem.insertAdjacentElement('afterend', tokenCounter);
+    const bottomLeft = document.querySelector('.composer-bottom-left');
+    if (bottomLeft) {
+      bottomLeft.appendChild(tokenCounter);
+    } else {
+      inputElem.insertAdjacentElement('afterend', tokenCounter);
+    }
   }
   updateTokenEstimate(inputElem?.value || '');
 
@@ -435,6 +442,10 @@ function initChatDropZone() {
         state.orchestrator.activePlan.status = 'cancelled';
         persistPlanState(null);
       }
+      if (activeTurnCard) {
+        activeTurnCard.finalize('*(Task stopped by user)*');
+        activeTurnCard = null;
+      }
       updateStatusBarAgentStatus();
       appendTimelineCard('assistant', '⏹️ Task stopped by user.');
       appendAgentChangedFilesSummaryCard('cancelled');
@@ -562,34 +573,53 @@ function clearAgentContext() {
 }
 
 export function compactAgentContext(isAutomatic = false) {
-  const before = state.conversation.length;
+  const activeMessages = state.conversation.filter(m => !m._ephemeral && !m._compactedOut);
+  const before = activeMessages.length;
   if (before < 4) {
     if (!isAutomatic) showToast('Conversation too short to compact', 'info', 2000);
     return;
   }
   // Keep the first user message (task anchor) + the most recent 6 messages,
-  // and drop everything in between. The orchestrator plan state is preserved.
-  const firstUser = state.conversation.find(m => m.role === 'user');
-  const recent = state.conversation.slice(-6);
+  // and mark everything in between as compacted for LLM context, but PRESERVE
+  // all user & agent messages visually in the timeline.
+  const firstUser = activeMessages.find(m => m.role === 'user');
+  const recent = activeMessages.slice(-6);
   const keep = new Set();
   if (firstUser) keep.add(firstUser);
   for (const m of recent) keep.add(m);
-  state.conversation = state.conversation.filter(m => keep.has(m));
-  // Mark the compaction so the model knows the earlier turns were summarised
-  state.conversation.unshift({
-    role: 'assistant',
-    content: `_Context compacted: ${before} turns → ${state.conversation.length} retained. Older turns were summarised out to conserve the context window. Completed actions and user decisions are preserved in execution memory._`,
-    timestamp: Date.now(),
-    _ephemeral: true,
-  });
+
+  for (const m of activeMessages) {
+    if (!keep.has(m)) {
+      m._compactedOut = true;
+    }
+  }
+
+  // Insert a non-destructive inline compaction divider in the timeline without wiping previous cards
   const timeline = document.getElementById('agent-timeline');
   if (timeline) {
-    timeline.innerHTML = '';
-    renderFullTimeline(state.conversation);
-    appendTimelineCard('assistant', `Context compacted — ${before} turns reduced to ${state.conversation.length} retained. Prior execution history and decisions preserved in active memory.`);
+    const divider = document.createElement('div');
+    divider.className = 'timeline-compact-divider';
+    divider.innerHTML = `
+      <div class="compact-divider-line"></div>
+      <div class="compact-divider-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 14 10 14 10 20"></polyline>
+          <polyline points="20 10 14 10 14 4"></polyline>
+          <line x1="14" y1="10" x2="21" y2="3"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+        <span>Context window compacted (${before} turns → ${keep.size} active) • Chat history preserved</span>
+      </div>
+      <div class="compact-divider-line"></div>
+    `;
+    timeline.appendChild(divider);
+    divider.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-  showToast(isAutomatic ? `Auto-compacted context (${before} → ${state.conversation.length} turns)` : `Context compacted: ${before} → ${state.conversation.length} turns`, 'success', 2500);
-  updateContextMeter(estimateTokens(state.conversation.map(m => m.content).join('')), getEffectiveNumCtx(), null);
+
+  showToast(isAutomatic ? `Auto-compacted context (${before} → ${keep.size} turns)` : `Context compacted: ${before} → ${keep.size} turns`, 'success', 2500);
+  const compactedTokens = estimateTokens(Array.from(keep).map(m => m.content || '').join(''));
+  updateContextMeter(compactedTokens, getEffectiveNumCtx(), null);
+  import('./chat-sessions.js').then(m => m.saveActiveSession());
 }
 
 function getModeDisplayName(mode = state.agentMode) {
@@ -905,50 +935,141 @@ function updateModeTooltip() {
 function openAttachmentMenu(e) {
   document.getElementById('attachment-menu')?.remove();
   const menu = document.createElement('div');
-  menu.className = 'orbital-context-menu';
+  menu.className = 'orbital-attachment-popover';
   menu.id = 'attachment-menu';
-  const items = [
-    { label: 'Current file', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', kind: 'current-file' },
-    { label: 'File by path…', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>', kind: 'file' },
-    { label: 'Code selection', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>', kind: 'selection' },
-    { label: 'Diagnostics & Problems', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>', kind: 'diagnostics' },
-    { label: 'Project Dependencies', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>', kind: 'env-deps' },
-    { label: 'Architecture Graph', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6"/><rect x="16" y="2" width="6" height="6"/><rect x="9" y="16" width="6" height="6"/><line x1="5" y1="8" x2="12" y2="16"/><line x1="19" y1="8" x2="12" y2="16"/></svg>', kind: 'semantic-graph' },
-    { label: 'Working Memories', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', kind: 'memory' },
-    { label: 'Terminal output', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>', kind: 'terminal' },
-    { label: 'Git diff', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>', kind: 'git-diff' },
-    { label: 'Folder tree', icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>', kind: 'folder' },
+
+  const sections = [
+    {
+      title: 'Active Context',
+      items: [
+        {
+          label: 'Current File',
+          desc: 'Attach open editor tab',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+          kind: 'current-file'
+        },
+        {
+          label: 'Code Selection',
+          desc: 'Highlighted lines from active tab',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+          kind: 'selection'
+        },
+        {
+          label: 'File by Path…',
+          desc: 'Pick any workspace file',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+          kind: 'file'
+        }
+      ]
+    },
+    {
+      title: 'Project & Architecture',
+      items: [
+        {
+          label: 'Architecture Graph',
+          desc: 'Component dependency structure',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6"/><rect x="16" y="2" width="6" height="6"/><rect x="9" y="16" width="6" height="6"/><line x1="5" y1="8" x2="12" y2="16"/><line x1="19" y1="8" x2="12" y2="16"/></svg>',
+          kind: 'semantic-graph'
+        },
+        {
+          label: 'Working Memory',
+          desc: 'Notes, plan & project rules',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+          kind: 'memory'
+        },
+        {
+          label: 'Folder Tree',
+          desc: 'Workspace directory map',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+          kind: 'folder'
+        },
+        {
+          label: 'Project Dependencies',
+          desc: 'package.json & Cargo.toml',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+          kind: 'env-deps'
+        }
+      ]
+    },
+    {
+      title: 'Dev & Diagnostics',
+      items: [
+        {
+          label: 'Git Diff',
+          desc: 'Uncommitted workspace changes',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v12"/><path d="M18 9a9 9 0 0 0-9 9"/></svg>',
+          kind: 'git-diff'
+        },
+        {
+          label: 'Terminal Output',
+          desc: 'Last 60 lines of terminal logs',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+          kind: 'terminal'
+        },
+        {
+          label: 'Diagnostics & Problems',
+          desc: 'Compiler and linter error reports',
+          icon: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+          kind: 'diagnostics'
+        }
+      ]
+    }
   ];
-  for (const item of items) {
-    const row = document.createElement('div');
-    row.className = 'tree-context-item';
-    row.innerHTML = `<span class="ctx-icon">${item.icon}</span><span class="ctx-label">${item.label}</span>`;
-    row.addEventListener('click', () => {
-      document.getElementById('attachment-menu')?.remove();
-      addAttachment(item.kind);
-    });
-    menu.appendChild(row);
+
+  for (const sec of sections) {
+    const secHeader = document.createElement('div');
+    secHeader.className = 'attachment-popover-header';
+    secHeader.textContent = sec.title;
+    menu.appendChild(secHeader);
+
+    for (const item of sec.items) {
+      const row = document.createElement('div');
+      row.className = 'attachment-popover-item';
+      row.innerHTML = `
+        <span class="attachment-popover-icon">${item.icon}</span>
+        <div class="attachment-popover-content">
+          <div class="attachment-popover-label">${item.label}</div>
+          <div class="attachment-popover-desc">${item.desc}</div>
+        </div>
+      `;
+      row.addEventListener('click', () => {
+        document.getElementById('attachment-menu')?.remove();
+        addAttachment(item.kind);
+      });
+      menu.appendChild(row);
+    }
   }
+
   document.body.appendChild(menu);
-  const rect = e.currentTarget?.getBoundingClientRect?.() || { left: e.clientX, bottom: e.clientY };
-  menu.style.left = `${Math.min(rect.left, window.innerWidth - 260)}px`;
-  menu.style.visibility = 'hidden';
-  menu.style.display = 'block';
-  // FIX 6: if there's not enough room below, flip the menu upward
-  const menuH = menu.offsetHeight || 220;
-  const spaceBelow = window.innerHeight - rect.bottom;
-  if (spaceBelow < menuH + 12) {
-    menu.style.top = `${Math.max(40, rect.top - menuH - 4)}px`;
-  } else {
-    menu.style.top = `${Math.max(40, rect.bottom + 4)}px`;
+  const trigger = e.currentTarget;
+  const rect = trigger?.getBoundingClientRect?.() || { left: e.clientX, top: e.clientY, right: e.clientX + 24, bottom: e.clientY + 24 };
+
+  const menuWidth = 270;
+  const menuHeight = menu.offsetHeight || 380;
+
+  // Align popover nicely right above trigger button, clamped to viewport
+  let left = rect.right - menuWidth;
+  if (left < 10) left = 10;
+  if (left + menuWidth > window.innerWidth - 10) left = window.innerWidth - menuWidth - 10;
+
+  let top = rect.top - menuHeight - 8;
+  if (top < 10) {
+    // If not enough room on top, position below
+    top = rect.bottom + 8;
   }
-  menu.style.visibility = '';
+
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+
   setTimeout(() => {
     const onDown = (ev) => {
-      if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', onDown); }
+      if (!menu.contains(ev.target) && ev.target !== trigger && !trigger?.contains?.(ev.target)) {
+        menu.remove();
+        document.removeEventListener('mousedown', onDown);
+      }
     };
     document.addEventListener('mousedown', onDown);
-  }, 0);
+  }, 10);
 }
 
 export async function switchMode(newMode) {
@@ -1500,7 +1621,7 @@ function getEffectiveNumCtx() {
  * - Always keeps the first user message as task anchor.
  */
 function buildContextWindow(numCtx) {
-  const conv = state.conversation.filter(m => !m._ephemeral);
+  const conv = state.conversation.filter(m => !m._ephemeral && !m._compactedOut);
   const budget = Math.max(1024, numCtx - 512);
 
   let used = 0;
@@ -1951,6 +2072,11 @@ STRATEGY:
 9. Mode immutability: you cannot switch agent modes — the user controls modes.
 10. Ground-truth memory: Never hallucinate or repeat completed actions. Check the COMPLETED ACTIONS section before acting. Never re-ask questions the user has already answered in USER DECISIONS & ANSWERS.`;
 
+  const turnAssistantMid = newMessageId();
+  activeTurnCard = beginStreamingCard();
+  let accumulatedNarrative = '';
+  let turnHasFinalized = false;
+
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
     updateStatusBarAgentStatus(`Agent running… step ${iteration}/${maxIterations}`);
@@ -1968,10 +2094,7 @@ STRATEGY:
       ...contextWindow,
     ];
 
-    // Live streaming card — updated per token, finalized with full markdown
-    const liveCard = beginStreamingCard();
     let streamed = '';
-
     let resp;
     const promptTokensBefore = estimateTokens(messages.map(m => m.content).join(''));
     try {
@@ -1979,9 +2102,9 @@ STRATEGY:
         modelOverride: routedModel,
         onToken: (text) => {
           streamed += text;
-          liveCard?.update(text);
+          activeTurnCard?.update(text);
         },
-        onStatus: (text) => liveCard?.setStatus(text),
+        onStatus: (text) => activeTurnCard?.setStatus(text),
       });
       consecutiveErrors = 0;
       sessionStats.turns++;
@@ -1992,49 +2115,44 @@ STRATEGY:
       if (resp.metrics?.tokensPerSecond) sessionStats.lastTps = resp.metrics.tokensPerSecond;
       if (state.ai.debugMode) appendDebugCard(messages, resp, promptTokensBefore, numCtx);
     } catch (err) {
-      liveCard?.fail(`Connection error: ${err}`);
+      activeTurnCard?.fail(`Connection error: ${err}`);
       consecutiveErrors++;
       if (consecutiveErrors >= 3) {
         displayOrbitalError(err);
         break;
       }
-      // Brief backoff, then retry — no error text is written into the
-      // permanent conversation history.
       await new Promise(r => setTimeout(r, 800 * consecutiveErrors));
       continue;
     }
 
-    const assistantMid = newMessageId();
     const { thinking: turnThinking, display: turnDisplay } = extractThinking(resp.content || streamed);
     const finalText = (turnDisplay || streamed || '').trim();
-
-    // Never show an empty response box to the user — remove the card
-    // entirely and let the empty-response retry path handle it
-    if (!finalText && !resp.cancelled && (!resp.tool_calls || resp.tool_calls.length === 0)) {
-      liveCard?.card?.remove();
-    } else {
-      if (liveCard?.card) {
-        liveCard.card.dataset.mid = assistantMid;
-        if (turnThinking) renderThinkingSection(liveCard.card, turnThinking);
-      }
-      const turnCalibration = evidenceLedger.computeCalibration(finalText, initialUserPrompt);
-      liveCard?.finalize(finalText || (resp.cancelled ? '*(stopped)*' : ''), turnCalibration);
+    if (finalText) {
+      accumulatedNarrative = (accumulatedNarrative ? (accumulatedNarrative + '\n\n') : '') + finalText;
     }
-    if (liveCard?.card) {
-      attachMessageActions(liveCard.card, {
-        role: 'assistant',
-        messageId: assistantMid,
-        getText: () => resp.content || streamed,
-        onRegenerate: () => regenerateFromAssistant(assistantMid),
-      });
+
+    if (activeTurnCard?.card) {
+      activeTurnCard.card.dataset.mid = turnAssistantMid;
+      if (turnThinking) renderThinkingSection(activeTurnCard.card, turnThinking);
     }
 
     // User cancellation mid-stream: keep partial output, stop cleanly
     if (resp.cancelled) {
+      if (activeTurnCard) {
+        activeTurnCard.finalize(accumulatedNarrative || '*(stopped)*');
+        attachMessageActions(activeTurnCard.card, {
+          role: 'assistant',
+          messageId: turnAssistantMid,
+          getText: () => accumulatedNarrative,
+          onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
+        });
+        turnHasFinalized = true;
+      }
       state.conversation.push({
         role: 'assistant',
-        content: resp.content || streamed || '',
+        content: accumulatedNarrative || '',
         timestamp: Date.now(),
+        mid: turnAssistantMid,
         tool_calls: undefined,
       });
       import('./chat-sessions.js').then(m => m.saveActiveSession());
@@ -2056,7 +2174,7 @@ STRATEGY:
       role: 'assistant',
       content: turnDisplay || '',
       timestamp: now,
-      mid: assistantMid,
+      mid: turnAssistantMid,
       tool_calls: resp.tool_calls && resp.tool_calls.length > 0 ? resp.tool_calls : undefined,
     });
     import('./chat-sessions.js').then(m => m.saveActiveSession());
@@ -2186,7 +2304,7 @@ STRATEGY:
                   description: `Auto-applied generated code to ${cleanPath}`
                 });
                 showToast(`✓ Written directly to ${cleanPath}`, 'success', 3000);
-                window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: cleanPath } }));
+                window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: cleanPath, source: 'ai' } }));
                 sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
 
                 import('./file-tree.js').then(f => f.refreshFileTree());
@@ -2199,11 +2317,11 @@ STRATEGY:
                 }
 
                 // Append visual badge on live card
-                if (liveCard?.card) {
+                if (activeTurnCard?.card) {
                   const banner = document.createElement('div');
                   banner.className = 'file-written-banner';
                   banner.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg> <span>Auto-written directly to <strong>${cleanPath}</strong></span>`;
-                  liveCard.card.appendChild(banner);
+                  activeTurnCard.card.appendChild(banner);
                 }
               } catch (err) {
                 console.error(`Failed to auto-write code to ${cleanPath}:`, err);
@@ -2222,6 +2340,17 @@ STRATEGY:
         if (hasPriorToolsInSession) {
           saveTaskCompletionMemory(initialUserPrompt, sessionToolTally);
         }
+        if (activeTurnCard && !turnHasFinalized) {
+          const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
+          activeTurnCard.finalize(accumulatedNarrative, turnCalibration);
+          attachMessageActions(activeTurnCard.card, {
+            role: 'assistant',
+            messageId: turnAssistantMid,
+            getText: () => accumulatedNarrative,
+            onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
+          });
+          turnHasFinalized = true;
+        }
         break;
       }
 
@@ -2232,6 +2361,17 @@ STRATEGY:
         }
         if (hasPriorToolsInSession) {
           saveTaskCompletionMemory(initialUserPrompt, sessionToolTally);
+        }
+        if (activeTurnCard && !turnHasFinalized) {
+          const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
+          activeTurnCard.finalize(accumulatedNarrative, turnCalibration);
+          attachMessageActions(activeTurnCard.card, {
+            role: 'assistant',
+            messageId: turnAssistantMid,
+            getText: () => accumulatedNarrative,
+            onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
+          });
+          turnHasFinalized = true;
         }
         break;
       }
@@ -2266,7 +2406,7 @@ STRATEGY:
       // FIX 3: notify the explorer after any filesystem mutation so the
       // tree refreshes automatically — no manual reload needed
       if (['write_file', 'patch_file', 'delete_file', 'delete_directory', 'rename_file', 'create_directory', 'batch_delete_files', 'vfs_shadow_write', 'vfs_commit', 'vfs_rollback'].includes(toolCall.name)) {
-        window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name, path: toolCall.arguments?.path } }));
+        window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: toolCall.name, path: toolCall.arguments?.path, source: 'ai' } }));
         import('../app.js').then(m => m.updateVfsStatusIndicator()).catch(() => {});
       }
 
@@ -2287,6 +2427,19 @@ STRATEGY:
       import('./chat-sessions.js').then(m => m.saveActiveSession());
     }
   }
+
+  if (activeTurnCard && !turnHasFinalized) {
+    const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
+    activeTurnCard.finalize(accumulatedNarrative || '*(completed)*', turnCalibration);
+    attachMessageActions(activeTurnCard.card, {
+      role: 'assistant',
+      messageId: turnAssistantMid,
+      getText: () => accumulatedNarrative,
+      onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
+    });
+    turnHasFinalized = true;
+  }
+  activeTurnCard = null;
 
   if (iteration >= maxIterations) {
     // FIX 11: offer a one-click continue instead of a dead-end message
@@ -3436,13 +3589,65 @@ function riskLabelFor(toolName) {
   return 'this action';
 }
 
+export function showWelcomeHero() {
+  const timeline = document.getElementById('agent-timeline');
+  if (!timeline) return;
+  timeline.innerHTML = `
+    <div class="chat-welcome-hero" id="chat-welcome-hero">
+      <div class="chat-hero-header">
+        <div class="chat-hero-icon-wrap">
+          <img src="/logo.png" alt="Orbital X" class="chat-hero-logo" />
+          <span class="chat-hero-sparkle">✦</span>
+        </div>
+        <div class="chat-hero-title">Orbital X AI Assistant</div>
+        <div class="chat-hero-caption">Autonomous software engineer, architect &amp; codebase companion.</div>
+      </div>
+
+      <!-- Quick Action Starters Grid -->
+      <div class="chat-starters-grid">
+        <div class="chat-starter-card" data-prompt="Explain the architecture, entrypoints, and state flows of this workspace.">
+          <div class="starter-icon" style="color: var(--accent-cyan);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 8 12 12 16 16 12 12 8"></polygon></svg></div>
+          <div class="starter-content">
+            <div class="starter-title">Explore Architecture</div>
+            <div class="starter-desc">Analyze project entrypoints and components</div>
+          </div>
+        </div>
+
+        <div class="chat-starter-card" data-prompt="/plan Build a new feature for this workspace: ">
+          <div class="starter-icon" style="color: var(--accent-purple);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg></div>
+          <div class="starter-content">
+            <div class="starter-title">Implementation Plan</div>
+            <div class="starter-desc">Design step-by-step engineering plan</div>
+          </div>
+        </div>
+
+        <div class="chat-starter-card" data-prompt="Run project tests, verify the workspace build, and report any diagnostics.">
+          <div class="starter-icon" style="color: var(--accent-green);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+          <div class="starter-content">
+            <div class="starter-title">Verify &amp; Test</div>
+            <div class="starter-desc">Check compilation and test coverage</div>
+          </div>
+        </div>
+
+        <div class="chat-starter-card" data-prompt="Review recent code diffs and suggest refactoring improvements for performance and clarity.">
+          <div class="starter-icon" style="color: var(--accent-orange);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg></div>
+          <div class="starter-content">
+            <div class="starter-title">Smart Refactor</div>
+            <div class="starter-desc">Optimize code quality &amp; performance</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export function renderFullTimeline(messages = []) {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return;
   timeline.innerHTML = '';
 
   if (!messages || messages.length === 0) {
-    appendTimelineCard('assistant', `Orbital Agent ready. Active Mode: <strong>${state.agentMode.toUpperCase()}</strong>.`);
+    showWelcomeHero();
     return;
   }
 
@@ -3633,6 +3838,7 @@ function attachRunCommandChip(card, text) {
 function beginStreamingCard() {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return null;
+  document.getElementById('chat-welcome-hero')?.remove();
 
   const card = document.createElement('div');
   card.className = 'timeline-card assistant-msg streaming';
@@ -3649,6 +3855,18 @@ function beginStreamingCard() {
       </div>
       <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${getRelativeTimeString(msgTime)}</span>
     </div>
+    <div class="turn-activity-tray" style="display: none; margin: 8px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(0,0,0,0.18); overflow: hidden;">
+      <details class="turn-activity-details" open>
+        <summary class="turn-activity-summary" style="padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
+          <span style="display: flex; align-items: center; gap: 6px; color: var(--accent-cyan);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            <span class="turn-activity-label">Actions Executed (0)</span>
+          </span>
+          <span class="turn-activity-status" style="font-size: 10px; color: var(--text-muted);"><span class="spinner"></span> Running</span>
+        </summary>
+        <div class="turn-activity-list" style="display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--border-subtle);"></div>
+      </details>
+    </div>
     <div class="timeline-card-body streaming-body" style="white-space: pre-wrap; font-size: 12px; line-height: 1.55;"></div>
   `;
 
@@ -3657,11 +3875,22 @@ function beginStreamingCard() {
 
   const bodyEl = card.querySelector('.streaming-body');
   const statusEl = card.querySelector('.stream-status');
+  const activityTray = card.querySelector('.turn-activity-tray');
+  const activityList = card.querySelector('.turn-activity-list');
+  const activityLabel = card.querySelector('.turn-activity-label');
+  const activityStatus = card.querySelector('.turn-activity-status');
+  let toolCount = 0;
   let acc = '';
   let raf = null;
 
   return {
     card,
+    getActivityList() {
+      toolCount++;
+      if (activityTray) activityTray.style.display = 'block';
+      if (activityLabel) activityLabel.textContent = `Actions Executed (${toolCount})`;
+      return activityList || timeline;
+    },
     update(text) {
       acc += text;
       if (raf) return;
@@ -3683,10 +3912,12 @@ function beginStreamingCard() {
       if (raf) cancelAnimationFrame(raf);
       if (bodyEl) bodyEl.textContent = acc || message;
       if (statusEl) statusEl.textContent = '';
+      if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-red);">✗ Error</span>`;
     },
     finalize(fullText, calibration = null) {
       if (raf) cancelAnimationFrame(raf);
       if (statusEl) statusEl.textContent = '';
+      if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-green);">✓ Complete</span>`;
       card.classList.remove('streaming');
       if (bodyEl) bodyEl.remove();
       if (calibration) {
@@ -3702,10 +3933,10 @@ function beginStreamingCard() {
       }
       const md = document.createElement('div');
       md.className = 'timeline-card-body';
-      md.innerHTML = formatMarkdown(fullText);
+      md.innerHTML = formatMarkdown(fullText || acc);
       enhanceRenderedBody(md);
       card.appendChild(md);
-      attachRunCommandChip(card, fullText);
+      attachRunCommandChip(card, fullText || acc);
     },
   };
 }
@@ -3713,6 +3944,7 @@ function beginStreamingCard() {
 export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}) {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return;
+  document.getElementById('chat-welcome-hero')?.remove();
 
   const msgTime = typeof timestamp === 'number' ? timestamp : (timestamp ? new Date(timestamp).getTime() : Date.now());
   const relativeTime = getRelativeTimeString(msgTime);
@@ -3810,6 +4042,10 @@ export function getToolCategory(toolName) {
 
 function appendToolBox(name, args, risk) {
   const timeline = document.getElementById('agent-timeline');
+  const targetParent = (activeTurnCard && typeof activeTurnCard.getActivityList === 'function')
+    ? activeTurnCard.getActivityList()
+    : timeline;
+
   const box = document.createElement('div');
   const id = 'toolbox_' + Math.random().toString(36).substring(2, 9);
   box.id = id;
@@ -3851,7 +4087,7 @@ function appendToolBox(name, args, risk) {
     box.classList.toggle('collapsed');
   });
 
-  timeline.appendChild(box);
+  if (targetParent) targetParent.appendChild(box);
   box.scrollIntoView({ behavior: 'smooth' });
   return id;
 }

@@ -155,52 +155,34 @@ export function getChangedFilesSummary() {
 }
 
 /**
- * Synchronize with Git status without creating duplicates.
+ * Synchronize existing AI changed files without polluting the list with human/git edits.
  */
 export async function refreshChangedFiles() {
   try {
     const res = await invoke('get_git_status');
     if (res && res.is_repo && res.raw) {
+      const gitFiles = new Set();
       for (const line of res.raw.split('\n')) {
         if (line.startsWith('##') || line.trim().length < 3) continue;
-        const code = line.slice(0, 2);
         let p = line.slice(3).trim();
-        let action = 'modified';
-        let oldPath = null;
-
-        if (code.includes('?') || code.includes('A')) {
-          action = 'created';
-        } else if (code.includes('D')) {
-          action = 'deleted';
-        } else if (code.includes('R')) {
-          action = 'renamed';
-          const arrow = p.indexOf(' -> ');
-          if (arrow !== -1) {
-            oldPath = p.slice(0, arrow).trim();
-            p = p.slice(arrow + 4).trim();
-          }
+        if (p.includes(' -> ')) {
+          p = p.slice(p.indexOf(' -> ') + 4).trim();
         }
-
         if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
         if (!p) continue;
-
         const norm = normalizeFilePath(p);
-        if (norm && !canonicalFilesMap.has(norm.canonicalKey)) {
-          canonicalFilesMap.set(norm.canonicalKey, {
-            key: norm.canonicalKey,
-            name: norm.name,
-            relativePath: norm.relativePath,
-            fullPath: norm.fullPath,
-            action,
-            oldPath: oldPath ? normalizeFilePath(oldPath)?.relativePath : null,
-            count: 1,
-            lastModified: Date.now()
-          });
+        if (norm) gitFiles.add(norm.canonicalKey);
+      }
+
+      // If an AI-changed file was discarded or committed outside, update its presence
+      for (const [key, entry] of canonicalFilesMap.entries()) {
+        if (!gitFiles.has(key)) {
+          // File has no uncommitted changes left in git; can be marked clean or kept as reviewed
         }
       }
     }
   } catch (e) {
-    // If not a git repo or IPC fails, session tracker remains authoritative
+    // Session tracker remains authoritative
   }
   updateChangedFilesUI();
 }
@@ -376,9 +358,13 @@ export function initReviewChangesBar() {
     }
   });
 
-  // Listen for file changes emitted by agent or filesystem
+  // Listen for file changes emitted by agent — only AI mutations go into Review Changes
   window.addEventListener('orbital:files-changed', (e) => {
     const detail = e.detail || {};
+    // Exclude human edits (from explorer drag-and-drop, manual rename, manual save)
+    if (detail.source === 'human' || detail.isHuman) return;
+    if (!detail.tool && detail.source !== 'ai') return;
+
     let action = detail.action || 'modified';
     const tool = (detail.tool || '').toLowerCase();
     if (tool.includes('delete') || action === 'deleted') {

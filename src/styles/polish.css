@@ -940,24 +940,78 @@ body.theme-light .settings-sidebar,
 /* ==========================================================================
    Parts H/I/J — agent chat & AI panels
    ========================================================================== */
-.msg-action-bar {
-  display: none;
-  gap: 2px;
-  margin-top: 6px;
-  padding-top: 4px;
-  border-top: 1px solid var(--border-subtle);
+.timeline-compact-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 8px;
+  user-select: none;
 }
-.timeline-card:hover .msg-action-bar { display: flex; }
+.compact-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+.compact-divider-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(57, 197, 187, 0.08);
+  border: 1px solid rgba(57, 197, 187, 0.25);
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Zero-layout-shift docked message action bar */
+.msg-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  min-height: 28px;
+  opacity: 0.72;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.timeline-card:hover .msg-action-bar {
+  opacity: 1;
+}
 .msg-action {
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: 5px;
-  padding: 2px 7px;
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 11px;
   cursor: pointer;
   color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
 }
-.msg-action:hover { background: var(--bg-hover); color: var(--text-primary); }
+.msg-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+.msg-action[data-act="up"]:hover,
+.msg-action.liked {
+  color: #22c55e !important;
+  border-color: rgba(34, 197, 94, 0.35) !important;
+  background: rgba(34, 197, 94, 0.08) !important;
+}
+.msg-action[data-act="down"]:hover,
+.msg-action.disliked {
+  color: #ef4444 !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+  background: rgba(239, 68, 68, 0.08) !important;
+}
 
 .attachment-chip {
   display: inline-flex;
@@ -1506,4 +1560,357 @@ body.theme-light .settings-sidebar,
   justify-content: space-between;
   min-height: 32px;
   background: var(--bg-surface);
+}
+
+/* ==========================================================================
+   Composer Option A & Attachment Popover (Apple HIG & Frontend Polish)
+   ========================================================================== */
+
+.composer-box {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 8px 10px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  min-width: 0;
+}
+
+.composer-box:focus-within {
+  border-color: rgba(57, 197, 187, 0.45);
+  box-shadow: 0 0 0 2px rgba(57, 197, 187, 0.12), 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Dedicated top bar for modes and model selectors */
+.composer-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.composer-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.composer-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+  min-height: 48px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.composer-token-counter {
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.65;
+  font-family: var(--font-mono, monospace);
+  padding: 0 2px;
+  user-select: none;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.composer-bottom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 6px;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.composer-bottom-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.composer-mode-tabs {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 2px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.composer-mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.composer-mode-btn:hover {
+  color: var(--text-secondary);
+}
+
+.composer-mode-btn.active {
+  background: rgba(57, 197, 187, 0.15);
+  color: var(--accent-cyan);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.composer-model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 170px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+#composer-model-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-model-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.composer-speculative-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 14px;
+  background: rgba(57, 197, 187, 0.08);
+  border: 1px solid rgba(57, 197, 187, 0.35);
+  color: var(--accent-cyan);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+#composer-speculative-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-speculative-pill:hover {
+  background: rgba(57, 197, 187, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.composer-actions .icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.composer-actions .icon-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.send-circle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-cyan);
+  border: none;
+  color: #0d1117;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 6px rgba(57, 197, 187, 0.35);
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.send-circle-btn:hover {
+  transform: scale(1.06);
+  box-shadow: 0 4px 12px rgba(57, 197, 187, 0.45);
+}
+
+.send-circle-btn:active {
+  transform: scale(0.95);
+}
+
+/* Apple HIG Attachment Popover */
+.orbital-attachment-popover {
+  position: fixed;
+  z-index: 99999;
+  width: 280px;
+  max-height: 440px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  padding: 6px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: popoverFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  scrollbar-width: thin;
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.attachment-popover-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--text-muted);
+  padding: 7px 8px 3px 8px;
+  user-select: none;
+}
+
+.attachment-popover-header:not(:first-child) {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 8px;
+}
+
+.attachment-popover-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease;
+  user-select: none;
+}
+
+.attachment-popover-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  transform: translateX(2px);
+}
+
+.attachment-popover-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--accent-cyan);
+  flex-shrink: 0;
+}
+
+.attachment-popover-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+
+.attachment-popover-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-popover-desc {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Responsive adjustments for narrow chat panel widths */
+.agent-composer {
+  min-width: 0;
+  overflow: visible;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.send-circle-btn {
+  flex-shrink: 0;
 }

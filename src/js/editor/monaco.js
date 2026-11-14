@@ -388,6 +388,18 @@ export function initMonaco(containerElement) {
         try {
           const fileData = await invoke('read_file', { path: writtenPath });
           const ed = editorFor(panel);
+          const currentVal = ed?.getValue();
+          if (currentVal === fileData.content) {
+            // Content in editor is already identical to saved file (e.g. auto-save or manual save).
+            // Do NOT call ed.setValue() because setValue resets Monaco's undo stack, selection,
+            // and clears active inline completion ghost text!
+            activeTab.content = fileData.content;
+            activeTab.originalContent = fileData.content;
+            activeTab.isDirty = false;
+            tabDirtyMap.set(activeTab.id, false);
+            renderTabs(panel);
+            continue;
+          }
           const pos = ed?.getPosition();
           ed?.setValue(fileData.content);
           if (pos && ed) ed.setPosition(pos);
@@ -605,40 +617,247 @@ export function rebindEditorCommands() {
 let inlineCompletionSeq = 0;
 let inlineCompletionsRegistered = false;
 
-// Local heuristic predictive completion fallback
+/**
+ * Cleans, aligns, and deduplicates inline completion output relative to the cursor.
+ * Guarantees that suggestions finish the current line without repeating code,
+ * jumping to unintended lines, or generating duplicate brackets.
+ */
+function cleanFimCompletion(rawText, lineBefore, lineAfter) {
+  if (!rawText) return '';
+  let text = rawText;
+
+  // 1. Strip markdown fences and language headers (```javascript ... ```)
+  text = text.replace(/^```[a-zA-Z0-9_-]*\r?\n?/, '').replace(/\r?\n?```[\s\S]*$/, '');
+
+  // 2. Strip special FIM tokens if any leaked into the generation
+  text = text.replace(/<\|fim_[a-z]+\|>/g, '')
+             .replace(/<\|endoftext\|>/g, '')
+             .replace(/<\|file_sep\|>/g, '')
+             .replace(/<file_sep>/g, '')
+             .replace(/<EOT>/g, '')
+             .replace(/<CURSOR>/g, '');
+
+  const trimmedBefore = lineBefore.trim();
+  const isMidLine = trimmedBefore.length > 0;
+
+  // 3. Lining & Spacing:
+  // If the user is actively typing mid-line, the suggestion MUST finish the line first!
+  // Strip leading newlines and unwanted leading whitespace that pushes suggestions to the next line.
+  if (isMidLine) {
+    text = text.replace(/^(\r?\n)+[ \t]*/, '');
+  }
+
+  // 4. Overlap & Prefix Deduplication (Fix for duplicate code like "if (age > 18) {})"):
+  if (isMidLine) {
+    // 4A: Exact prefix match
+    if (text.startsWith(trimmedBefore)) {
+      text = text.substring(trimmedBefore.length);
+    } else {
+      // 4B: Whitespace/token normalized match
+      const normBefore = trimmedBefore.replace(/\s+/g, '');
+      let accum = '';
+      let matchEnd = -1;
+      for (let i = 0; i < text.length; i++) {
+        if (!/\s/.test(text[i])) {
+          accum += text[i];
+        }
+        if (accum === normBefore) {
+          matchEnd = i + 1;
+          break;
+        } else if (!normBefore.startsWith(accum)) {
+          break;
+        }
+      }
+      if (matchEnd > 0) {
+        text = text.substring(matchEnd);
+      }
+    }
+
+    // 4C: Suffix overlap of lineBefore with prefix of text
+    const maxOverlap = Math.min(trimmedBefore.length, 50);
+    for (let len = maxOverlap; len >= 2; len--) {
+      const tail = trimmedBefore.substring(trimmedBefore.length - len);
+      if (text.startsWith(tail)) {
+        text = text.substring(tail.length);
+        break;
+      }
+    }
+
+    // 4D: Word-prefix deduplication (e.g., user typed "func" and model says "function")
+    const wordMatch = lineBefore.match(/([a-zA-Z0-9_$]+)$/);
+    if (wordMatch) {
+      const currentWord = wordMatch[1];
+      if (text.startsWith(currentWord)) {
+        text = text.substring(currentWord.length);
+      }
+    }
+  }
+
+  // 5. Suffix overlap deduplication (Code that already exists after cursor)
+  const trimmedAfter = lineAfter.trim();
+  if (trimmedAfter.length > 0) {
+    if (text.startsWith(trimmedAfter)) {
+      text = text.substring(trimmedAfter.length);
+    } else {
+      for (let len = Math.min(trimmedAfter.length, 25); len >= 1; len--) {
+        const head = trimmedAfter.substring(0, len);
+        if (text.endsWith(head)) {
+          text = text.substring(0, text.length - len);
+          break;
+        }
+      }
+    }
+  }
+
+  // 6. Balanced parentheses check:
+  // If user typed e.g. "if(age > 18" with unclosed "(" and text starts with " {", add ")"
+  if (isMidLine) {
+    const openParens = (lineBefore.match(/\(/g) || []).length;
+    const closeParens = (lineBefore.match(/\)/g) || []).length;
+    if (openParens > closeParens) {
+      if (/^\s*\{/.test(text) && !text.includes(')')) {
+        text = text.replace(/^\s*\{/, ') {');
+      }
+    }
+  }
+
+  // 7. Limit runaway length: suggestions should finish the current statement / 1-4 lines max
+  const lines = text.split('\n');
+  if (lines.length > 4) {
+    text = lines.slice(0, 3).join('\n');
+  }
+
+  return text;
+}
+
+// Universal multi-language syntax predictive completion engine
 function getLocalSuggestion(prefix, suffix, lineContent, language) {
   const trimmed = lineContent.trim();
   if (!trimmed) return null;
+  const lang = (language || '').toLowerCase();
+  const suf = (suffix || '').trim();
 
-  // Bracket and quote closing
-  if (trimmed.endsWith('{') && !suffix.trim().startsWith('}')) return '\n  \n}';
-  if (trimmed.endsWith('(') && !suffix.trim().startsWith(')')) return ')';
-  if (trimmed.endsWith('[') && !suffix.trim().startsWith(']')) return ']';
+  // 1. Universal bracket & delimiter closers
+  if (trimmed.endsWith('{') && !suf.startsWith('}')) return '\n  \n}';
+  if (trimmed.endsWith('(') && !suf.startsWith(')')) return ')';
+  if (trimmed.endsWith('[') && !suf.startsWith(']')) return ']';
+  if (trimmed.endsWith('/*') && !suf.startsWith('*/')) return ' */';
 
-  // Language specific idioms
-  if (language === 'python') {
+  // 2. Python / Ruby / GDScript indentation idioms
+  if (['python', 'ruby', 'gdscript'].includes(lang)) {
+    if (trimmed.startsWith('def ') && !trimmed.includes('(')) return '():\n    pass';
     if (trimmed.startsWith('def ') && trimmed.endsWith(':')) return '\n    pass';
     if (trimmed.startsWith('class ') && trimmed.endsWith(':')) return '\n    def __init__(self):\n        pass';
+    if (trimmed.startsWith('if ') && !trimmed.endsWith(':')) return ':\n    pass';
+    if (trimmed.startsWith('elif ') && !trimmed.endsWith(':')) return ':\n    pass';
+    if (trimmed === 'else:') return '\n    pass';
+    if (trimmed.startsWith('for ') && !trimmed.includes(' in ')) return 'item in items:\n    pass';
+    if (trimmed.startsWith('while ') && !trimmed.endsWith(':')) return ':\n    pass';
+    if (trimmed.startsWith('try:')) return '\n    pass\nexcept Exception as e:\n    pass';
     if (trimmed.startsWith('if __name__')) return ' == "__main__":\n    main()';
-    if (trimmed.startsWith('for ') && !trimmed.endsWith(':')) return ' in range():';
-  } else if (language === 'javascript' || language === 'typescript') {
-    if (trimmed.startsWith('function ') && !trimmed.includes('{')) return '() {\n  \n}';
-    if (trimmed.startsWith('const ') && trimmed.includes('=') && trimmed.includes('(') && !trimmed.includes('=>')) return ' => {\n  \n};';
-    if (trimmed === 'console.log') return '();';
-    if (trimmed.startsWith('export default function')) return '() {\n  \n}';
-  } else if (language === 'rust') {
-    if ((trimmed.startsWith('fn ') || trimmed.startsWith('pub fn ')) && !trimmed.includes('{')) return '() {\n    \n}';
-    if (trimmed.startsWith('let mut ') && !trimmed.includes('=')) return ' = ';
   }
 
-  // Word token prefix matching from buffer
-  const lastWordMatch = lineContent.match(/([a-zA-Z0-9_$]{3,})$/);
+  // 3. Rust idioms
+  if (lang === 'rust') {
+    if ((trimmed.startsWith('fn ') || trimmed.startsWith('pub fn ')) && !trimmed.includes('{')) return '() {\n    \n}';
+    if (trimmed.startsWith('let mut ') && !trimmed.includes('=')) return ' = ';
+    if (trimmed.startsWith('match ') && !trimmed.endsWith('{')) return ' {\n    _ => (),\n}';
+    if (trimmed.startsWith('impl ') && !trimmed.endsWith('{')) return ' {\n    \n}';
+    if (trimmed.startsWith('struct ') && !trimmed.endsWith('{')) return ' {\n    \n}';
+    if (trimmed === 'println!') return '("{}", );';
+  }
+
+  // 4. Go idioms
+  if (lang === 'go') {
+    if (trimmed.startsWith('func ') && !trimmed.includes('{')) return '() {\n\t\n}';
+    if (trimmed === 'if err != nil') return ' {\n\treturn err\n}';
+    if (trimmed.startsWith('type ') && !trimmed.includes('{')) return ' struct {\n\t\n}';
+    if (trimmed.startsWith('fmt.Println')) return '()';
+  }
+
+  // 5. Java / C# / Kotlin / C++ / C / Swift / Dart idioms
+  if (['java', 'csharp', 'cpp', 'c', 'kotlin', 'swift', 'dart'].includes(lang)) {
+    if (trimmed.startsWith('public static void main') && !trimmed.includes('{')) return '(String[] args) {\n    \n}';
+    if (trimmed.startsWith('System.out.println')) return '();';
+    if (trimmed.startsWith('Console.WriteLine')) return '();';
+    if (trimmed.startsWith('std::cout')) return ' <<  << std::endl;';
+    if (trimmed.startsWith('class ') && !trimmed.includes('{')) return ' {\n    \n}';
+  }
+
+  // 6. JavaScript / TypeScript / JSX / TSX
+  if (['javascript', 'typescript', 'javascriptreact', 'typescriptreact'].includes(lang)) {
+    if (trimmed.startsWith('function ') && !trimmed.includes('{')) return '() {\n  \n}';
+    if (trimmed.startsWith('const ') && trimmed.includes('=') && trimmed.includes('(') && !trimmed.includes('=>')) return ' => {\n  \n};';
+    if (trimmed.startsWith('export default function') && !trimmed.includes('{')) return '() {\n  \n}';
+    if (trimmed.startsWith('export const ') && !trimmed.includes('=')) return ' = ';
+    if (trimmed === 'console.log') return '();';
+    if (trimmed === 'console.error') return '();';
+    if (trimmed.endsWith('.then(')) return 'res => {\n  \n})';
+    if (trimmed.endsWith('.catch(')) return 'err => {\n  \n})';
+  }
+
+  // 7. HTML / XML / JSX tag closing
+  if (['html', 'xml', 'javascriptreact', 'typescriptreact', 'vue', 'svelte'].includes(lang)) {
+    const tagMatch = trimmed.match(/<([a-zA-Z0-9_-]+)(?:\s+[^>]*)?$/);
+    if (tagMatch) {
+      const tag = tagMatch[1];
+      const selfClosing = ['input', 'img', 'br', 'hr', 'meta', 'link'].includes(tag.toLowerCase());
+      return selfClosing ? ' />' : `></${tag}>`;
+    }
+  }
+
+  // 8. CSS / SCSS / Less
+  if (['css', 'scss', 'less'].includes(lang)) {
+    if (trimmed.endsWith(':') && !trimmed.includes(';')) return ' ;';
+    if (!trimmed.includes('{') && !trimmed.includes(';') && /^[.#a-zA-Z]/.test(trimmed)) return ' {\n  \n}';
+  }
+
+  // 9. SQL
+  if (['sql', 'mysql', 'pgsql'].includes(lang)) {
+    if (trimmed.toUpperCase().startsWith('SELECT ') && !trimmed.toUpperCase().includes('FROM')) return '* FROM ';
+    if (trimmed.toUpperCase().startsWith('INSERT INTO ') && !trimmed.toUpperCase().includes('VALUES')) return ' VALUES ()';
+    if (trimmed.toUpperCase().startsWith('UPDATE ') && !trimmed.toUpperCase().includes('SET')) return ' SET ';
+  }
+
+  // 10. Universal C-Family Control Flow: if, for, while, switch, try, catch
+  // Works across ALL C-like languages: JS, TS, Java, C#, C, C++, PHP, Go, Rust, Swift, Kotlin, Dart
+  if (!['python', 'ruby'].includes(lang)) {
+    if (trimmed.startsWith('if (') || trimmed.startsWith('if(')) {
+      const openCount = (trimmed.match(/\(/g) || []).length;
+      const closeCount = (trimmed.match(/\)/g) || []).length;
+      if (openCount > closeCount) {
+        return `) {\n  \n}`;
+      }
+    }
+    if (trimmed.startsWith('for (') || trimmed.startsWith('for(')) {
+      const openCount = (trimmed.match(/\(/g) || []).length;
+      const closeCount = (trimmed.match(/\)/g) || []).length;
+      if (openCount > closeCount) {
+        return `) {\n  \n}`;
+      }
+    }
+    if (trimmed.startsWith('while (') || trimmed.startsWith('while(')) {
+      const openCount = (trimmed.match(/\(/g) || []).length;
+      const closeCount = (trimmed.match(/\)/g) || []).length;
+      if (openCount > closeCount) {
+        return `) {\n  \n}`;
+      }
+    }
+    if (trimmed === 'else' || trimmed === '} else') return ' {\n  \n}';
+    if (trimmed.startsWith('else if (') || trimmed.startsWith('} else if (')) return ') {\n  \n}';
+    if (trimmed === 'try' || trimmed === '} try') return ' {\n  \n} catch (e) {\n  \n}';
+  }
+
+  // 11. Active Token Buffer Discovery:
+  const lastWordMatch = lineContent.match(/([a-zA-Z0-9_$]{2,})$/);
   if (lastWordMatch) {
     const prefixWord = lastWordMatch[1];
-    const tokens = prefix.match(/\b[a-zA-Z0-9_$]{4,}\b/g) || [];
-    const match = tokens.find(t => t.startsWith(prefixWord) && t !== prefixWord);
-    if (match) {
-      return match.slice(prefixWord.length);
+    const tokens = prefix.match(/\b[a-zA-Z0-9_$]{3,}\b/g) || [];
+    for (let i = tokens.length - 1; i >= 0; i--) {
+      const t = tokens[i];
+      if (t.startsWith(prefixWord) && t !== prefixWord) {
+        return t.slice(prefixWord.length);
+      }
     }
   }
 
@@ -647,6 +866,7 @@ function getLocalSuggestion(prefix, suffix, lineContent, language) {
 
 // LRU completion cache for ultra-low latency (<20ms) on repeated or backspaced contexts
 const inlineCache = new Map();
+let activeInlineSuggestion = null;
 
 function registerInlineCompletions() {
   if (inlineCompletionsRegistered) return;
@@ -659,7 +879,38 @@ function registerInlineCompletions() {
 
       // Grab current line up to cursor
       const lineContent = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
-      if (!lineContent.trim() && position.column === 1) return { items: [] };
+      if (!lineContent.trim() && position.column === 1) {
+        activeInlineSuggestion = null;
+        return { items: [] };
+      }
+
+      // Check if user is typing characters matching the currently visible suggestion prefix.
+      // If so, stay visible and slice off the typed prefix without re-querying or debouncing!
+      if (activeInlineSuggestion &&
+          activeInlineSuggestion.uri === model.uri.toString() &&
+          activeInlineSuggestion.lineNumber === position.lineNumber &&
+          position.column >= activeInlineSuggestion.column) {
+        const currentLine = model.getLineContent(position.lineNumber);
+        const typedSinceStart = currentLine.substring(activeInlineSuggestion.column - 1, position.column - 1);
+        if (activeInlineSuggestion.fullText.startsWith(typedSinceStart)) {
+          const remainingText = activeInlineSuggestion.fullText.substring(typedSinceStart.length);
+          if (remainingText) {
+            return {
+              items: [{
+                insertText: remainingText,
+                range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+              }]
+            };
+          } else {
+            activeInlineSuggestion = null;
+          }
+        } else {
+          // User typed something divergent - clear and fetch fresh suggestion
+          activeInlineSuggestion = null;
+        }
+      } else {
+        activeInlineSuggestion = null;
+      }
 
       // Responsive 140ms debounce for rapid typing without backend flooding
       const mySeq = ++inlineCompletionSeq;
@@ -684,6 +935,12 @@ function registerInlineCompletions() {
       const cached = inlineCache.get(cacheKey);
       if (cached && (Date.now() - cached.timestamp < 30000)) {
         cancelSub?.dispose?.();
+        activeInlineSuggestion = {
+          uri: model.uri.toString(),
+          lineNumber: position.lineNumber,
+          column: position.column,
+          fullText: cached.text
+        };
         return {
           items: [{
             insertText: cached.text,
@@ -749,30 +1006,20 @@ function registerInlineCompletions() {
           indicator.title = `Inline suggestion latency: ${latencyMs}ms (${inlineModel})`;
         }
 
-        // If backend was slow or empty, fall back to local syntax predictive engine
-        if (!text) {
-          text = getLocalSuggestion(prefix, suffix, lineContent, language) || '';
+        const lineBefore = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
+        const lineAfter = model.getLineContent(position.lineNumber).substring(position.column - 1);
+
+        // Sanitize, clean, and deduplicate model completion relative to cursor
+        if (text) {
+          text = cleanFimCompletion(text, lineBefore, lineAfter);
         }
 
-        if (!text || text.length > 500) return { items: [] };
-
-        // Clean up completion string: strip markdown fences and leading blank lines
-        text = text.replace(/^\`\`\`[a-zA-Z0-9_-]*\r?\n?/, '').replace(/\r?\n?\`\`\`$/, '');
-        text = text.replace(/^\s*\r?\n+/, '');
-
-        // Word-prefix deduplication: prevent "funcfunction" duplication when cursor is mid-word
-        const match = lineContent.match(/[a-zA-Z0-9_$]+$/);
-        const currentWordPrefix = match ? match[0] : '';
-        if (currentWordPrefix && text.startsWith(currentWordPrefix)) {
-          text = text.substring(currentWordPrefix.length);
+        // If backend was slow or empty, fall back to universal local syntax predictive engine
+        if (!text || !text.trim()) {
+          text = getLocalSuggestion(prefix, suffix, lineBefore, language) || '';
         }
 
-        // Suffix overlap deduplication: strip duplicate tokens matching characters immediately after cursor
-        const afterCursor = model.getLineContent(position.lineNumber).substring(position.column - 1);
-        if (afterCursor && text.startsWith(afterCursor)) {
-          text = text.substring(afterCursor.length);
-        }
-        if (!text || !text.trim()) return { items: [] };
+        if (!text || !text.trim() || text.length > 500) return { items: [] };
 
         // Save in cache (keep max 100 entries)
         if (inlineCache.size > 100) {
@@ -780,6 +1027,13 @@ function registerInlineCompletions() {
           inlineCache.delete(oldest);
         }
         inlineCache.set(cacheKey, { text, timestamp: Date.now() });
+
+        activeInlineSuggestion = {
+          uri: model.uri.toString(),
+          lineNumber: position.lineNumber,
+          column: position.column,
+          fullText: text
+        };
 
         return {
           items: [
@@ -790,8 +1044,15 @@ function registerInlineCompletions() {
           ]
         };
       } catch (err) {
-        const fallback = getLocalSuggestion(prefix, suffix, lineContent, language);
+        const lineBefore = model.getLineContent(position.lineNumber).substring(0, position.column - 1);
+        const fallback = getLocalSuggestion(prefix, suffix, lineBefore, language);
         if (fallback) {
+          activeInlineSuggestion = {
+            uri: model.uri.toString(),
+            lineNumber: position.lineNumber,
+            column: position.column,
+            fullText: fallback
+          };
           return {
             items: [{
               insertText: fallback,

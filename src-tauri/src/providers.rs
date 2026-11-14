@@ -352,15 +352,22 @@ impl ProviderService {
         let clean_provider_str = clean_provider.as_str();
 
         let clean_completion = |raw: &str| -> String {
-            let mut s = raw.trim();
-            if s.starts_with("```") {
-                if let Some(first_nl) = s.find('\n') {
-                    s = &s[first_nl + 1..];
+            let mut s = raw;
+            // Strip markdown fences
+            if let Some(stripped) = s.strip_prefix("```") {
+                if let Some(first_nl) = stripped.find('\n') {
+                    s = &stripped[first_nl + 1..];
                 }
             }
             if let Some(idx) = s.rfind("```") {
                 s = &s[..idx];
             }
+            // Strip FIM control tokens
+            s = s.trim_end_matches("<|endoftext|>")
+                 .trim_end_matches("<|fim_pad|>")
+                 .trim_end_matches("<|file_sep|>")
+                 .trim_end_matches("<file_sep>")
+                 .trim_end_matches("<EOT>");
             s.trim_end().to_string()
         };
 
@@ -369,18 +376,37 @@ impl ProviderService {
                 let url = base_url.unwrap_or_else(|| "http://127.0.0.1:11434".into());
                 let normalized_url = url.replace("localhost", "127.0.0.1");
                 let target_model = if model.is_empty() { "qwen2.5-coder:1.5b" } else { model };
+                let target_model_lower = target_model.to_lowercase();
+
+                let is_qwen = target_model_lower.contains("qwen");
+                let is_codellama = target_model_lower.contains("codellama");
+                let is_starcoder = target_model_lower.contains("starcoder");
+                let is_deepseek = target_model_lower.contains("deepseek");
+
+                let fim_prompt = if is_qwen || is_deepseek {
+                    format!("<|fim_prefix|>{}<|fim_suffix|>{}<|fim_middle|>", prefix, suffix)
+                } else if is_codellama {
+                    format!("<PRE> {} <SUF>{} <MID>", prefix, suffix)
+                } else if is_starcoder {
+                    format!("<fim_prefix>{}<fim_suffix>{}<fim_middle>", prefix, suffix)
+                } else {
+                    prefix.to_string()
+                };
+
+                let is_fim_model = is_qwen || is_codellama || is_starcoder || is_deepseek;
 
                 // First attempt: FIM (Fill-In-The-Middle) via /api/generate
                 let fim_payload = serde_json::json!({
                     "model": target_model,
-                    "prompt": prefix,
-                    "suffix": suffix,
+                    "prompt": fim_prompt,
+                    "suffix": if is_fim_model { "" } else { suffix },
+                    "raw": is_fim_model,
                     "stream": false,
                     "keep_alive": "15m",
                     "options": {
-                        "num_predict": 36,
-                        "temperature": 0.1,
-                        "stop": ["\n\n", "\r\n\r\n", "```", "<|endoftext|>", "<|fim_pad|>"]
+                        "num_predict": 32,
+                        "temperature": 0.05,
+                        "stop": ["\n\n", "```", "<|endoftext|>", "<|fim_pad|>", "<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<file_sep>", "<|file_sep|>"]
                     }
                 });
 
@@ -401,23 +427,23 @@ impl ProviderService {
                     }
                 }
 
-                // Fallback: /api/chat with prompt
+                // Fallback: /api/chat with strict inline completion constraints
                 let user_prompt = format!(
-                    "Language: {}\nCode before cursor:\n{}\nCode after cursor:\n{}\nComplete code at cursor without explanations or fences.",
+                    "File language: {}\nExisting code before cursor:\n{}\n<CURSOR>\nExisting code after cursor:\n{}\nOutput ONLY the code tokens to insert at <CURSOR>:",
                     language, prefix, suffix
                 );
                 let chat_payload = serde_json::json!({
                     "model": target_model,
                     "messages": [
-                        { "role": "system", "content": "You are a code completion engine. Return ONLY the code to insert at cursor. No explanations. 1-3 lines max." },
+                        { "role": "system", "content": "You are a strict code autocomplete engine. Your ONLY job is to complete the code starting EXACTLY at the cursor. Finish the current line or statement. DO NOT repeat code before the cursor. DO NOT add explanations or markdown fences." },
                         { "role": "user", "content": user_prompt }
                     ],
                     "stream": false,
                     "keep_alive": "15m",
                     "options": {
-                        "num_predict": 48,
-                        "temperature": 0.1,
-                        "stop": ["```", "\n\n"]
+                        "num_predict": 32,
+                        "temperature": 0.05,
+                        "stop": ["```", "\n\n", "<CURSOR>"]
                     }
                 });
                 let resp = client

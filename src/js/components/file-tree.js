@@ -1172,7 +1172,7 @@ export function wireTreeDragDrop() {
     try {
       await invoke('move_workspace_entry', { from: srcPath, to: destPath });
       showToast(`Moved "${basename}" to ${destDir ? '/' + destDir : 'workspace root'}`, 'success', 2200);
-      window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { path: destPath, action: 'moved' } }));
+      window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { path: destPath, action: 'moved', source: 'human' } }));
       await refreshFileTree();
     } catch (err) {
       showToast(`Move failed: ${err}`, 'error', 3000);

@@ -305,9 +305,8 @@ export function createNewSession(title = null) {
   state.conversation = [];
   saveSessionsToStorage();
 
-  // Reset timeline UI
+  // Reset timeline UI to clean welcome hero (Image 2) with starter cards
   renderFullTimeline([]);
-  appendTimelineCard('assistant', `Started a new session: <strong>${initialTitle}</strong>. Ready to inspect, code, and execute.`);
   updateTitleDisplay();
   closeHistoryDropdown();
 }

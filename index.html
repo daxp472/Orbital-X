@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.3.9 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.0 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -797,35 +797,40 @@
           </div>
 
           <div class="composer-box">
-            <textarea class="composer-textarea" id="agent-input" placeholder="Ask Orbital X to edit, test, or explain..." rows="2" aria-label="Agent chat input"></textarea>
-            <div class="composer-bottom-bar">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <!-- Ask / Chat Segmented Mode Switcher -->
-                <div class="composer-mode-tabs" id="composer-mode-tabs">
-                  <button class="composer-mode-btn" id="btn-mode-ask" data-cmode="ask" type="button" title="Ask Mode: Read-only Q&A & code explanations (cannot edit or delete files)">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-                    <span>Ask</span>
-                  </button>
-                  <button class="composer-mode-btn active" id="btn-mode-chat" data-cmode="chat" type="button" title="Chat / Agent Mode: Full AI software engineer (writes code, edits files, executes tools)">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                    <span>Chat</span>
-                  </button>
-                </div>
-                <!-- Model selector pill on bottom left -->
+            <!-- Composer Top Bar: Mode Switcher & Model / Speculative Controls -->
+            <div class="composer-top-bar">
+              <!-- Ask / Chat Segmented Mode Switcher -->
+              <div class="composer-mode-tabs" id="composer-mode-tabs">
+                <button class="composer-mode-btn" id="btn-mode-ask" data-cmode="ask" type="button" title="Ask Mode: Read-only Q&A & code explanations (cannot edit or delete files)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  <span>Ask</span>
+                </button>
+                <button class="composer-mode-btn active" id="btn-mode-chat" data-cmode="chat" type="button" title="Chat / Agent Mode: Full AI software engineer (writes code, edits files, executes tools)">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                  <span>Chat</span>
+                </button>
+              </div>
+
+              <!-- Model selector & Auto Speculative Toggle on Top Right -->
+              <div class="composer-top-controls">
                 <div class="composer-model-pill" id="composer-model-selector" title="Click to change model">
                   <span style="color: var(--accent-cyan); font-weight: bold;">+</span>
                   <span id="composer-model-name">Ollama (llama3)</span>
                   <span style="font-size: 8px; opacity: 0.6;">▼</span>
                 </div>
 
-                <!-- Auto / Speculative Mode quick toggle pill -->
                 <div class="composer-speculative-pill" id="composer-speculative-toggle" title="Click to toggle Auto Speculative Dual-Model Mode">
                   <span class="spec-sparkle" style="color: var(--accent-cyan);">⚡</span>
                   <span id="composer-speculative-label">Auto: Off</span>
                 </div>
               </div>
+            </div>
 
-              <!-- Context @ and Send button on bottom right -->
+            <textarea class="composer-textarea" id="agent-input" placeholder="Ask Orbital X to edit, test, or explain..." rows="2" aria-label="Agent chat input"></textarea>
+            <div class="composer-bottom-bar">
+              <div class="composer-bottom-left" style="display: flex; align-items: center; min-width: 0;"></div>
+
+              <!-- Context @, Media and Send buttons on bottom right -->
               <div class="composer-actions">
                 <!-- Tiny Context Ring Popover (Floats directly above the circle) -->
                 <div class="composer-context-popover" id="composer-context-popover" style="display: none;">
@@ -1993,7 +1998,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.3.9 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.4.0 · The AI-native IDE for everyone</div>
           </div>
         </div>
 
@@ -2301,7 +2306,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.3.9 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.4.0 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 
