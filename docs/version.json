@@ -1,11 +1,11 @@
 {
-  "version": "2.3.9",
-  "tag": "v2.3.9",
-  "release_date": "2026-11-13",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_portable_win64.zip",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_aarch64.dmg",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.3.9/Orbital.X_2.3.9_amd64.deb",
-  "changelog": "v2.3.9: High-Speed Inline Code Suggestions (<2s latency, dedicated lightweight 1.5B/3B decoupled model, fast LRU cache), Screenshot-to-Agent Multimodal Visual Intelligence, Transactional VFS In-Editor Code Review, Dedicated OX Structured Error Framework, Activity & Notification Center Apple HIG Redesign, Explorer Drag-and-Drop Tagging & Rich Context Staging."
+  "version": "2.4.0",
+  "tag": "v2.4.0",
+  "release_date": "2026-11-14",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_portable_win64.zip",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_aarch64.dmg",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_amd64.deb",
+  "changelog": "v2.4.0: High-Speed Contextual Antithesis Inline Completions, Dual-Row Apple HIG Chat Composer with Left-Aligned Attachments, Vision Model Guidance Warning Modal, 4-Stage Error Presentation Architecture, Zero-Duplicate Control Statement Deduplication, and Native Windows NSIS Packaging."
 }

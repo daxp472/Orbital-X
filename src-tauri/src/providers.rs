@@ -383,6 +383,14 @@ impl ProviderService {
                 let is_starcoder = target_model_lower.contains("starcoder");
                 let is_deepseek = target_model_lower.contains("deepseek");
 
+                // Dedicated FIM models are base models without chat templates
+                let is_base_coder = (is_qwen || is_deepseek)
+                    && target_model_lower.contains("coder")
+                    && !target_model_lower.contains("instruct")
+                    && !target_model_lower.contains("chat")
+                    || is_codellama
+                    || is_starcoder;
+
                 let fim_prompt = if is_qwen || is_deepseek {
                     format!("<|fim_prefix|>{}<|fim_suffix|>{}<|fim_middle|>", prefix, suffix)
                 } else if is_codellama {
@@ -393,41 +401,41 @@ impl ProviderService {
                     prefix.to_string()
                 };
 
-                let is_fim_model = is_qwen || is_codellama || is_starcoder || is_deepseek;
+                // If dedicated base coder model, use raw FIM via /api/generate
+                if is_base_coder {
+                    let fim_payload = serde_json::json!({
+                        "model": target_model,
+                        "prompt": fim_prompt,
+                        "suffix": "",
+                        "raw": true,
+                        "stream": false,
+                        "keep_alive": "30m",
+                        "options": {
+                            "num_predict": 32,
+                            "temperature": 0.05,
+                            "stop": ["\n\n", "```", "<|endoftext|>", "<|fim_pad|>", "<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<file_sep>", "<|file_sep|>"]
+                        }
+                    });
 
-                // First attempt: FIM (Fill-In-The-Middle) via /api/generate
-                let fim_payload = serde_json::json!({
-                    "model": target_model,
-                    "prompt": fim_prompt,
-                    "suffix": if is_fim_model { "" } else { suffix },
-                    "raw": is_fim_model,
-                    "stream": false,
-                    "keep_alive": "15m",
-                    "options": {
-                        "num_predict": 32,
-                        "temperature": 0.05,
-                        "stop": ["\n\n", "```", "<|endoftext|>", "<|fim_pad|>", "<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<file_sep>", "<|file_sep|>"]
-                    }
-                });
-
-                if let Ok(resp) = client
-                    .post(format!("{}/api/generate", normalized_url.trim_end_matches('/')))
-                    .json(&fim_payload)
-                    .send()
-                    .await
-                {
-                    if resp.status().is_success() {
-                        if let Ok(json) = resp.json::<serde_json::Value>().await {
-                            if let Some(c) = json.get("response").and_then(|v| v.as_str()) {
-                                if !c.trim().is_empty() {
-                                    return Ok(clean_completion(c));
+                    if let Ok(resp) = client
+                        .post(format!("{}/api/generate", normalized_url.trim_end_matches('/')))
+                        .json(&fim_payload)
+                        .send()
+                        .await
+                    {
+                        if resp.status().is_success() {
+                            if let Ok(json) = resp.json::<serde_json::Value>().await {
+                                if let Some(c) = json.get("response").and_then(|v| v.as_str()) {
+                                    if !c.trim().is_empty() {
+                                        return Ok(clean_completion(c));
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // Fallback: /api/chat with strict inline completion constraints
+                // Chat / Instruct models or FIM fallback: /api/chat with strict inline completion constraints
                 let user_prompt = format!(
                     "File language: {}\nExisting code before cursor:\n{}\n<CURSOR>\nExisting code after cursor:\n{}\nOutput ONLY the code tokens to insert at <CURSOR>:",
                     language, prefix, suffix
@@ -435,11 +443,11 @@ impl ProviderService {
                 let chat_payload = serde_json::json!({
                     "model": target_model,
                     "messages": [
-                        { "role": "system", "content": "You are a strict code autocomplete engine. Your ONLY job is to complete the code starting EXACTLY at the cursor. Finish the current line or statement. DO NOT repeat code before the cursor. DO NOT add explanations or markdown fences." },
+                        { "role": "system", "content": "You are a strict code autocomplete engine. Your ONLY job is to complete the code starting EXACTLY at the cursor. Finish the current line or statement. DO NOT repeat code before the cursor. If inside an else branch, infer the contextual antithesis of the if branch. DO NOT add explanations or markdown fences." },
                         { "role": "user", "content": user_prompt }
                     ],
                     "stream": false,
-                    "keep_alive": "15m",
+                    "keep_alive": "30m",
                     "options": {
                         "num_predict": 32,
                         "temperature": 0.05,

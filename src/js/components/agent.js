@@ -87,6 +87,12 @@ export async function processAndAttachImage(fileOrBlob, name = 'screenshot.png')
       };
       pendingImages.push(imgObj);
       renderAttachmentChips();
+
+      // Check vision capability and inform user with helpful guidance if model is text-only
+      if (!isVisionCapableModel(state.ai?.provider, state.ai?.model)) {
+        showVisionModelWarningModal(state.ai?.model || 'qwen');
+      }
+
       resolve(imgObj);
     };
     reader.onerror = () => {
@@ -94,6 +100,54 @@ export async function processAndAttachImage(fileOrBlob, name = 'screenshot.png')
       resolve(null);
     };
     reader.readAsDataURL(fileOrBlob);
+  });
+}
+
+export function showVisionModelWarningModal(activeModel) {
+  document.getElementById('orbital-vision-warning-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'orbital-vision-warning-modal';
+  modal.className = 'modal-backdrop';
+  modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 100000; animation: fadeIn 0.15s ease;';
+
+  modal.innerHTML = `
+    <div class="modal-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 14px; max-width: 440px; width: 90%; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); display: flex; flex-direction: column; gap: 14px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(255, 152, 0, 0.15); color: #ff9800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        </div>
+        <div>
+          <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">Vision Model Recommended</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Active Model: <code style="color: var(--accent-cyan); font-family: var(--font-mono);">${escapeHtml(activeModel || 'qwen')}</code> (Text-Only)</div>
+        </div>
+      </div>
+
+      <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
+        Your photo is attached, but text-only models cannot read images. To enable the AI to inspect UI layouts, diagrams, or errors from this screenshot, switch to a vision model:
+      </div>
+
+      <div style="background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; font-size: 11.5px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-weight: 600; color: var(--text-primary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">Recommended Vision Models:</div>
+        <div style="color: var(--text-muted);"><strong style="color: var(--accent-cyan);">Ollama Local:</strong> <code>llama3.2-vision</code>, <code>llava</code>, <code>moondream</code></div>
+        <div style="color: var(--text-muted);"><strong style="color: var(--accent-purple);">Cloud Providers:</strong> <code>gpt-4o</code>, <code>claude-3-5-sonnet</code>, <code>gemini-2.0-flash</code></div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 4px;">
+        <button class="btn btn-secondary btn-sm" id="btn-vision-warning-dismiss">Keep Attached</button>
+        <button class="btn btn-primary btn-sm" id="btn-vision-warning-switch" style="background: var(--accent-cyan); color: #0d1117; font-weight: 600;">Switch Model</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#btn-vision-warning-dismiss')?.addEventListener('click', () => modal.remove());
+  modal.querySelector('#btn-vision-warning-switch')?.addEventListener('click', () => {
+    modal.remove();
+    document.getElementById('composer-model-selector')?.click();
+  });
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
   });
 }
 
@@ -174,15 +228,16 @@ export function initAgent() {
     });
   }
 
-  // Live token estimate counter in composer bottom bar
+  // Live token estimate counter in composer actions row
   let tokenCounter = document.getElementById('composer-token-counter');
   if (!tokenCounter && inputElem) {
-    tokenCounter = document.createElement('div');
+    tokenCounter = document.createElement('span');
     tokenCounter.id = 'composer-token-counter';
     tokenCounter.className = 'composer-token-counter';
-    const bottomLeft = document.querySelector('.composer-bottom-left');
-    if (bottomLeft) {
-      bottomLeft.appendChild(tokenCounter);
+    const actionsRow = document.querySelector('.composer-actions');
+    const ring = document.getElementById('composer-context-ring');
+    if (actionsRow && ring) {
+      actionsRow.insertBefore(tokenCounter, ring);
     } else {
       inputElem.insertAdjacentElement('afterend', tokenCounter);
     }
@@ -2200,7 +2255,7 @@ STRATEGY:
 
       // Duplicate response detection: if the model repeated the same answer, break immediately
       const prevAssistantMsgs = state.conversation
-        .filter(m => m.role === 'assistant' && m.mid !== assistantMid && m.content)
+        .filter(m => m.role === 'assistant' && m.mid !== turnAssistantMid && m.content)
         .slice(-4);
       const isDuplicate = prevAssistantMsgs.some(m => {
         const prev = (m.content || '').trim();

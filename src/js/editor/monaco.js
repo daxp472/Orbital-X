@@ -721,6 +721,26 @@ function cleanFimCompletion(rawText, lineBefore, lineAfter) {
     }
   }
 
+  // 6B: Condition header duplication protection (Fix for "if(age > 18 {" -> "if (age > 18) {})")
+  // If lineBefore already opened a control statement (if, while, for, switch), strip any re-statement in text
+  const condHeaderMatch = lineBefore.match(/^\s*(if|else\s+if|for|while|switch)\s*\(?([^){]*)/i);
+  if (condHeaderMatch) {
+    const kw = condHeaderMatch[1];
+    const condBody = condHeaderMatch[2].trim().replace(/\s+/g, '');
+    const textCondMatch = text.match(new RegExp(`^\\s*${kw}\\s*\\(?([^){]*)`, 'i'));
+    if (textCondMatch) {
+      const textCondBody = textCondMatch[1].trim().replace(/\s+/g, '');
+      if (!condBody || textCondBody.includes(condBody) || condBody.includes(textCondBody)) {
+        text = text.replace(new RegExp(`^\\s*${kw}\\s*\\([^)]*\\)\\s*\\{?`, 'i'), '');
+      }
+    }
+  }
+
+  // If lineBefore already ends with '{', strip any redundant closing parens, braces or wrappers at start of text
+  if (trimmedBefore.endsWith('{')) {
+    text = text.replace(/^(\s*\)|\s*\}\)|\s*\{)+/, '');
+  }
+
   // 7. Limit runaway length: suggestions should finish the current statement / 1-4 lines max
   const lines = text.split('\n');
   if (lines.length > 4) {
@@ -730,10 +750,186 @@ function cleanFimCompletion(rawText, lineBefore, lineAfter) {
   return text;
 }
 
+/**
+ * High-speed semantic antithesis & contextual inversion engine.
+ * Solves: If user writes `if (age > 18) { console.log("you can drive a car"); } else { console.log`
+ * Instantly completes with: `("you cannot drive a car");`
+ * Works across all languages (JS, TS, Python, Rust, Go, Java, C#, C++, etc.)
+ */
+function getSemanticContextualSuggestion(prefix, suffix, lineContent, language) {
+  if (!prefix || !lineContent) return null;
+  const lineTrimmed = lineContent.trim();
+  if (!lineTrimmed) return null;
+
+  // Check if current context is inside an else / elif / catch / fallback block
+  const lines = prefix.split('\n');
+  let elseLineIdx = -1;
+  for (let i = lines.length - 1; i >= Math.max(0, lines.length - 25); i--) {
+    const l = lines[i].trim();
+    if (l === 'else' || l === 'else {' || l.startsWith('} else') || l === 'else:' || l.startsWith('elif ') || l.startsWith('else if')) {
+      elseLineIdx = i;
+      break;
+    }
+  }
+
+  if (elseLineIdx === -1) return null;
+
+  // Find the matching preceding `if` block before `else`
+  let ifLineIdx = -1;
+  for (let i = elseLineIdx - 1; i >= Math.max(0, elseLineIdx - 30); i--) {
+    const l = lines[i].trim();
+    if (l.startsWith('if ') || l.startsWith('if(') || l.startsWith('elif ')) {
+      ifLineIdx = i;
+      break;
+    }
+  }
+
+  if (ifLineIdx === -1) return null;
+
+  // Extract statements inside the `if` block (between ifLineIdx and elseLineIdx)
+  const ifBlockLines = lines.slice(ifLineIdx, elseLineIdx);
+  const ifBlockText = ifBlockLines.join('\n');
+
+  // Helper to invert semantic meaning (antonyms)
+  function invertSemanticPhrase(str) {
+    if (!str) return str;
+    const trimmed = str.trim();
+    if (trimmed === 'true') return 'false';
+    if (trimmed === 'false') return 'true';
+    if (trimmed === '1') return '0';
+    if (trimmed === '0') return '1';
+
+    let inverted = str;
+    let replaced = false;
+
+    const antonyms = [
+      [/\bcan\b/gi, 'cannot'],
+      [/\bcannot\b/gi, 'can'],
+      [/\bcan't\b/gi, 'can'],
+      [/\bis not\b/gi, 'is'],
+      [/\bisn't\b/gi, 'is'],
+      [/\bis\b/gi, 'is not'],
+      [/\bare not\b/gi, 'are'],
+      [/\baren't\b/gi, 'are'],
+      [/\bare\b/gi, 'are not'],
+      [/\bwill not\b/gi, 'will'],
+      [/\bwon't\b/gi, 'will'],
+      [/\bwill\b/gi, 'will not'],
+      [/\bshould not\b/gi, 'should'],
+      [/\bshouldn't\b/gi, 'should'],
+      [/\bshould\b/gi, 'should not'],
+      [/\bvalid\b/gi, 'invalid'],
+      [/\binvalid\b/gi, 'valid'],
+      [/\bsuccessful\b/gi, 'unsuccessful'],
+      [/\bsuccess\b/gi, 'failed'],
+      [/\bfailed\b/gi, 'succeeded'],
+      [/\bfailure\b/gi, 'success'],
+      [/\ballowed\b/gi, 'not allowed'],
+      [/\benabled\b/gi, 'disabled'],
+      [/\bdisabled\b/gi, 'enabled'],
+      [/\btrue\b/gi, 'false'],
+      [/\bfalse\b/gi, 'true'],
+      [/\bpassed\b/gi, 'failed'],
+      [/\bpass\b/gi, 'fail'],
+      [/\bcorrect\b/gi, 'incorrect'],
+      [/\bincorrect\b/gi, 'correct'],
+      [/\bgranted\b/gi, 'denied'],
+      [/\bdenied\b/gi, 'granted'],
+      [/\baccepted\b/gi, 'rejected'],
+      [/\brejected\b/gi, 'accepted'],
+      [/\bavailable\b/gi, 'unavailable'],
+      [/\bunavailable\b/gi, 'available'],
+      [/\beligible\b/gi, 'not eligible'],
+      [/\bauthorized\b/gi, 'unauthorized'],
+      [/\bunauthorized\b/gi, 'authorized'],
+      [/\bwelcome\b/gi, 'access denied'],
+      [/\bactive\b/gi, 'inactive'],
+      [/\binactive\b/gi, 'active'],
+      [/\bonline\b/gi, 'offline'],
+      [/\boffline\b/gi, 'online'],
+      [/\bgreater\b/gi, 'less'],
+      [/\bless\b/gi, 'greater'],
+      [/\babove\b/gi, 'below'],
+      [/\bbelow\b/gi, 'above'],
+      [/\bpositive\b/gi, 'negative'],
+      [/\bnegative\b/gi, 'positive'],
+      [/\byes\b/gi, 'no'],
+      [/\bno\b/gi, 'yes']
+    ];
+
+    for (const [re, repl] of antonyms) {
+      if (re.test(inverted)) {
+        inverted = inverted.replace(re, repl);
+        replaced = true;
+        break;
+      }
+    }
+
+    if (!replaced) {
+      if (/^[a-zA-Z]/.test(inverted)) {
+        inverted = 'not ' + inverted;
+      }
+    }
+
+    return inverted;
+  }
+
+  // 1. Logging and print function calls: console.log, print, println, fmt.Println, etc.
+  const callMatch = lineTrimmed.match(/(console\.(?:log|info|warn|error)|print|println!?|System\.out\.println|fmt\.Print(?:ln|f)?|logger\.(?:info|error|warn))\s*(\(?)(\s*['"`]?)(.*)$/);
+  if (callMatch) {
+    const callPrefix = callMatch[1];
+    const hasOpenParen = !!callMatch[2];
+    const quoteChar = callMatch[3].trim();
+
+    // Look for string literal in if block
+    const stringLiteralRegex = /(["'`])((?:\\.|[^\\])*?)\1/;
+    const found = ifBlockText.match(stringLiteralRegex);
+    if (found) {
+      const q = quoteChar || found[1] || '"';
+      const origText = found[2];
+      const inverted = invertSemanticPhrase(origText);
+      const isPython = (language || '').toLowerCase().includes('python');
+      const semi = isPython ? '' : ';';
+
+      if (!hasOpenParen) {
+        return `(${q}${inverted}${q})${semi}`;
+      } else if (!quoteChar) {
+        return `${q}${inverted}${q})${semi}`;
+      } else {
+        return `${inverted}${q})${semi}`;
+      }
+    }
+  }
+
+  // 2. Return statements: return true / return "valid" / return 1
+  if (lineTrimmed.startsWith('return')) {
+    const retMatch = ifBlockText.match(/return\s+([^;\n]+)/);
+    if (retMatch) {
+      const origVal = retMatch[1].trim();
+      const isString = /^["'`]/.test(origVal);
+      if (isString) {
+        const q = origVal[0];
+        const inner = origVal.slice(1, -1);
+        const inverted = invertSemanticPhrase(inner);
+        return lineTrimmed === 'return' ? ` ${q}${inverted}${q};` : `${q}${inverted}${q};`;
+      } else {
+        const inverted = invertSemanticPhrase(origVal);
+        return lineTrimmed === 'return' ? ` ${inverted};` : `${inverted};`;
+      }
+    }
+  }
+
+  return null;
+}
+
 // Universal multi-language syntax predictive completion engine
 function getLocalSuggestion(prefix, suffix, lineContent, language) {
   const trimmed = lineContent.trim();
   if (!trimmed) return null;
+
+  // 0. High-speed semantic antithesis (if...else inversion & statement completion)
+  const semantic = getSemanticContextualSuggestion(prefix, suffix, lineContent, language);
+  if (semantic) return semantic;
   const lang = (language || '').toLowerCase();
   const suf = (suffix || '').trim();
 
@@ -912,23 +1108,39 @@ function registerInlineCompletions() {
         activeInlineSuggestion = null;
       }
 
-      // Responsive 140ms debounce for rapid typing without backend flooding
+      // Fast path: Check for zero-latency immediate semantic & syntax completion before debounce
+      const offset = model.getOffsetAt(position);
+      const full = model.getValue();
+      const prefix = full.slice(Math.max(0, offset - 500), offset);
+      const suffix = full.slice(offset, Math.min(full.length, offset + 150));
+      const language = model.getLanguageId();
+
+      const immediateMatch = getLocalSuggestion(prefix, suffix, lineContent, language);
+      if (immediateMatch) {
+        activeInlineSuggestion = {
+          uri: model.uri.toString(),
+          lineNumber: position.lineNumber,
+          column: position.column,
+          fullText: immediateMatch
+        };
+        return {
+          items: [{
+            insertText: immediateMatch,
+            range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column)
+          }]
+        };
+      }
+
+      // Responsive 60ms debounce for rapid typing without backend flooding
       const mySeq = ++inlineCompletionSeq;
       let isCancelled = false;
       const cancelSub = token?.onCancellationRequested?.(() => { isCancelled = true; });
 
-      await new Promise(r => setTimeout(r, 140));
+      await new Promise(r => setTimeout(r, 60));
       if (isCancelled || mySeq !== inlineCompletionSeq || token?.isCancellationRequested) {
         cancelSub?.dispose?.();
         return { items: [] };
       }
-
-      const offset = model.getOffsetAt(position);
-      const full = model.getValue();
-      // Compact context window: 400 chars prefix, 120 chars suffix (dramatically lowers prefill time)
-      const prefix = full.slice(Math.max(0, offset - 400), offset);
-      const suffix = full.slice(offset, Math.min(full.length, offset + 120));
-      const language = model.getLanguageId();
 
       // Check cache first
       const cacheKey = `${language}:${prefix.slice(-150)}:${suffix.slice(0, 40)}`;
