@@ -1,11 +1,11 @@
 {
-  "version": "2.4.0",
-  "tag": "v2.4.0",
-  "release_date": "2026-11-14",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_portable_win64.zip",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_aarch64.dmg",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.0/Orbital.X_2.4.0_amd64.deb",
-  "changelog": "v2.4.0: High-Speed Contextual Antithesis Inline Completions, Dual-Row Apple HIG Chat Composer with Left-Aligned Attachments, Vision Model Guidance Warning Modal, 4-Stage Error Presentation Architecture, Zero-Duplicate Control Statement Deduplication, and Native Windows NSIS Packaging."
+  "version": "2.4.1",
+  "tag": "v2.4.1",
+  "release_date": "2026-11-15",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.1/Orbital.X_2.4.1_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.1/Orbital.X_2.4.1_portable_win64.zip",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.1/Orbital.X_2.4.1_aarch64.dmg",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.1/Orbital.X_2.4.1_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.1/Orbital.X_2.4.1_amd64.deb",
+  "changelog": "v2.4.1: Workspace Memory & Knowledge Directory (Core Memory, Dependencies & Semantic Architecture Graph), Apple HIG Drawer & Full White Theme/Light Mode Support, Dynamic Follow-up Queued Messages Execution Mode, and Universal Escape Dismissal."
 }

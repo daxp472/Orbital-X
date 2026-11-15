@@ -599,7 +599,7 @@ async function renderInformationDirectory() {
 
     // Section 1: Detected Dependencies & Stack
     html += `
-      <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+      <div class="mem-section-card">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
           <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
             <span>📦</span> Workspace Dependencies &amp; Toolchain
@@ -660,7 +660,7 @@ async function renderInformationDirectory() {
 
     // Section 2: Historical Changelogs & Information Directory
     html += `
-      <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+      <div class="mem-section-card">
         <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span>📚</span> Knowledge Library Records &amp; Changelogs
@@ -673,7 +673,7 @@ async function renderInformationDirectory() {
       html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
       for (const rec of dirRecords) {
         html += `
-          <div style="background: rgba(10, 13, 18, 0.55); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 14px;">
+          <div class="mem-subcard">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
               <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">${esc(rec.title || rec.id)}</span>
               <span style="font-size: 9.5px; color: #c084fc; background: rgba(168, 85, 247, 0.12); padding: 2px 6px; border-radius: 4px; font-weight: 600; text-transform: uppercase;">${esc(rec.source || 'Knowledge')}</span>
@@ -709,20 +709,20 @@ async function renderArchitecturalGraph() {
 
     let html = `
       <div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: calc(85vh - 180px); padding-right: 4px;">
-        <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+        <div class="mem-section-card">
           <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
             <span>🕸️</span> Semantic Graph Architecture Summary
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">
-            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="mem-subcard">
               <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Indexed Files</div>
               <div style="font-size: 20px; font-weight: 700; color: var(--accent-cyan); margin-top: 3px;">${stats?.file_count ?? stats?.indexed_files ?? 'Active'}</div>
             </div>
-            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="mem-subcard">
               <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Symbols &amp; AST Nodes</div>
               <div style="font-size: 20px; font-weight: 700; color: #c084fc; margin-top: 3px;">${stats?.symbol_count ?? 'Computed'}</div>
             </div>
-            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="mem-subcard">
               <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Graph Edges / Calls</div>
               <div style="font-size: 20px; font-weight: 700; color: #4ade80; margin-top: 3px;">${stats?.edge_count ?? 'Indexed'}</div>
             </div>
@@ -732,11 +732,11 @@ async function renderArchitecturalGraph() {
 
     if (focused && focused.components) {
       html += `
-        <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+        <div class="mem-section-card">
           <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 10px;">Key Components &amp; Entrypoints</div>
           <div style="display: flex; flex-direction: column; gap: 6px;">
             ${(focused.components || []).map(c => `
-              <div style="font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-secondary); background: rgba(10, 13, 18, 0.55); padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">${esc(c)}</div>
+              <div class="mem-subcard" style="font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-secondary); padding: 7px 10px;">${esc(c)}</div>
             `).join('')}
           </div>
         </div>
@@ -744,7 +744,7 @@ async function renderArchitecturalGraph() {
     }
 
     html += `
-        <div style="background: rgba(57, 197, 187, 0.08); border: 1px solid rgba(57, 197, 187, 0.25); border-radius: 10px; padding: 12px 16px; font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
+        <div class="mem-tip-box" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 10px; font-size: 11.5px;">
           <span>💡 Semantic Code Graph continuously indexes symbols and call hierarchies in background.</span>
           <button class="btn btn-secondary btn-sm" id="btn-reindex-graph" style="font-size: 10.5px; padding: 4px 10px; border-radius: 6px;">Re-index Workspace</button>
         </div>

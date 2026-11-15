@@ -2396,3 +2396,26 @@ body.theme-light .settings-sidebar,
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
   animation: fadeIn 0.2s ease-in-out;
 }
+
+/* Memory Section Cards & Subcards */
+.mem-section-card {
+  background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.mem-subcard {
+  background: rgba(10, 13, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.mem-tip-box {
+  background: rgba(57, 197, 187, 0.08);
+  border: 1px solid rgba(57, 197, 187, 0.25);
+  border-radius: 10px;
+  color: var(--text-secondary);
+}

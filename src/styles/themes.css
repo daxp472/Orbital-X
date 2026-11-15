@@ -487,3 +487,480 @@ body.theme-hc .action-chip,
   border: 1px solid #6fc3df;
   color: #ffffff;
 }
+
+/* ==========================================================================
+   Light Theme -- Notification Center & Knowledge Directory
+   ========================================================================== */
+
+/* 1. Notification Center (White Theme) */
+body.theme-light .notif-backdrop,
+[data-theme="theme-light"] .notif-backdrop,
+[data-theme="nebula-light"] .notif-backdrop {
+  background: rgba(15, 23, 42, 0.25) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+body.theme-light .notif-drawer,
+[data-theme="theme-light"] .notif-drawer,
+[data-theme="nebula-light"] .notif-drawer {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border-left: 1px solid #d0d7de !important;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: blur(28px) saturate(190%) !important;
+}
+
+body.theme-light .notif-header,
+[data-theme="theme-light"] .notif-header,
+[data-theme="nebula-light"] .notif-header {
+  background: #f6f8fa !important;
+  border-bottom: 1px solid #d0d7de !important;
+}
+
+body.theme-light .notif-header-title,
+[data-theme="theme-light"] .notif-header-title,
+[data-theme="nebula-light"] .notif-header-title {
+  color: #1f2328 !important;
+}
+
+body.theme-light .notif-count-pill,
+[data-theme="theme-light"] .notif-count-pill,
+[data-theme="nebula-light"] .notif-count-pill {
+  background: rgba(5, 150, 105, 0.12) !important;
+  color: #059669 !important;
+  border-color: rgba(5, 150, 105, 0.3) !important;
+}
+
+body.theme-light .notif-icon-action,
+[data-theme="theme-light"] .notif-icon-action,
+[data-theme="nebula-light"] .notif-icon-action {
+  color: #57606a !important;
+}
+
+body.theme-light .notif-icon-action:hover,
+[data-theme="theme-light"] .notif-icon-action:hover,
+[data-theme="nebula-light"] .notif-icon-action:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .notif-icon-action.notif-close-btn:hover,
+[data-theme="theme-light"] .notif-icon-action.notif-close-btn:hover,
+[data-theme="nebula-light"] .notif-icon-action.notif-close-btn:hover {
+  color: #cf222e !important;
+  background: rgba(207, 34, 46, 0.1) !important;
+  border-color: rgba(207, 34, 46, 0.2) !important;
+}
+
+body.theme-light .notif-toolbar,
+[data-theme="theme-light"] .notif-toolbar,
+[data-theme="nebula-light"] .notif-toolbar {
+  background: #f6f8fa !important;
+  border-bottom: 1px solid #d0d7de !important;
+}
+
+body.theme-light .notif-tabs,
+[data-theme="theme-light"] .notif-tabs,
+[data-theme="nebula-light"] .notif-tabs {
+  background: #ebedf0 !important;
+  border: 1px solid #d0d7de !important;
+}
+
+body.theme-light .notif-tab,
+[data-theme="theme-light"] .notif-tab,
+[data-theme="nebula-light"] .notif-tab {
+  color: #57606a !important;
+}
+
+body.theme-light .notif-tab:hover,
+[data-theme="theme-light"] .notif-tab:hover,
+[data-theme="nebula-light"] .notif-tab:hover {
+  color: #1f2328 !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+body.theme-light .notif-tab.active,
+[data-theme="theme-light"] .notif-tab.active,
+[data-theme="nebula-light"] .notif-tab.active {
+  color: #1f2328 !important;
+  background: #ffffff !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+body.theme-light .notif-tab-badge,
+[data-theme="theme-light"] .notif-tab-badge,
+[data-theme="nebula-light"] .notif-tab-badge {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #57606a !important;
+}
+
+body.theme-light .notif-tab.active .notif-tab-badge,
+[data-theme="theme-light"] .notif-tab.active .notif-tab-badge,
+[data-theme="nebula-light"] .notif-tab.active .notif-tab-badge {
+  background: rgba(5, 150, 105, 0.15) !important;
+  color: #059669 !important;
+}
+
+body.theme-light .notif-subbar,
+[data-theme="theme-light"] .notif-subbar,
+[data-theme="nebula-light"] .notif-subbar {
+  color: #57606a !important;
+}
+
+body.theme-light .notif-density-select,
+[data-theme="theme-light"] .notif-density-select,
+[data-theme="nebula-light"] .notif-density-select {
+  background: #ffffff !important;
+  color: #24292f !important;
+  border: 1px solid #d0d7de !important;
+}
+
+body.theme-light .notif-content-list,
+[data-theme="theme-light"] .notif-content-list,
+[data-theme="nebula-light"] .notif-content-list {
+  scrollbar-color: #c1c7cd transparent !important;
+}
+
+body.theme-light .notif-content-list::-webkit-scrollbar-thumb,
+[data-theme="theme-light"] .notif-content-list::-webkit-scrollbar-thumb,
+[data-theme="nebula-light"] .notif-content-list::-webkit-scrollbar-thumb {
+  background: #c1c7cd !important;
+}
+
+body.theme-light .notif-card,
+[data-theme="theme-light"] .notif-card,
+[data-theme="nebula-light"] .notif-card {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light .notif-card:hover,
+[data-theme="theme-light"] .notif-card:hover,
+[data-theme="nebula-light"] .notif-card:hover {
+  background: #f8fafc !important;
+  border-color: #0969da !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-light .notif-card.unread,
+[data-theme="theme-light"] .notif-card.unread,
+[data-theme="nebula-light"] .notif-card.unread {
+  background: #f0fdf4 !important;
+  border-color: rgba(5, 150, 105, 0.35) !important;
+}
+
+body.theme-light .notif-card-body,
+[data-theme="theme-light"] .notif-card-body,
+[data-theme="nebula-light"] .notif-card-body {
+  color: #24292f !important;
+}
+
+body.theme-light .notif-card-time,
+[data-theme="theme-light"] .notif-card-time,
+[data-theme="nebula-light"] .notif-card-time {
+  color: #57606a !important;
+}
+
+body.theme-light .notif-card-dismiss,
+[data-theme="theme-light"] .notif-card-dismiss,
+[data-theme="nebula-light"] .notif-card-dismiss {
+  color: #8c959f !important;
+}
+
+body.theme-light .notif-card-dismiss:hover,
+[data-theme="theme-light"] .notif-card-dismiss:hover,
+[data-theme="nebula-light"] .notif-card-dismiss:hover {
+  background: rgba(207, 34, 46, 0.1) !important;
+  color: #cf222e !important;
+}
+
+body.theme-light .notif-card-footer,
+[data-theme="theme-light"] .notif-card-footer,
+[data-theme="nebula-light"] .notif-card-footer {
+  border-top: 1px solid #e1e4e8 !important;
+}
+
+body.theme-light .notif-card-action,
+[data-theme="theme-light"] .notif-card-action,
+[data-theme="nebula-light"] .notif-card-action {
+  background: rgba(9, 105, 218, 0.08) !important;
+  border: 1px solid rgba(9, 105, 218, 0.2) !important;
+  color: #0969da !important;
+}
+
+body.theme-light .notif-empty-state,
+[data-theme="theme-light"] .notif-empty-state,
+[data-theme="nebula-light"] .notif-empty-state {
+  color: #57606a !important;
+}
+
+/* 2. Knowledge Directory Modal & Drawer (White Theme) */
+body.theme-light #modal-memory-manager .memory-manager-modal,
+[data-theme="theme-light"] #modal-memory-manager .memory-manager-modal,
+[data-theme="nebula-light"] #modal-memory-manager .memory-manager-modal {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18) !important;
+}
+
+body.theme-light #modal-memory-manager .modal-header,
+[data-theme="theme-light"] #modal-memory-manager .modal-header,
+[data-theme="nebula-light"] #modal-memory-manager .modal-header {
+  background: #f6f8fa !important;
+  border-bottom: 1px solid #d0d7de !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light #modal-memory-manager .memory-manager-tabs,
+[data-theme="theme-light"] #modal-memory-manager .memory-manager-tabs,
+[data-theme="nebula-light"] #modal-memory-manager .memory-manager-tabs {
+  background: #f1f3f5 !important;
+  border-bottom: 1px solid #d0d7de !important;
+}
+
+body.theme-light #modal-memory-manager .memory-nav-tab,
+[data-theme="theme-light"] #modal-memory-manager .memory-nav-tab,
+[data-theme="nebula-light"] #modal-memory-manager .memory-nav-tab {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #57606a !important;
+}
+
+body.theme-light #modal-memory-manager .memory-nav-tab:hover,
+[data-theme="theme-light"] #modal-memory-manager .memory-nav-tab:hover,
+[data-theme="nebula-light"] #modal-memory-manager .memory-nav-tab:hover {
+  background: #f8fafc !important;
+  color: #1f2328 !important;
+  border-color: #b0b8c1 !important;
+}
+
+body.theme-light #modal-memory-manager .memory-nav-tab.active,
+[data-theme="theme-light"] #modal-memory-manager .memory-nav-tab.active,
+[data-theme="nebula-light"] #modal-memory-manager .memory-nav-tab.active {
+  background: rgba(5, 150, 105, 0.12) !important;
+  color: #059669 !important;
+  border-color: #059669 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-light #modal-memory-manager .tab-count-pill,
+[data-theme="theme-light"] #modal-memory-manager .tab-count-pill,
+[data-theme="nebula-light"] #modal-memory-manager .tab-count-pill {
+  background: rgba(5, 150, 105, 0.15) !important;
+  color: #059669 !important;
+}
+
+body.theme-light #modal-memory-manager .memory-manager-body,
+[data-theme="theme-light"] #modal-memory-manager .memory-manager-body,
+[data-theme="nebula-light"] #modal-memory-manager .memory-manager-body {
+  background: #f6f8fa !important;
+}
+
+body.theme-light #modal-memory-manager .mem-filter-pill,
+[data-theme="theme-light"] #modal-memory-manager .mem-filter-pill,
+[data-theme="nebula-light"] #modal-memory-manager .mem-filter-pill {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #57606a !important;
+}
+
+body.theme-light #modal-memory-manager .mem-filter-pill:hover,
+[data-theme="theme-light"] #modal-memory-manager .mem-filter-pill:hover,
+[data-theme="nebula-light"] #modal-memory-manager .mem-filter-pill:hover {
+  background: #f1f3f5 !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light #modal-memory-manager .mem-filter-pill.active,
+[data-theme="theme-light"] #modal-memory-manager .mem-filter-pill.active,
+[data-theme="nebula-light"] #modal-memory-manager .mem-filter-pill.active {
+  background: rgba(5, 150, 105, 0.14) !important;
+  border-color: #059669 !important;
+  color: #059669 !important;
+}
+
+body.theme-light #modal-memory-manager .mem-search-box,
+[data-theme="theme-light"] #modal-memory-manager .mem-search-box,
+[data-theme="nebula-light"] #modal-memory-manager .mem-search-box {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #57606a !important;
+}
+
+body.theme-light #modal-memory-manager .mem-search-input,
+[data-theme="theme-light"] #modal-memory-manager .mem-search-input,
+[data-theme="nebula-light"] #modal-memory-manager .mem-search-input {
+  background: transparent !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light #modal-memory-manager .memory-modal-card,
+[data-theme="theme-light"] #modal-memory-manager .memory-modal-card,
+[data-theme="nebula-light"] #modal-memory-manager .memory-modal-card {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light #modal-memory-manager .memory-modal-card:hover,
+[data-theme="theme-light"] #modal-memory-manager .memory-modal-card:hover,
+[data-theme="nebula-light"] #modal-memory-manager .memory-modal-card:hover {
+  background: #ffffff !important;
+  border-color: #059669 !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-light #modal-memory-manager .memory-card-title,
+[data-theme="theme-light"] #modal-memory-manager .memory-card-title,
+[data-theme="nebula-light"] #modal-memory-manager .memory-card-title {
+  color: #1f2328 !important;
+}
+
+body.theme-light #modal-memory-manager .memory-card-snippet,
+[data-theme="theme-light"] #modal-memory-manager .memory-card-snippet,
+[data-theme="nebula-light"] #modal-memory-manager .memory-card-snippet {
+  background: #f8fafc !important;
+  border: 1px solid #e1e4e8 !important;
+  color: #24292f !important;
+}
+
+body.theme-light #modal-memory-manager .memory-card-footer,
+[data-theme="theme-light"] #modal-memory-manager .memory-card-footer,
+[data-theme="nebula-light"] #modal-memory-manager .memory-card-footer {
+  border-top: 1px solid #e1e4e8 !important;
+  color: #57606a !important;
+}
+
+body.theme-light #modal-memory-manager .mem-btn-edit,
+[data-theme="theme-light"] #modal-memory-manager .mem-btn-edit,
+[data-theme="nebula-light"] #modal-memory-manager .mem-btn-edit {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #24292f !important;
+}
+
+body.theme-light #modal-memory-manager .mem-btn-edit:hover,
+[data-theme="theme-light"] #modal-memory-manager .mem-btn-edit:hover,
+[data-theme="nebula-light"] #modal-memory-manager .mem-btn-edit:hover {
+  background: #f1f3f5 !important;
+  color: #0969da !important;
+  border-color: #0969da !important;
+}
+
+body.theme-light #modal-memory-manager .mem-btn-delete,
+[data-theme="theme-light"] #modal-memory-manager .mem-btn-delete,
+[data-theme="nebula-light"] #modal-memory-manager .mem-btn-delete {
+  background: rgba(207, 34, 46, 0.08) !important;
+  border: 1px solid rgba(207, 34, 46, 0.25) !important;
+  color: #cf222e !important;
+}
+
+body.theme-light #modal-memory-manager .mem-btn-delete:hover,
+[data-theme="theme-light"] #modal-memory-manager .mem-btn-delete:hover,
+[data-theme="nebula-light"] #modal-memory-manager .mem-btn-delete:hover {
+  background: rgba(207, 34, 46, 0.16) !important;
+  border-color: #cf222e !important;
+}
+
+body.theme-light .memory-edit-drawer,
+[data-theme="theme-light"] .memory-edit-drawer,
+[data-theme="nebula-light"] .memory-edit-drawer {
+  background: rgba(240, 242, 245, 0.85) !important;
+}
+
+body.theme-light .mem-drawer-card,
+[data-theme="theme-light"] .mem-drawer-card,
+[data-theme="nebula-light"] .mem-drawer-card {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.16) !important;
+}
+
+body.theme-light .mem-drawer-header,
+body.theme-light .mem-drawer-footer,
+[data-theme="theme-light"] .mem-drawer-header,
+[data-theme="theme-light"] .mem-drawer-footer,
+[data-theme="nebula-light"] .mem-drawer-header,
+[data-theme="nebula-light"] .mem-drawer-footer {
+  border-color: #e1e4e8 !important;
+}
+
+body.theme-light .mem-drawer-title,
+[data-theme="theme-light"] .mem-drawer-title,
+[data-theme="nebula-light"] .mem-drawer-title {
+  color: #1f2328 !important;
+}
+
+body.theme-light .mem-drawer-subtitle,
+[data-theme="theme-light"] .mem-drawer-subtitle,
+[data-theme="nebula-light"] .mem-drawer-subtitle {
+  color: #57606a !important;
+}
+
+body.theme-light .mem-form-label,
+[data-theme="theme-light"] .mem-form-label,
+[data-theme="nebula-light"] .mem-form-label {
+  color: #24292f !important;
+}
+
+body.theme-light .mem-form-hint,
+[data-theme="theme-light"] .mem-form-hint,
+[data-theme="nebula-light"] .mem-form-hint {
+  color: #6e7781 !important;
+}
+
+body.theme-light .mem-form-input,
+body.theme-light .mem-form-select,
+[data-theme="theme-light"] .mem-form-input,
+[data-theme="theme-light"] .mem-form-select,
+[data-theme="nebula-light"] .mem-form-input,
+[data-theme="nebula-light"] .mem-form-select {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .mem-form-textarea,
+[data-theme="theme-light"] .mem-form-textarea,
+[data-theme="nebula-light"] .mem-form-textarea {
+  background: #f8fafc !important;
+  border: 1px solid #d0d7de !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .drawer-star,
+[data-theme="theme-light"] .drawer-star,
+[data-theme="nebula-light"] .drawer-star {
+  color: #d0d7de !important;
+}
+
+body.theme-light .drawer-star.on,
+[data-theme="theme-light"] .drawer-star.on,
+[data-theme="nebula-light"] .drawer-star.on {
+  color: #d97706 !important;
+}
+
+body.theme-light .mem-section-card,
+[data-theme="theme-light"] .mem-section-card,
+[data-theme="nebula-light"] .mem-section-card {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light .mem-subcard,
+[data-theme="theme-light"] .mem-subcard,
+[data-theme="nebula-light"] .mem-subcard {
+  background: #f8fafc !important;
+  border: 1px solid #e1e4e8 !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .mem-tip-box,
+[data-theme="theme-light"] .mem-tip-box,
+[data-theme="nebula-light"] .mem-tip-box {
+  background: rgba(5, 150, 105, 0.08) !important;
+  border: 1px solid rgba(5, 150, 105, 0.25) !important;
+  color: #1f2328 !important;
+}

@@ -6,6 +6,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [v2.4.1] — 2026-11-15
+
+### Added & Upgraded
+- **Workspace Memory & Knowledge Directory:** Dedicated interactive management modal providing centralized control over Core Memory rules, workspace dependencies (`package.json`, `Cargo.toml`, `requirements.txt`), and semantic code graph architecture.
+- **Apple HIG Glass Drawer Redesign:** Floating glass form drawer for adding and editing memories with interactive 1–5 star priority rating, category tag metadata, and smooth entry animations.
+- **Full White Theme (Light Mode) Support:** Complete light theme design overhaul for both the Notification Center drawer and the Knowledge Directory modal, providing clean slate aesthetics, crisp contrast, and native look and feel.
+- **Follow-up Queued Messages Execution Mode:** Configurable execution mode (`Queue` vs `Send Immediately`) in Settings with dynamic Send/Stop button toggling in the chat input when typing while tasks are running.
+- **Universal Escape & Backdrop Dismissal:** Escape key capture and outside backdrop click listeners to smoothly close any modal, drawer, or dialog across the entire application.
+- **Agent Tool Isolation & Ghost File Elimination:** Hardened tool call filters to eliminate duplicate file creation artifacts (`hello.j` alongside `hello.js`) and unified singular response cards.
+
+---
+
 ## [v2.3.2] — 2026-11-04
 
 ### Added & Upgraded
