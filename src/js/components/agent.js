@@ -45,6 +45,8 @@ let liveActivityStartTime = null;
 let activeTurnId = null;
 // Active singular turn container card — encapsulates tool steps and final narrative into a single card
 let activeTurnCard = null;
+// Follow-up queued messages while agent is in flight
+let agentMessageQueue = [];
 
 // Screenshot & Image Attachment state for multimodal vision turns
 let pendingImages = []; // { id, name, base64, dataUrl, size }
@@ -458,6 +460,7 @@ function initChatDropZone() {
       inputElem.style.height = 'auto';
       inputElem.style.height = Math.min(inputElem.scrollHeight, 180) + 'px';
       updateTokenEstimate(inputElem.value);
+      updateSendButtonState();
       handleComposerInput(inputElem);
     });
 
@@ -1172,21 +1175,166 @@ export async function switchMode(newMode) {
   notify('modeChanged', newMode);
 }
 
-function setAgentBusy(busy) {
-  state.ai.isGenerating = busy;
+export function updateSendButtonState() {
   const sendBtn = document.getElementById('btn-agent-send');
   const stopBtn = document.getElementById('btn-agent-stop');
+  const inputElem = document.getElementById('agent-input');
+  if (!sendBtn || !stopBtn) return;
 
-  if (sendBtn) sendBtn.style.display = busy ? 'none' : 'inline-flex';
-  if (stopBtn) stopBtn.style.display = busy ? 'inline-flex' : 'none';
+  const hasText = (inputElem?.value || '').trim().length > 0;
+  if (isLoopRunning) {
+    if (hasText) {
+      sendBtn.style.display = 'inline-flex';
+      stopBtn.style.display = 'none';
+      const mode = state.settings?.queuedMessagesMode || 'queue';
+      sendBtn.title = mode === 'queue' ? 'Queue follow-up message for agent (Enter)' : 'Send immediately / Interrupt agent (Enter)';
+    } else {
+      sendBtn.style.display = 'none';
+      stopBtn.style.display = 'inline-flex';
+      sendBtn.title = 'Send (Enter)';
+    }
+  } else {
+    sendBtn.style.display = 'inline-flex';
+    stopBtn.style.display = 'none';
+    sendBtn.title = 'Send (Enter)';
+  }
+}
+
+function setAgentBusy(busy) {
+  state.ai.isGenerating = busy;
+  updateSendButtonState();
+}
+
+function queueAgentMessage(promptText) {
+  const images = pendingImages.map(img => img.dataUrl || img.base64);
+  clearImages();
+  agentMessageQueue.push({ promptText, images, timestamp: Date.now() });
+
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    const chip = document.createElement('div');
+    chip.className = 'agent-queued-message-banner';
+    chip.id = `queued-msg-${Date.now()}`;
+    chip.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <span style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent-cyan); font-size: 11.5px;">
+          <span>⏳</span>
+          <span>Queued Message #${agentMessageQueue.length}</span>
+        </span>
+        <button class="icon-btn btn-cancel-queued" style="font-size: 10px; padding: 2px 6px; color: var(--text-muted); cursor: pointer;">✕ Cancel</button>
+      </div>
+      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-family: var(--font-mono, monospace); white-space: pre-wrap;">${escapeHtml(promptText)}</div>
+    `;
+    chip.querySelector('.btn-cancel-queued')?.addEventListener('click', () => {
+      const idx = agentMessageQueue.findIndex(q => q.promptText === promptText);
+      if (idx !== -1) agentMessageQueue.splice(idx, 1);
+      chip.remove();
+      showToast('Queued message removed', 'info', 1800);
+    });
+    timeline.appendChild(chip);
+    chip.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  showToast(`⏳ Message queued (#${agentMessageQueue.length}) — will run automatically after current turn`, 'info', 2500);
+}
+
+async function interruptAndSendImmediate(promptText) {
+  showToast('⚡ Steering agent with immediate directive…', 'info', 2200);
+  isLoopRunning = false;
+  if (activeTurnId) {
+    try {
+      await invoke('cancel_agent_operation', { opId: activeTurnId });
+    } catch (_) {}
+  }
+  if (activeTurnCard) {
+    activeTurnCard.finalize('*(Task redirected by user directive)*');
+    activeTurnCard = null;
+  }
+  const timeline = document.getElementById('agent-timeline');
+  if (timeline) {
+    const divider = document.createElement('div');
+    divider.className = 'timeline-compact-divider';
+    divider.innerHTML = `
+      <div class="compact-divider-line"></div>
+      <div class="compact-divider-badge" style="color: var(--accent-orange); border-color: rgba(251, 146, 60, 0.4);">
+        <span>⚡ Interrupted by priority user message</span>
+      </div>
+      <div class="compact-divider-line"></div>
+    `;
+    timeline.appendChild(divider);
+  }
+
+  const now = Date.now();
+  const userMid = newMessageId();
+  const currentImages = pendingImages.map(img => img.dataUrl || img.base64);
+  clearImages();
+  appendTimelineCard('user', promptText, now, { messageId: userMid, images: currentImages });
+  state.conversation.push({ role: 'user', content: promptText, timestamp: now, mid: userMid });
+
+  setTimeout(async () => {
+    isLoopRunning = true;
+    setAgentBusy(true);
+    try {
+      await runAgentLoop(promptText);
+    } catch (err) {
+      console.error("Agent error on immediate directive:", err);
+      displayOrbitalError(err);
+    } finally {
+      isLoopRunning = false;
+      setAgentBusy(false);
+      updateStatusBarAgentStatus();
+      processNextQueuedMessage();
+    }
+  }, 250);
+}
+
+function processNextQueuedMessage() {
+  if (agentMessageQueue.length === 0) return;
+  const next = agentMessageQueue.shift();
+  document.querySelector('.agent-queued-message-banner')?.remove();
+
+  setTimeout(async () => {
+    appendTimelineCard('user', next.promptText, next.timestamp, { images: next.images });
+    state.conversation.push({ role: 'user', content: next.promptText, timestamp: next.timestamp, mid: newMessageId() });
+    isLoopRunning = true;
+    setAgentBusy(true);
+    try {
+      await runAgentLoop(next.promptText);
+    } catch (err) {
+      console.error("Agent error on queued message:", err);
+      displayOrbitalError(err);
+    } finally {
+      isLoopRunning = false;
+      setAgentBusy(false);
+      updateStatusBarAgentStatus();
+      processNextQueuedMessage();
+    }
+  }, 350);
 }
 
 async function handleSend() {
   const inputElem = document.getElementById('agent-input');
-  if (!inputElem || isLoopRunning) return;
+  if (!inputElem) return;
 
   let promptText = inputElem.value.trim();
   if (!promptText) return;
+
+  // If agent is in flight, handle according to user's queued messages setting
+  if (isLoopRunning) {
+    const queueMode = state.settings?.queuedMessagesMode || 'queue';
+    inputElem.value = '';
+    inputElem.style.height = 'auto';
+    updateTokenEstimate('');
+    updateSendButtonState();
+
+    if (queueMode === 'queue') {
+      queueAgentMessage(promptText);
+      return;
+    } else {
+      await interruptAndSendImmediate(promptText);
+      return;
+    }
+  }
 
   // H3: expand slash commands into full prompts
   if (promptText.startsWith('/')) {
@@ -1290,6 +1438,7 @@ async function handleSend() {
     invoke('record_agent_turn_end', { turnId: userMid }).catch(() => {});
     import('./chat-sessions.js').then(m => m.saveActiveSession());
     import('./usage.js').then(m => m.loadAndRenderUsage(false));
+    processNextQueuedMessage();
   }
 }
 

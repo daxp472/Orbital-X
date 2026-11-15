@@ -43,12 +43,21 @@ export function initMemory() {
 
   // Modal controls
   const modal = document.getElementById('modal-memory-manager');
+  document.getElementById('btn-close-memory-manager')?.addEventListener('click', closeMemoryManagerModal);
   document.getElementById('btn-close-memory-modal')?.addEventListener('click', closeMemoryManagerModal);
 
-  // Modal Tab switching
-  const tabs = document.querySelectorAll('.memory-tab-btn');
+  // Backdrop click on modal closes it
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      closeMemoryManagerModal();
+    }
+  });
+
+  // Modal Tab switching (Apple Segmented Bar)
+  const tabs = document.querySelectorAll('.memory-nav-tab');
   tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
+    tab.addEventListener('click', (e) => {
+      e.preventDefault();
       tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const targetTab = tab.dataset.mtab;
@@ -57,25 +66,71 @@ export function initMemory() {
   });
 
   // Modal search & category filters
-  const modalSearch = document.getElementById('mem-modal-search');
+  const modalSearch = document.getElementById('memory-modal-search') || document.getElementById('mem-modal-search');
   modalSearch?.addEventListener('input', () => {
-    modalSearchQuery = modalSearch.value;
+    modalSearchQuery = modalSearch.value || '';
     renderModalCoreMemories();
   });
 
-  const modalCatFilter = document.getElementById('mem-modal-cat-filter');
-  modalCatFilter?.addEventListener('change', () => {
-    modalCategoryFilter = modalCatFilter.value;
-    renderModalCoreMemories();
+  // Category filter pills
+  const filterPills = document.querySelectorAll('.mem-filter-pill');
+  filterPills.forEach(pill => {
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
+      filterPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      modalCategoryFilter = pill.dataset.cat || 'all';
+      renderModalCoreMemories();
+    });
   });
 
-  // Modal Add Memory button
+  // Modal Add Memory buttons
+  document.getElementById('btn-modal-add-memory')?.addEventListener('click', () => openMemoryDrawer());
   document.getElementById('mem-modal-add-btn')?.addEventListener('click', () => openMemoryDrawer());
+
+  // Modal Sync / Refresh button
+  document.getElementById('btn-modal-refresh-memory')?.addEventListener('click', async () => {
+    showToast('Syncing memory and scanning workspace…', 'info', 1800);
+    await refreshMemories();
+    const activeTab = document.querySelector('.memory-nav-tab.active')?.dataset?.mtab || 'core';
+    switchModalTab(activeTab);
+    showToast('✓ Memory & Knowledge Directory synced', 'success', 2000);
+  });
 
   // Drawer Form controls (replaces prompt() with Apple HIG in-place drawer)
   document.getElementById('btn-close-mem-drawer')?.addEventListener('click', closeMemoryDrawer);
   document.getElementById('btn-cancel-mem-drawer')?.addEventListener('click', closeMemoryDrawer);
   document.getElementById('btn-save-mem-drawer')?.addEventListener('click', saveMemoryFromDrawer);
+
+  const drawer = document.getElementById('memory-edit-drawer');
+  drawer?.addEventListener('click', (e) => {
+    if (e.target === drawer) {
+      closeMemoryDrawer();
+    }
+  });
+
+  // Drawer star rating selector
+  document.querySelectorAll('#mem-drawer-stars .drawer-star').forEach(star => {
+    star.addEventListener('click', () => {
+      const val = parseInt(star.dataset.val, 10);
+      updateDrawerStars(val);
+    });
+  });
+
+  // Architectural graph re-index button delegation
+  document.getElementById('memory-panel-graph')?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('#btn-reindex-graph');
+    if (btn) {
+      showToast('Re-indexing workspace semantic graph…', 'info', 2000);
+      try {
+        await invoke('graph_reindex');
+        showToast('✓ Workspace semantic graph updated', 'success', 2200);
+        renderArchitecturalGraph();
+      } catch (err) {
+        showToast(`Graph index error: ${err}`, 'error', 2500);
+      }
+    }
+  });
 
   // Close modal on Escape
   window.addEventListener('keydown', (e) => {
@@ -83,10 +138,12 @@ export function initMemory() {
       const drawer = document.getElementById('memory-edit-drawer');
       if (drawer && drawer.style.display !== 'none') {
         closeMemoryDrawer();
+        e.stopPropagation();
         return;
       }
       if (modal && modal.style.display !== 'none') {
         closeMemoryManagerModal();
+        e.stopPropagation();
       }
     }
   });
@@ -406,6 +463,27 @@ async function deleteMemoryById(id) {
 // Drawer Form (In-place modal overlay — replaces prompt())
 // ---------------------------------------------------------------------------
 
+function updateDrawerStars(val) {
+  const stars = document.querySelectorAll('#mem-drawer-stars .drawer-star');
+  stars.forEach(s => {
+    const v = parseInt(s.dataset.val, 10);
+    s.classList.toggle('on', v <= val);
+  });
+  const impInput = document.getElementById('mem-edit-importance');
+  if (impInput) impInput.value = String(val);
+  const label = document.getElementById('mem-importance-label');
+  if (label) {
+    const labels = {
+      5: '★★★★★ (Critical Anchor)',
+      4: '★★★★☆ (High Priority)',
+      3: '★★★☆☆ (Normal)',
+      2: '★★☆☆☆ (Low)',
+      1: '★☆☆☆☆ (Trivial)',
+    };
+    label.textContent = labels[val] || `${val} stars`;
+  }
+}
+
 function openMemoryDrawer(existing = null) {
   const drawer = document.getElementById('memory-edit-drawer');
   if (!drawer) return;
@@ -414,25 +492,25 @@ function openMemoryDrawer(existing = null) {
   const idInput = document.getElementById('mem-edit-id');
   const titleInput = document.getElementById('mem-edit-title');
   const catSelect = document.getElementById('mem-edit-category');
-  const impSelect = document.getElementById('mem-edit-importance');
   const contentInput = document.getElementById('mem-edit-content');
+
+  const imp = existing ? (existing.importance || 3) : 3;
 
   if (existing) {
     if (titleHeader) titleHeader.textContent = 'Edit Durable Memory';
     if (idInput) idInput.value = existing.id || '';
     if (titleInput) titleInput.value = existing.title || '';
     if (catSelect) catSelect.value = existing.category || 'convention';
-    if (impSelect) impSelect.value = String(existing.importance || 3);
     if (contentInput) contentInput.value = existing.content || '';
   } else {
     if (titleHeader) titleHeader.textContent = 'Add Durable Memory';
     if (idInput) idInput.value = '';
     if (titleInput) titleInput.value = '';
     if (catSelect) catSelect.value = 'convention';
-    if (impSelect) impSelect.value = '3';
     if (contentInput) contentInput.value = '';
   }
 
+  updateDrawerStars(imp);
   drawer.style.display = 'flex';
   setTimeout(() => titleInput?.focus(), 50);
 }

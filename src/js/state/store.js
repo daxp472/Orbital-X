@@ -99,6 +99,7 @@ export const state = {
   settings: {
     autoSave: true,
     autoSaveDelay: 1000,
+    queuedMessagesMode: 'queue', // 'queue' | 'immediate'
     // File boilerplate starter content templates
     boilerplate: { enabled: true, disabledLanguages: [] },
     // B1: inline AI autocomplete (ghost text)
@@ -234,6 +235,10 @@ export function loadPersistedState() {
         state.settings.boilerplate = { ...state.settings.boilerplate, ...JSON.parse(savedBoilerplate) };
       } catch (e) { /* keep defaults */ }
     }
+    const savedQueueMode = localStorage.getItem('orbital_queued_messages_mode');
+    if (savedQueueMode === 'queue' || savedQueueMode === 'immediate') {
+      state.settings.queuedMessagesMode = savedQueueMode;
+    }
     const savedTerminal = localStorage.getItem('orbital_terminal_settings');
     if (savedTerminal) {
       try {
@@ -264,6 +269,7 @@ export function persistState() {
     localStorage.setItem('orbital_terminal_settings', JSON.stringify(state.settings.terminal || {}));
     localStorage.setItem('orbital_autosave', state.settings.autoSave ? 'true' : 'false');
     localStorage.setItem('orbital_autosave_delay', (state.settings.autoSaveDelay || 1000).toString());
+    localStorage.setItem('orbital_queued_messages_mode', state.settings.queuedMessagesMode || 'queue');
     localStorage.setItem('orbital_boilerplate', JSON.stringify(state.settings.boilerplate || { enabled: true, disabledLanguages: [] }));
   } catch (e) {
     console.warn("Could not persist state:", e);

@@ -2251,49 +2251,80 @@
         </div>
       </div>
 
-      <!-- Add/Edit Memory Sub-Modal (Inline Drawer/Overlay) -->
-      <div id="memory-edit-drawer" style="display: none; position: absolute; inset: 0; background: rgba(13, 17, 23, 0.96); backdrop-filter: blur(12px); z-index: 50; flex-direction: column; padding: 20px 24px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-          <div style="font-weight: 700; font-size: 15px;" id="mem-drawer-title">Add Durable Memory</div>
-          <button class="icon-btn" id="btn-close-mem-drawer">✕</button>
+      <!-- Add/Edit Memory Sub-Modal (Inline Drawer/Overlay - Apple HIG Glass) -->
+      <div id="memory-edit-drawer" class="memory-edit-drawer" style="display: none;">
+        <div class="mem-drawer-card">
+          <div class="mem-drawer-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="mem-drawer-icon-wrap">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </div>
+              <div>
+                <div class="mem-drawer-title" id="mem-drawer-title">Add Durable Memory</div>
+                <div class="mem-drawer-subtitle">Memory anchors workspace rules, stack conventions, and AI directives across sessions.</div>
+              </div>
+            </div>
+            <button class="icon-btn" id="btn-close-mem-drawer" title="Close (Esc)" style="font-size: 15px;">✕</button>
+          </div>
+
+          <form id="mem-edit-form" class="mem-drawer-form" onsubmit="return false;">
+            <input type="hidden" id="mem-edit-id" value="" />
+            
+            <div class="mem-form-group">
+              <label class="mem-form-label">
+                <span>Rule or Decision Title</span>
+                <span class="mem-form-hint">Brief identifier for this architectural rule</span>
+              </label>
+              <input type="text" id="mem-edit-title" class="mem-form-input" placeholder="e.g. Build commands or SQLite schema convention" required />
+            </div>
+
+            <div class="mem-form-row">
+              <div class="mem-form-group" style="flex: 1;">
+                <label class="mem-form-label">Category</label>
+                <select id="mem-edit-category" class="mem-form-select">
+                  <option value="architecture">🏛️ Architecture</option>
+                  <option value="convention" selected>📏 Conventions</option>
+                  <option value="rule">📋 Rules</option>
+                  <option value="instruction">📝 Instructions</option>
+                  <option value="decision">🎯 Decisions</option>
+                </select>
+              </div>
+              <div class="mem-form-group" style="width: 200px;">
+                <label class="mem-form-label">
+                  <span>Importance</span>
+                  <span id="mem-importance-label" class="mem-form-hint" style="color: #eab308; font-weight: 600;">★★★☆☆ (Normal)</span>
+                </label>
+                <div class="mem-form-stars" id="mem-drawer-stars">
+                  <span class="drawer-star on" data-val="1">★</span>
+                  <span class="drawer-star on" data-val="2">★</span>
+                  <span class="drawer-star on" data-val="3">★</span>
+                  <span class="drawer-star" data-val="4">★</span>
+                  <span class="drawer-star" data-val="5">★</span>
+                </div>
+                <input type="hidden" id="mem-edit-importance" value="3" />
+              </div>
+            </div>
+
+            <div class="mem-form-group" style="flex: 1; display: flex; flex-direction: column;">
+              <label class="mem-form-label">
+                <span>Directives & Constraints for the AI Agent</span>
+                <span class="mem-form-hint">Direct instructions, commands, or technical rules</span>
+              </label>
+              <textarea id="mem-edit-content" class="mem-form-textarea" placeholder="Detail the exact constraints, file structures, or commands the agent must follow in this workspace..." required></textarea>
+            </div>
+
+            <div class="mem-drawer-footer">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-mem-drawer">Cancel</button>
+              <button type="button" class="btn btn-primary" id="btn-save-mem-drawer" style="display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span>Save Memory Rule</span>
+              </button>
+            </div>
+          </form>
         </div>
-        <form id="mem-edit-form" style="display: flex; flex-direction: column; gap: 12px; flex: 1;" onsubmit="return false;">
-          <input type="hidden" id="mem-edit-id" value="" />
-          <div>
-            <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Title</label>
-            <input type="text" id="mem-edit-title" class="input-text" placeholder="e.g. Build commands or API design convention" style="width: 100%; font-size: 12px; padding: 6px 10px;" required />
-          </div>
-          <div style="display: flex; gap: 12px;">
-            <div style="flex: 1;">
-              <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Category</label>
-              <select id="mem-edit-category" class="input-text" style="width: 100%; font-size: 12px; padding: 6px 10px;">
-                <option value="architecture">🏛️ Architecture</option>
-                <option value="convention" selected>📏 Conventions</option>
-                <option value="rule">📋 Rules</option>
-                <option value="instruction">📝 Instructions</option>
-                <option value="decision">🎯 Decisions</option>
-              </select>
-            </div>
-            <div style="width: 160px;">
-              <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Importance (1–5)</label>
-              <select id="mem-edit-importance" class="input-text" style="width: 100%; font-size: 12px; padding: 6px 10px;">
-                <option value="5">★★★★★ (Critical Anchor)</option>
-                <option value="4">★★★★☆ (High)</option>
-                <option value="3" selected>★★★☆☆ (Normal)</option>
-                <option value="2">★★☆☆☆ (Low)</option>
-                <option value="1">★☆☆☆☆ (Trivial)</option>
-              </select>
-            </div>
-          </div>
-          <div style="flex: 1; display: flex; flex-direction: column;">
-            <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Memory Content (Direct instructions or technical details for the AI)</label>
-            <textarea id="mem-edit-content" class="input-text" style="width: 100%; flex: 1; min-height: 140px; font-size: 12px; line-height: 1.5; font-family: var(--font-mono, monospace); padding: 8px 10px; resize: none;" placeholder="Write specific rules, commands, or patterns the AI must always follow in this workspace..." required></textarea>
-          </div>
-          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
-            <button type="button" class="btn btn-secondary" id="btn-cancel-mem-drawer">Cancel</button>
-            <button type="button" class="btn btn-primary" id="btn-save-mem-drawer">Save Memory</button>
-          </div>
-        </form>
       </div>
     </div>
   </div>

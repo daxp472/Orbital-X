@@ -71,11 +71,17 @@ export function initSettings() {
   // Initial sync with active mode
   selectSecurityCard(state.agentMode);
 
-  // Segmented group for Queued Messages
+  // Segmented group for Queued Messages (Queue vs Send Immediately)
+  const activeQueueMode = state.settings?.queuedMessagesMode || 'queue';
   document.querySelectorAll('#queued-msg-control .settings-segmented-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.val === activeQueueMode);
     btn.addEventListener('click', () => {
       document.querySelectorAll('#queued-msg-control .settings-segmented-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      const val = btn.dataset.val;
+      state.settings.queuedMessagesMode = val;
+      persistState();
+      showToast(val === 'queue' ? 'Follow-up messages will be queued while agent is busy' : 'Follow-up messages will be sent immediately (interrupts task)', 'info', 2500);
     });
   });
 

@@ -2307,3 +2307,33 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Universal modal close handler (Click backdrop or press Escape)
+document.addEventListener('click', (e) => {
+  if (e.target && e.target.classList && e.target.classList.contains('modal-backdrop')) {
+    e.target.style.display = 'none';
+    if (e.target.id === 'modal-memory-manager') {
+      import('./components/memory.js').then(m => m.closeMemoryManagerModal()).catch(() => {});
+    }
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const drawer = document.getElementById('memory-edit-drawer');
+    if (drawer && drawer.style.display !== 'none') {
+      drawer.style.display = 'none';
+      e.stopPropagation();
+      return;
+    }
+    const openModals = Array.from(document.querySelectorAll('.modal-backdrop')).filter(m => m.style.display && m.style.display !== 'none');
+    if (openModals.length > 0) {
+      const topModal = openModals[openModals.length - 1];
+      topModal.style.display = 'none';
+      if (topModal.id === 'modal-memory-manager') {
+        import('./components/memory.js').then(m => m.closeMemoryManagerModal()).catch(() => {});
+      }
+      e.stopPropagation();
+    }
+  }
+});
