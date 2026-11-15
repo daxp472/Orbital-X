@@ -2213,16 +2213,21 @@
         <!-- Tab 1: Core Memory -->
         <div id="memory-panel-core" class="memory-tab-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-            <div class="memory-category-filters" id="mem-category-filters" style="display: flex; gap: 5px; flex-wrap: wrap;">
+            <div class="memory-category-filters" id="mem-category-filters">
               <button class="mem-filter-pill active" data-cat="all">All</button>
               <button class="mem-filter-pill" data-cat="architecture">🏛️ Architecture</button>
               <button class="mem-filter-pill" data-cat="convention">📏 Conventions</button>
               <button class="mem-filter-pill" data-cat="rule">📋 Rules</button>
               <button class="mem-filter-pill" data-cat="instruction">📝 Instructions</button>
               <button class="mem-filter-pill" data-cat="decision">🎯 Decisions</button>
+              <button class="mem-filter-pill" data-cat="history">📜 History</button>
             </div>
-            <div style="position: relative; width: 220px;">
-              <input type="text" id="memory-modal-search" class="input-text" placeholder="Search memories…" style="width: 100%; font-size: 11px; padding: 4px 8px; border-radius: 6px;" />
+            <div class="mem-search-box">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="memory-modal-search" class="mem-search-input" placeholder="Search memories &amp; rules…" />
             </div>
           </div>
 

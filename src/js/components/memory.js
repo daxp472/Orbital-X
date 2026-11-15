@@ -17,11 +17,13 @@ import { showConfirmDialog } from '../services/dialogs.js';
 import { showToast } from '../services/notifications.js';
 
 const CATEGORY_META = {
-  architecture: { icon: '🏛️', label: 'Architecture', color: 'var(--accent-purple)' },
-  convention: { icon: '📏', label: 'Conventions', color: 'var(--accent-cyan)' },
-  rule: { icon: '📋', label: 'Rules', color: 'var(--accent-orange)' },
-  instruction: { icon: '📝', label: 'Instructions', color: 'var(--accent-green)' },
-  decision: { icon: '🎯', label: 'Decisions', color: 'var(--accent-blue)' },
+  architecture: { icon: '🏛️', label: 'Architecture', color: '#c084fc', bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.28)' },
+  convention: { icon: '📏', label: 'Convention', color: 'var(--accent-cyan)', bg: 'rgba(57, 197, 187, 0.12)', border: 'rgba(57, 197, 187, 0.28)' },
+  rule: { icon: '📋', label: 'Rule', color: '#60a5fa', bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.28)' },
+  instruction: { icon: '📝', label: 'Instruction', color: '#facc15', bg: 'rgba(234, 179, 8, 0.12)', border: 'rgba(234, 179, 8, 0.28)' },
+  decision: { icon: '🎯', label: 'Decision', color: '#f472b6', bg: 'rgba(236, 72, 153, 0.12)', border: 'rgba(236, 72, 153, 0.28)' },
+  progress: { icon: '⚡', label: 'Progress', color: '#fb923c', bg: 'rgba(251, 146, 60, 0.12)', border: 'rgba(251, 146, 60, 0.28)' },
+  iteration_history: { icon: '📜', label: 'History', color: '#4ade80', bg: 'rgba(74, 222, 128, 0.12)', border: 'rgba(74, 222, 128, 0.28)' },
 };
 
 let memorySearchQuery = '';
@@ -269,7 +271,14 @@ function renderModalCoreMemories() {
   const catFilter = modalCategoryFilter;
 
   const filtered = memories.filter(m => {
-    if (catFilter !== 'all' && (m.category || '').toLowerCase() !== catFilter.toLowerCase()) return false;
+    if (catFilter !== 'all') {
+      const mc = (m.category || '').toLowerCase();
+      if (catFilter === 'history') {
+        if (mc !== 'iteration_history' && mc !== 'progress') return false;
+      } else if (mc !== catFilter.toLowerCase()) {
+        return false;
+      }
+    }
     if (q) {
       return (m.title || '').toLowerCase().includes(q) ||
              (m.content || '').toLowerCase().includes(q) ||
@@ -304,34 +313,45 @@ function renderModalCoreMemories() {
 function modalMemoryCard(m) {
   const card = document.createElement('div');
   card.className = 'memory-modal-card';
-  card.style.cssText = 'background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; transition: all 0.15s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
 
-  const cat = m.category || 'convention';
-  const meta = CATEGORY_META[cat] || { icon: '🗂️', label: cat, color: 'var(--accent-cyan)' };
+  const rawCat = (m.category || 'convention').toLowerCase();
+  const meta = CATEGORY_META[rawCat] || {
+    icon: '🗂️',
+    label: m.category || 'Note',
+    color: 'var(--accent-cyan)',
+    bg: 'rgba(57, 197, 187, 0.12)',
+    border: 'rgba(57, 197, 187, 0.28)',
+  };
   const importance = m.importance || 3;
 
   card.innerHTML = `
-    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
-      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-        <span style="font-size: 13px;">${meta.icon}</span>
-        <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${esc(m.title)}">${esc(m.title)}</span>
+    <div class="memory-card-header">
+      <div class="memory-card-title-group">
+        <span style="font-size: 14px;">${meta.icon}</span>
+        <span class="memory-card-title" title="${esc(m.title)}">${esc(m.title)}</span>
       </div>
-      <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.05); color: ${meta.color}; font-weight: 600; text-transform: uppercase;">${esc(meta.label)}</span>
+      <span class="memory-card-badge" style="color: ${meta.color}; background: ${meta.bg}; border: 1px solid ${meta.border};">${esc(meta.label)}</span>
     </div>
 
-    <div style="font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); flex: 1; max-height: 180px; overflow-y: auto;">${esc(m.content || '')}</div>
+    <div class="memory-card-snippet">${esc(m.content || '')}</div>
 
-    <div style="display: flex; align-items: center; justify-content: space-between; pt: 4px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 6px;">
+    <div class="memory-card-footer">
       <div style="display: flex; align-items: center; gap: 8px;">
-        <span class="mem-stars" title="Click stars to set importance (1-5)" style="display: flex; gap: 2px;">
-          ${[1, 2, 3, 4, 5].map(i => `<span class="mem-modal-star ${i <= importance ? 'on' : ''}" data-star="${i}" style="color: ${i <= importance ? '#eab308' : 'rgba(255,255,255,0.15)'}; font-size: 13px; cursor: pointer; transition: transform 0.1s;">★</span>`).join('')}
+        <span class="mem-stars" title="Set importance (1-5 stars)">
+          ${[1, 2, 3, 4, 5].map(i => `<span class="mem-modal-star ${i <= importance ? 'on' : ''}" data-star="${i}">★</span>`).join('')}
         </span>
         <span style="font-size: 10px; color: var(--text-muted);">${esc(relAge(m.timestamp))}</span>
       </div>
 
       <div style="display: flex; gap: 6px;">
-        <button class="btn btn-secondary btn-sm btn-card-edit" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px;">Edit</button>
-        <button class="btn btn-danger btn-sm btn-card-del" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px;">Delete</button>
+        <button class="mem-btn-edit btn-card-edit" title="Edit this memory">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+          <span>Edit</span>
+        </button>
+        <button class="mem-btn-delete btn-card-del" title="Delete this memory">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          <span>Delete</span>
+        </button>
       </div>
     </div>
   `;
@@ -501,12 +521,12 @@ async function renderInformationDirectory() {
 
     // Section 1: Detected Dependencies & Stack
     html += `
-      <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+      <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
             <span>📦</span> Workspace Dependencies &amp; Toolchain
           </div>
-          <span style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, monospace);">Auto-detected</span>
+          <span style="font-size: 10px; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.12); border: 1px solid rgba(57, 197, 187, 0.25); padding: 2px 7px; border-radius: 10px; font-weight: 600;">Auto-detected</span>
         </div>
     `;
 
@@ -562,9 +582,12 @@ async function renderInformationDirectory() {
 
     // Section 2: Historical Changelogs & Information Directory
     html += `
-      <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
-        <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
-          <span>📚</span> Knowledge Library Records &amp; Changelogs (${Array.isArray(dirRecords) ? dirRecords.length : 0})
+      <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+        <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>📚</span> Knowledge Library Records &amp; Changelogs
+          </div>
+          <span style="font-size: 10px; color: #c084fc; background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.25); padding: 2px 7px; border-radius: 10px; font-weight: 600;">${Array.isArray(dirRecords) ? dirRecords.length : 0} Records</span>
         </div>
     `;
 
@@ -572,12 +595,12 @@ async function renderInformationDirectory() {
       html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
       for (const rec of dirRecords) {
         html += `
-          <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.04); border-radius: 6px; padding: 10px 12px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-              <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">${esc(rec.title || rec.id)}</span>
-              <span style="font-size: 9.5px; color: var(--accent-purple); text-transform: uppercase; font-weight: 600;">${esc(rec.source || 'Knowledge')}</span>
+          <div style="background: rgba(10, 13, 18, 0.55); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 10px 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary);">${esc(rec.title || rec.id)}</span>
+              <span style="font-size: 9.5px; color: #c084fc; background: rgba(168, 85, 247, 0.12); padding: 2px 6px; border-radius: 4px; font-weight: 600; text-transform: uppercase;">${esc(rec.source || 'Knowledge')}</span>
             </div>
-            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45; font-family: var(--font-mono, monospace); white-space: pre-wrap;">${esc((rec.content || '').slice(0, 300))}${(rec.content || '').length > 300 ? '…' : ''}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; font-family: var(--font-mono, monospace); white-space: pre-wrap;">${esc((rec.content || '').slice(0, 300))}${(rec.content || '').length > 300 ? '…' : ''}</div>
           </div>
         `;
       }
@@ -608,22 +631,22 @@ async function renderArchitecturalGraph() {
 
     let html = `
       <div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: calc(85vh - 180px); padding-right: 4px;">
-        <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
-          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+        <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+          <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
             <span>🕸️</span> Semantic Graph Architecture Summary
           </div>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">
-            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
-              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Indexed Files</div>
-              <div style="font-size: 18px; font-weight: 700; color: var(--accent-cyan); margin-top: 2px;">${stats?.file_count ?? stats?.indexed_files ?? 'Active'}</div>
+            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Indexed Files</div>
+              <div style="font-size: 20px; font-weight: 700; color: var(--accent-cyan); margin-top: 3px;">${stats?.file_count ?? stats?.indexed_files ?? 'Active'}</div>
             </div>
-            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
-              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Symbols &amp; AST Nodes</div>
-              <div style="font-size: 18px; font-weight: 700; color: var(--accent-purple); margin-top: 2px;">${stats?.symbol_count ?? 'Computed'}</div>
+            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Symbols &amp; AST Nodes</div>
+              <div style="font-size: 20px; font-weight: 700; color: #c084fc; margin-top: 3px;">${stats?.symbol_count ?? 'Computed'}</div>
             </div>
-            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
-              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Graph Edges / Calls</div>
-              <div style="font-size: 18px; font-weight: 700; color: var(--accent-green); margin-top: 2px;">${stats?.edge_count ?? 'Indexed'}</div>
+            <div style="background: rgba(10, 13, 18, 0.55); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px;">Graph Edges / Calls</div>
+              <div style="font-size: 20px; font-weight: 700; color: #4ade80; margin-top: 3px;">${stats?.edge_count ?? 'Indexed'}</div>
             </div>
           </div>
         </div>
@@ -631,11 +654,11 @@ async function renderArchitecturalGraph() {
 
     if (focused && focused.components) {
       html += `
-        <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
-          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 8px;">Key Components &amp; Entrypoints</div>
+        <div style="background: linear-gradient(145deg, rgba(23, 29, 38, 0.75) 0%, rgba(15, 19, 26, 0.88) 100%); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px 18px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+          <div style="font-weight: 700; font-size: 13.5px; color: var(--text-primary); margin-bottom: 10px;">Key Components &amp; Entrypoints</div>
           <div style="display: flex; flex-direction: column; gap: 6px;">
             ${(focused.components || []).map(c => `
-              <div style="font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px;">${esc(c)}</div>
+              <div style="font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-secondary); background: rgba(10, 13, 18, 0.55); padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">${esc(c)}</div>
             `).join('')}
           </div>
         </div>
@@ -643,9 +666,9 @@ async function renderArchitecturalGraph() {
     }
 
     html += `
-        <div style="background: rgba(57, 197, 187, 0.05); border: 1px solid rgba(57, 197, 187, 0.2); border-radius: 8px; padding: 12px 14px; font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: rgba(57, 197, 187, 0.08); border: 1px solid rgba(57, 197, 187, 0.25); border-radius: 10px; padding: 12px 16px; font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
           <span>💡 Semantic Code Graph continuously indexes symbols and call hierarchies in background.</span>
-          <button class="btn btn-secondary btn-sm" id="btn-reindex-graph" style="font-size: 10.5px; padding: 3px 8px;">Re-index Workspace</button>
+          <button class="btn btn-secondary btn-sm" id="btn-reindex-graph" style="font-size: 10.5px; padding: 4px 10px; border-radius: 6px;">Re-index Workspace</button>
         </div>
       </div>
     `;

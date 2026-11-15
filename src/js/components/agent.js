@@ -2243,7 +2243,6 @@ STRATEGY:
         if (emptyResponseCount >= 3) {
           break; // genuinely stuck — stop cleanly without a visible card
         }
-        liveCard?.card?.remove();
         state.conversation.push({
           role: 'user',
           content: 'Your last response was empty. Continue the task by calling the next required tool.',
@@ -2270,7 +2269,6 @@ STRATEGY:
 
       if (isDuplicate) {
         console.warn('[Agent Loop] Duplicate response detected — breaking loop cleanly to prevent repetition.');
-        liveCard?.card?.remove();
         state.conversation.pop();
         break;
       }
@@ -2544,14 +2542,18 @@ STRATEGY:
   }
 
   if (activeTurnCard && !turnHasFinalized) {
-    const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
-    activeTurnCard.finalize(accumulatedNarrative || '*(completed)*', turnCalibration, turnModifiedFiles);
-    attachMessageActions(activeTurnCard.card, {
-      role: 'assistant',
-      messageId: turnAssistantMid,
-      getText: () => accumulatedNarrative,
-      onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
-    });
+    if (!accumulatedNarrative && Object.keys(sessionToolTally).length === 0) {
+      activeTurnCard.card?.remove();
+    } else {
+      const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
+      activeTurnCard.finalize(accumulatedNarrative || '*(completed)*', turnCalibration, turnModifiedFiles);
+      attachMessageActions(activeTurnCard.card, {
+        role: 'assistant',
+        messageId: turnAssistantMid,
+        getText: () => accumulatedNarrative,
+        onRegenerate: () => regenerateFromAssistant(turnAssistantMid),
+      });
+    }
     turnHasFinalized = true;
   }
   activeTurnCard = null;
