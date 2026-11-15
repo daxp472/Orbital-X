@@ -288,6 +288,9 @@ class TerminalSession {
     this.historyIndex = -1;
     this.buffer = '';
     this.isRunning = false;
+    this.runningCmd = null;
+    this.isAgent = false;
+    this.agentSlot = 1;
     this.isBackendConnected = false;
   }
 
@@ -303,6 +306,13 @@ class TerminalSession {
 
   // Clean VS Code style title: e.g. "cmd · Orbital X" or "pwsh · Orbital X"
   tabTitle() {
+    if (this.isAgent) {
+      const slot = this.agentSlot || 1;
+      const status = this.isRunning
+        ? (this.runningCmd ? ` (● ${this.runningCmd.slice(0, 14)}…)` : ' (● Running)')
+        : ' (Idle)';
+      return `🤖 Agent ${slot}${status}`;
+    }
     const isCmd = /cmd\.exe|cmd$/i.test(this.shell);
     const isPwsh = /powershell/i.test(this.shell);
     const isBash = /bash/i.test(this.shell);
@@ -311,6 +321,19 @@ class TerminalSession {
     const parts = cwd.split(/[\\/]/).filter(Boolean);
     const folder = parts[parts.length - 1] || '';
     return folder ? `${typeLabel} · ${folder}` : typeLabel;
+  }
+
+  async killRunningProcess() {
+    this.isRunning = false;
+    this.runningCmd = null;
+    this.buffer += `\r\n\x1b[31m[Process stopped by user]\x1b[0m\r\n`;
+    try {
+      if (this.isBackendConnected) {
+        await invoke('send_terminal_input', { sessionId: this.sessionId, input: '\x03' });
+      }
+    } catch (_) {}
+    renderPanes();
+    showToast(`Stopped process in ${this.name}`, 'info', 2000);
   }
 
   async startBackendShell() {
@@ -761,14 +784,22 @@ function renderPaneTabs(pane) {
   for (const term of sessions) {
     const isActive = term.id === activeTerminalId;
     const item = document.createElement('div');
-    item.className = `terminal-tab ${isActive ? 'active' : ''}`;
+    item.className = `terminal-tab ${isActive ? 'active' : ''} ${term.isAgent ? 'terminal-agent-tab' : ''}`;
+    const killBtnHtml = term.isRunning
+      ? `<span class="terminal-kill-btn" title="Kill running process" style="margin-left: 4px; padding: 0 4px; border-radius: 3px; background: rgba(239, 68, 68, 0.25); color: #ef4444; font-size: 9px; cursor: pointer; font-weight: 700;">⏹ Kill</span>`
+      : '';
+
     item.innerHTML = `
-      <span class="terminal-shell-dot" style="background:${shellDot(term.shell)};" title="${term.name}"></span>
+      <span class="terminal-shell-dot" style="background:${term.isAgent ? 'var(--accent-cyan)' : shellDot(term.shell)};" title="${term.name}"></span>
       <span class="terminal-tab-label" title="${term.name} · ${term.cwd || ''}">${term.id}: ${term.tabTitle()}</span>
+      ${killBtnHtml}
       <span class="terminal-tab-close" title="Close terminal">✕</span>
     `;
     item.addEventListener('click', (e) => {
-      if (e.target.classList.contains('terminal-tab-close')) {
+      if (e.target.classList.contains('terminal-kill-btn')) {
+        e.stopPropagation();
+        term.killRunningProcess();
+      } else if (e.target.classList.contains('terminal-tab-close')) {
         closeTerminalInstance(term.id, e);
       } else {
         switchTerminalInstance(term.id);
@@ -1516,5 +1547,92 @@ async function handleTabCompletion(inputElem) {
     }
   } catch (e) {
     // Silent — Tab completion is best-effort
+  }
+}
+
+// ===========================================================================
+// Dedicated AI Terminals (Up to 3: 🤖 Agent 1, 🤖 Agent 2, 🤖 Agent 3)
+// ===========================================================================
+
+export function getOrCreateAgentTerminal(slot = 1) {
+  const safeSlot = Math.min(Math.max(1, slot), 3);
+  let term = terminalInstances.find(t => t.isAgent && t.agentSlot === safeSlot);
+  if (!term) {
+    const nextId = terminalInstances.length + 1;
+    const defaultProfile = SHELL_PROFILES.find(p => p.id === state.terminal?.defaultShell) || SHELL_PROFILES[0];
+    term = new TerminalSession(nextId, defaultProfile.shell, 'A');
+    term.isAgent = true;
+    term.agentSlot = safeSlot;
+    term.name = `🤖 Agent ${safeSlot}`;
+    terminalInstances.push(term);
+    term.startBackendShell();
+    renderPanes();
+  }
+  return term;
+}
+
+export function isCriticalCommand(command) {
+  if (!command || typeof command !== 'string') return false;
+  const c = command.toLowerCase().trim();
+  const criticalPatterns = [
+    /\bgit\s+push\b/,
+    /\bgit\s+reset\s+--hard\b/,
+    /\bgit\s+clean\s+-f/,
+    /\brm\s+-rf\s+[\/~]/,
+    /\bformat\s+[a-z]:/i,
+    /\bsudo\s+/,
+    /\brunas\s+/
+  ];
+  return criticalPatterns.some(re => re.test(c));
+}
+
+export async function sendCommandToUserTerminal(command) {
+  const userTerm = terminalInstances.find(t => !t.isAgent) || terminalInstances[0];
+  if (!userTerm) return;
+  const bottomPanel = document.getElementById('bottom-panel');
+  bottomPanel?.classList.remove('collapsed');
+  const termTab = document.querySelector('.panel-tab[data-tab="terminal"]');
+  termTab?.click();
+  switchTerminalInstance(userTerm.id);
+  const inputA = document.getElementById('terminal-command-input-A');
+  if (inputA) {
+    inputA.value = command;
+    inputA.focus();
+  }
+  showToast(`Sent to user terminal (${userTerm.name}): ready to inspect and press Enter`, 'info', 3000);
+}
+
+export async function executeAgentTerminalCommand(command, cwd = null, slot = 1) {
+  const term = getOrCreateAgentTerminal(slot);
+  term.isRunning = true;
+  term.runningCmd = command;
+  renderPanes();
+
+  const formattedCwd = cwd || state.workspace.rootPath || '';
+  term.buffer += `\r\n\x1b[36m🤖 [AI Terminal - Agent ${slot}]\x1b[0m \x1b[90m(${formattedCwd})\x1b[0m\r\n\x1b[32m$ ${command}\x1b[0m\r\n`;
+  renderPanes();
+
+  try {
+    const res = await invoke('run_command', {
+      command,
+      cwd: formattedCwd,
+      timeoutSeconds: 60,
+    });
+    if (res.stdout) {
+      term.buffer += res.stdout;
+    }
+    if (res.stderr) {
+      term.buffer += `\x1b[31m${res.stderr}\x1b[0m`;
+    }
+    term.isRunning = false;
+    term.runningCmd = null;
+    renderPanes();
+    return res;
+  } catch (err) {
+    term.buffer += `\r\n\x1b[31mExecution Error: ${err}\x1b[0m\r\n`;
+    term.isRunning = false;
+    term.runningCmd = null;
+    renderPanes();
+    throw err;
   }
 }

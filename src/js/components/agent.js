@@ -621,7 +621,7 @@ function clearAgentContext() {
   const timeline = document.getElementById('agent-timeline');
   if (timeline) {
     timeline.innerHTML = '';
-    appendTimelineCard('assistant', `Conversation reset. Active Mode: <strong>${state.agentMode.toUpperCase()}</strong>.`);
+    showWelcomeHero();
   }
   showToast('Conversation cleared', 'info', 2000);
   updateContextMeter(0, getEffectiveNumCtx(), null);
@@ -1982,6 +1982,7 @@ function updateContextMeter(promptTokens, numCtx, tokensPerSecond) {
 
 async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
   const evidenceLedger = getActiveEvidenceLedger();
+  const turnModifiedFiles = new Map();
   let iteration = 0;
   const maxIterations = parseInt(state.ai.settings?.maxIterations, 10) || 60;
   let hasSavedMemoryThisTurn = false;
@@ -2285,7 +2286,10 @@ STRATEGY:
         /^\s*(done|finished|complete)\s*[.!]?\s*$/im.test(finalText);
 
       // Safety Interceptor: If model output code blocks into chat instead of calling write_file
-      if (state.agentMode !== 'ask') {
+      // IMPORTANT: If tool calls ALREADY executed write_file/patch_file in this session or turn,
+      // skip interceptor to prevent duplicate/ghost writes (like creating hello.j alongside hello.js).
+      const hasAlreadyWrittenFiles = (sessionToolTally['write_file'] || 0) > 0 || (sessionToolTally['patch_file'] || 0) > 0 || turnModifiedFiles.size > 0;
+      if (state.agentMode !== 'ask' && !hasAlreadyWrittenFiles) {
         const codeBlockRegex = /```([a-zA-Z0-9_\-]+)?\s*(?:\r?\n)([\s\S]+?)```/g;
         const blocks = [];
         let bMatch;
@@ -2301,9 +2305,9 @@ STRATEGY:
           for (const block of blocks) {
             let targetPath = null;
 
-            // Heuristic 1: Look in the first 3 lines of code for comment filename
+            // Heuristic 1: Look in the first 3 lines of code for comment filename (at least 2 chars extension or .c/.h)
             const topLines = block.code.split('\n').slice(0, 3).join('\n');
-            const commentFileMatch = topLines.match(/(?:^|\n)\s*(?:\/\/|#|<!--|\/\*)\s*(?:filename|filepath|file)?\s*[:=]?\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)/i);
+            const commentFileMatch = topLines.match(/(?:^|\n)\s*(?:\/\/|#|<!--|\/\*)\s*(?:filename|filepath|file)?\s*[:=]?\s*([a-zA-Z0-9_\-\./\\]+\.(?:[a-zA-Z0-9]{2,}|[chdCH]))/i);
             if (commentFileMatch) {
               targetPath = commentFileMatch[1];
             }
@@ -2311,7 +2315,7 @@ STRATEGY:
             // Heuristic 2: Look at markdown text directly preceding this code block
             if (!targetPath) {
               const textBefore = finalText.substring(Math.max(0, block.index - 250), block.index);
-              const headerMatch = textBefore.match(/(?:file|into|in|create|edit|update|for|to|here is|here's|path)\s*[:`"']*\s*([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']*/i);
+              const headerMatch = textBefore.match(/(?:file|into|in|create|edit|update|for|to|here is|here's|path)\s*[:`"']*\s*([a-zA-Z0-9_\-\./\\]+\.(?:[a-zA-Z0-9]{2,}|[chdCH]))[`"']*/i);
               if (headerMatch) {
                 targetPath = headerMatch[1];
               }
@@ -2319,8 +2323,8 @@ STRATEGY:
 
             // Heuristic 3: User prompt explicitly specifies filename
             if (!targetPath && initialUserPrompt) {
-              const promptFileMatch = initialUserPrompt.match(/\b(?:into|in|to|file|create|write|make|add|update)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)[`"']?/i) ||
-                                      initialUserPrompt.match(/\b([a-zA-Z0-9_\-\./\\]+\.[a-zA-Z0-9]+)\b/);
+              const promptFileMatch = initialUserPrompt.match(/\b(?:into|in|to|file|create|write|make|add|update)\s+[`"']?([a-zA-Z0-9_\-\./\\]+\.(?:[a-zA-Z0-9]{2,}|[chdCH]))[`"']?/i) ||
+                                      initialUserPrompt.match(/\b([a-zA-Z0-9_\-\./\\]+\.(?:[a-zA-Z0-9]{2,}|[chdCH]))\b/);
               if (promptFileMatch) {
                 targetPath = promptFileMatch[1];
               }
@@ -2351,14 +2355,34 @@ STRATEGY:
 
             if (targetPath) {
               const cleanPath = targetPath.replace(/^[/"'\\s]+|[/"'\\s]+$/g, '');
+              const dot = cleanPath.lastIndexOf('.');
+              const ext = dot !== -1 ? cleanPath.slice(dot + 1).toLowerCase() : '';
+              if (ext === 'j' || (ext.length === 1 && !['c', 'h', 'd', 'r'].includes(ext))) {
+                console.warn(`[Agent Interceptor] Rejecting truncated file extension: ${cleanPath}`);
+                continue;
+              }
+              if (turnModifiedFiles.has(cleanPath)) {
+                continue;
+              }
               console.log(`[Agent Interceptor] Writing extracted code block to disk: ${cleanPath}`);
               try {
+                let originalContent = '';
+                try {
+                  const prev = await invoke('read_file', { path: cleanPath });
+                  originalContent = prev?.content || '';
+                } catch (_) {}
+
                 await invoke('save_file', {
                   path: cleanPath,
                   content: block.code,
                   description: `Auto-applied generated code to ${cleanPath}`
                 });
                 showToast(`✓ Written directly to ${cleanPath}`, 'success', 3000);
+                turnModifiedFiles.set(cleanPath, {
+                  oldContent: originalContent,
+                  newContent: block.code,
+                  diff: null
+                });
                 window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'write_file', path: cleanPath, source: 'ai' } }));
                 sessionToolTally['write_file'] = (sessionToolTally['write_file'] || 0) + 1;
 
@@ -2397,7 +2421,7 @@ STRATEGY:
         }
         if (activeTurnCard && !turnHasFinalized) {
           const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
-          activeTurnCard.finalize(accumulatedNarrative, turnCalibration);
+          activeTurnCard.finalize(accumulatedNarrative, turnCalibration, turnModifiedFiles);
           attachMessageActions(activeTurnCard.card, {
             role: 'assistant',
             messageId: turnAssistantMid,
@@ -2419,7 +2443,7 @@ STRATEGY:
         }
         if (activeTurnCard && !turnHasFinalized) {
           const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
-          activeTurnCard.finalize(accumulatedNarrative, turnCalibration);
+          activeTurnCard.finalize(accumulatedNarrative, turnCalibration, turnModifiedFiles);
           attachMessageActions(activeTurnCard.card, {
             role: 'assistant',
             messageId: turnAssistantMid,
@@ -2443,6 +2467,42 @@ STRATEGY:
 
     // Reset stall counter once tools start being called
     noToolStallCount = 0;
+
+    // Filter and sanitize tool calls to eliminate duplicate/truncated hallucinations (e.g. hello.j alongside hello.js)
+    if (Array.isArray(resp.tool_calls) && resp.tool_calls.length > 0) {
+      const sanitizedCalls = [];
+      const seenFilePaths = new Set();
+      for (const tc of resp.tool_calls) {
+        const p = tc.arguments?.path || tc.arguments?.file_path || tc.arguments?.filePath;
+        if (p && typeof p === 'string') {
+          seenFilePaths.add(p.trim().toLowerCase());
+        }
+      }
+      for (const tc of resp.tool_calls) {
+        const p = tc.arguments?.path || tc.arguments?.file_path || tc.arguments?.filePath;
+        if (p && typeof p === 'string') {
+          const cleanP = p.trim();
+          const cleanPLower = cleanP.toLowerCase();
+          const dotIdx = cleanP.lastIndexOf('.');
+          if (dotIdx !== -1) {
+            const ext = cleanP.slice(dotIdx + 1).toLowerCase();
+            if (ext.length === 1 && !['c', 'h', 'd', 'r'].includes(ext)) {
+              if (seenFilePaths.has(cleanPLower + 's') || seenFilePaths.has(cleanPLower + 'son')) {
+                console.warn(`[Agent] Discarding truncated tool call path: ${cleanP}`);
+                continue;
+              }
+              if (ext === 'j') {
+                if (tc.arguments.path) tc.arguments.path = cleanP + 's';
+                if (tc.arguments.file_path) tc.arguments.file_path = cleanP + 's';
+                if (tc.arguments.filePath) tc.arguments.filePath = cleanP + 's';
+              }
+            }
+          }
+        }
+        sanitizedCalls.push(tc);
+      }
+      resp.tool_calls = sanitizedCalls;
+    }
 
     // Process each tool call
     for (const toolCall of resp.tool_calls) {
@@ -2485,7 +2545,7 @@ STRATEGY:
 
   if (activeTurnCard && !turnHasFinalized) {
     const turnCalibration = evidenceLedger.computeCalibration(accumulatedNarrative, initialUserPrompt);
-    activeTurnCard.finalize(accumulatedNarrative || '*(completed)*', turnCalibration);
+    activeTurnCard.finalize(accumulatedNarrative || '*(completed)*', turnCalibration, turnModifiedFiles);
     attachMessageActions(activeTurnCard.card, {
       role: 'assistant',
       messageId: turnAssistantMid,
@@ -3296,6 +3356,15 @@ async function processToolCallWithPolicy(toolCall) {
   else if (name === 'query_information_directory') opSummary = `Querying Knowledge Library: ${args.query || 'past data'}`;
   updateLiveActivityOp(opSummary);
 
+  // Pre-capture original file content for files about to be modified
+  let preToolFileContent = '';
+  if (['write_file', 'patch_file'].includes(name) && args && args.path) {
+    try {
+      const prev = await invoke('read_file', { path: args.path });
+      preToolFileContent = prev?.content || '';
+    } catch (_) {}
+  }
+
   // 3. Execute approved tool in backend
   updateToolBoxStatus(toolBoxId, 'Executing...', 'running');
   try {
@@ -3350,28 +3419,45 @@ async function processToolCallWithPolicy(toolCall) {
       import('./memory.js').then(m => m.refreshMemories());
     }
 
-    // If writing a file succeeded, notify listeners and open or refresh it in Monaco
-    if (output && output.staged_in_vfs && args.path) {
+    // Stream command output to dedicated AI terminal
+    if (name === 'run_command' && args && args.command) {
       try {
-        const originalFile = await invoke('read_file', { path: args.path }).catch(() => ({ content: '' }));
-        showVfsFileReview(args.path, originalFile?.content || '', args.content || '', output.diff);
-        showToast(`Staged in VFS Review: ${args.path.split(/[/\\]/).pop()}`, 'info', 2800);
-      } catch (vfsErr) {
-        console.warn('Failed to launch VFS file review in Monaco:', vfsErr);
+        const { executeAgentTerminalCommand } = await import('./terminal.js');
+        executeAgentTerminalCommand(args.command, args.cwd, 1).catch(() => {});
+      } catch (_) {}
+    }
+
+    // If writing or patching a file succeeded, stage for review and update Monaco diff
+    if (['write_file', 'patch_file'].includes(name) && args && args.path) {
+      let postToolFileContent = args.content;
+      if (!postToolFileContent) {
+        try {
+          const post = await invoke('read_file', { path: args.path });
+          postToolFileContent = post?.content || '';
+        } catch (_) {
+          postToolFileContent = '';
+        }
       }
-    } else if (name === 'write_file' && args.path) {
+      turnModifiedFiles.set(args.path, {
+        oldContent: preToolFileContent,
+        newContent: postToolFileContent,
+        diff: output?.diff || null
+      });
+      try {
+        const { showVfsFileReview } = await import('../editor/monaco.js');
+        showVfsFileReview(args.path, preToolFileContent, postToolFileContent, output?.diff);
+      } catch (e) {
+        console.warn('Failed to launch in-editor file review:', e);
+      }
+      window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: name, path: args.path, source: 'ai' } }));
       window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
-      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
+      showToast(`✅ Agent modified: ${args.path.split(/[/\\]/).pop()}`, 'success', 2200);
       try {
         const fileData = await invoke('read_file', { path: args.path });
         openFileInTab(fileData);
-      } catch (e) {
-        console.warn("Could not reload written file:", e);
-      }
-    } else if (name === 'patch_file' && args.path) {
-      window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: args.path } }));
-      showToast(`✅ Agent wrote: ${args.path}`, 'success', 2500);
+      } catch (_) {}
     } else if (name === 'delete_file' && args.path) {
+      window.dispatchEvent(new CustomEvent('orbital:files-changed', { detail: { tool: 'delete_file', path: args.path, source: 'ai' } }));
       showToast(`✅ Agent deleted: ${args.path}`, 'success', 2500);
     } else if ((name === 'delete_directory' || name === 'delete_folder') && args.path) {
       showToast(`🗑️ Agent removed directory: ${args.path}`, 'success', 3000);
@@ -3886,6 +3972,92 @@ function attachRunCommandChip(card, text) {
   card.appendChild(actionRow);
 }
 
+function renderTurnFileReviewDeck(card, modifiedFilesMap) {
+  if (!card || !modifiedFilesMap || modifiedFilesMap.size === 0) return;
+  const existingDeck = card.querySelector('.turn-files-review-deck');
+  if (existingDeck) existingDeck.remove();
+
+  const deck = document.createElement('div');
+  deck.className = 'turn-files-review-deck';
+  deck.style.cssText = 'margin-top: 10px; border: 1px solid rgba(57, 197, 187, 0.25); border-radius: 8px; background: rgba(13, 17, 23, 0.7); overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.2);';
+
+  const count = modifiedFilesMap.size;
+  deck.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; background: rgba(57, 197, 187, 0.08); border-bottom: 1px solid rgba(57, 197, 187, 0.15);">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+        <span style="font-size: 11.5px; font-weight: 700; color: var(--text-primary);">Pending File Changes (${count})</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button class="btn btn-sm btn-deck-accept-all" style="background: rgba(34, 197, 94, 0.18); border: 1px solid rgba(34, 197, 94, 0.4); color: #22c55e; font-size: 10.5px; padding: 2px 8px; border-radius: 5px; font-weight: 600; cursor: pointer;">✓ Accept All</button>
+        <button class="btn btn-sm btn-deck-reject-all" style="background: rgba(239, 68, 68, 0.18); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; font-size: 10.5px; padding: 2px 8px; border-radius: 5px; font-weight: 600; cursor: pointer;">✕ Reject All</button>
+      </div>
+    </div>
+    <div class="deck-file-rows" style="display: flex; flex-direction: column;"></div>
+  `;
+
+  const rowsContainer = deck.querySelector('.deck-file-rows');
+
+  for (const [filePath, info] of modifiedFilesMap.entries()) {
+    const filename = filePath.split(/[\\/]/).pop() || filePath;
+    const row = document.createElement('div');
+    row.className = 'deck-file-row';
+    row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); font-size: 11px;';
+
+    row.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+        <span style="font-size: 12px;">📄</span>
+        <span class="file-link" style="font-weight: 600; color: var(--text-primary); cursor: pointer;" title="Inspect in editor">${escapeHtml(filename)}</span>
+        <span style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, monospace);">${escapeHtml(filePath)}</span>
+      </div>
+      <div class="row-actions" style="display: flex; align-items: center; gap: 6px;">
+        <button class="btn btn-sm btn-deck-accept" style="background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.35); color: #22c55e; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; cursor: pointer;">✓ Accept</button>
+        <button class="btn btn-sm btn-deck-reject" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #ef4444; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; cursor: pointer;">✕ Reject</button>
+      </div>
+    `;
+
+    row.querySelector('.file-link')?.addEventListener('click', async () => {
+      try {
+        const { openFileInTab } = await import('../editor/monaco.js');
+        const fd = await invoke('read_file', { path: filePath });
+        openFileInTab(fd);
+      } catch (_) {}
+    });
+
+    row.querySelector('.btn-deck-accept')?.addEventListener('click', async () => {
+      const { acceptVfsFile } = await import('../editor/monaco.js');
+      await acceptVfsFile(filePath);
+      row.querySelector('.row-actions').innerHTML = '<span style="color: #22c55e; font-size: 10px; font-weight: 600;">✓ Accepted</span>';
+    });
+
+    row.querySelector('.btn-deck-reject')?.addEventListener('click', async () => {
+      const { rejectVfsFile } = await import('../editor/monaco.js');
+      await rejectVfsFile(filePath);
+      row.querySelector('.row-actions').innerHTML = '<span style="color: #ef4444; font-size: 10px; font-weight: 600;">✕ Reverted</span>';
+    });
+
+    rowsContainer.appendChild(row);
+  }
+
+  deck.querySelector('.btn-deck-accept-all')?.addEventListener('click', async () => {
+    const { acceptAllVfsFiles } = await import('../editor/monaco.js');
+    await acceptAllVfsFiles();
+    deck.querySelectorAll('.row-actions').forEach(el => {
+      el.innerHTML = '<span style="color: #22c55e; font-size: 10px; font-weight: 600;">✓ Accepted</span>';
+    });
+  });
+
+  deck.querySelector('.btn-deck-reject-all')?.addEventListener('click', async () => {
+    const { rejectAllVfsFiles } = await import('../editor/monaco.js');
+    await rejectAllVfsFiles();
+    deck.querySelectorAll('.row-actions').forEach(el => {
+      el.innerHTML = '<span style="color: #ef4444; font-size: 10px; font-weight: 600;">✕ Reverted</span>';
+    });
+  });
+
+  card.appendChild(deck);
+}
+
 /**
  * Streaming assistant card: tokens are appended as plain text (inherently
  * safe), then the finalized text is rendered through the safe markdown path.
@@ -3969,7 +4141,7 @@ function beginStreamingCard() {
       if (statusEl) statusEl.textContent = '';
       if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-red);">✗ Error</span>`;
     },
-    finalize(fullText, calibration = null) {
+    finalize(fullText, calibration = null, modifiedFilesMap = null) {
       if (raf) cancelAnimationFrame(raf);
       if (statusEl) statusEl.textContent = '';
       if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-green);">✓ Complete</span>`;
@@ -3992,6 +4164,10 @@ function beginStreamingCard() {
       enhanceRenderedBody(md);
       card.appendChild(md);
       attachRunCommandChip(card, fullText || acc);
+
+      if (modifiedFilesMap && modifiedFilesMap.size > 0) {
+        renderTurnFileReviewDeck(card, modifiedFilesMap);
+      }
     },
   };
 }

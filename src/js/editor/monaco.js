@@ -726,19 +726,21 @@ function cleanFimCompletion(rawText, lineBefore, lineAfter) {
   const condHeaderMatch = lineBefore.match(/^\s*(if|else\s+if|for|while|switch)\s*\(?([^){]*)/i);
   if (condHeaderMatch) {
     const kw = condHeaderMatch[1];
-    const condBody = condHeaderMatch[2].trim().replace(/\s+/g, '');
-    const textCondMatch = text.match(new RegExp(`^\\s*${kw}\\s*\\(?([^){]*)`, 'i'));
-    if (textCondMatch) {
-      const textCondBody = textCondMatch[1].trim().replace(/\s+/g, '');
-      if (!condBody || textCondBody.includes(condBody) || condBody.includes(textCondBody)) {
-        text = text.replace(new RegExp(`^\\s*${kw}\\s*\\([^)]*\\)\\s*\\{?`, 'i'), '');
-      }
+    // Strip any leading re-statement of the keyword and condition
+    const reStatementRegex = new RegExp(`^\\s*${kw}\\s*\\([^)]*\\)\\s*\\{?`, 'i');
+    if (reStatementRegex.test(text)) {
+      text = text.replace(reStatementRegex, '');
     }
   }
 
-  // If lineBefore already ends with '{', strip any redundant closing parens, braces or wrappers at start of text
+  // If lineBefore already ends with '{' or contains open brace, strip any redundant closing parens, braces or wrappers
   if (trimmedBefore.endsWith('{')) {
-    text = text.replace(/^(\s*\)|\s*\}\)|\s*\{)+/, '');
+    text = text.replace(/^(\s*\)|\s*\}\)|\s*\{\}\)|\s*\{)+/, '');
+  }
+
+  // Discard empty or malformed bracket artifacts like "{})", "})", ")"
+  if (/^(\s*\{\}\)|\s*\}\)|\s*\)|\s*\{\s*\})+$/.test(text.trim())) {
+    return '\n  \n}';
   }
 
   // 7. Limit runaway length: suggestions should finish the current statement / 1-4 lines max
@@ -766,7 +768,7 @@ function getSemanticContextualSuggestion(prefix, suffix, lineContent, language) 
   let elseLineIdx = -1;
   for (let i = lines.length - 1; i >= Math.max(0, lines.length - 25); i--) {
     const l = lines[i].trim();
-    if (l === 'else' || l === 'else {' || l.startsWith('} else') || l === 'else:' || l.startsWith('elif ') || l.startsWith('else if')) {
+    if (/\b(else|elif|else\s+if)\b/.test(l)) {
       elseLineIdx = i;
       break;
     }
@@ -776,18 +778,20 @@ function getSemanticContextualSuggestion(prefix, suffix, lineContent, language) 
 
   // Find the matching preceding `if` block before `else`
   let ifLineIdx = -1;
-  for (let i = elseLineIdx - 1; i >= Math.max(0, elseLineIdx - 30); i--) {
+  for (let i = elseLineIdx; i >= Math.max(0, elseLineIdx - 30); i--) {
     const l = lines[i].trim();
-    if (l.startsWith('if ') || l.startsWith('if(') || l.startsWith('elif ')) {
-      ifLineIdx = i;
-      break;
+    if (/\b(if|elif)\b/.test(l)) {
+      if (i < elseLineIdx || (l.indexOf('if') < l.indexOf('else'))) {
+        ifLineIdx = i;
+        break;
+      }
     }
   }
 
   if (ifLineIdx === -1) return null;
 
-  // Extract statements inside the `if` block (between ifLineIdx and elseLineIdx)
-  const ifBlockLines = lines.slice(ifLineIdx, elseLineIdx);
+  // Extract statements inside the `if` block (between ifLineIdx and elseLineIdx + 1)
+  const ifBlockLines = lines.slice(ifLineIdx, elseLineIdx + 1);
   const ifBlockText = ifBlockLines.join('\n');
 
   // Helper to invert semantic meaning (antonyms)

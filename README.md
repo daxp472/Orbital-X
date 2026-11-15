@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.0-blueviolet.svg?logo=tauri)](https://tauri.app)
 [![Rust](https://img.shields.io/badge/Rust-1.90%2B-orange.svg?logo=rust)](https://www.rust-lang.org)
-[![Version](https://img.shields.io/badge/Release-v2.4.0-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
+[![Version](https://img.shields.io/badge/Release-v2.4.1-emerald.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
 [![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-0078d4.svg)](https://github.com/daxp472/Orbital-X/releases/latest)
 [![Tests](https://img.shields.io/badge/cargo%20test-84%2F84%20passed-brightgreen.svg)](.github/workflows/ci.yml)
 
@@ -29,6 +29,24 @@ The agent streams tokens as they are generated, manages its own context window a
 ---
 
 ## Key Features
+
+### Interactive File Review & Accept/Reject Controls
+- **Per-File & Batch Decisions** — Review changes with inline `[✓ Accept]` and `[✕ Reject]` buttons on each modified file, or use `[✓ Accept All]` and `[✕ Reject All]` directly from the agent turn card or panel header.
+- **Instant Rollback Engine** — Rejecting a file immediately reverts both the Monaco editor and disk content to the exact pre-turn snapshot.
+- **Human Edit Isolation** — Changes made manually in the file explorer or editor remain untouched and are never polluted by or conflated with AI review states.
+
+### Knowledge & Core Memory Management Page
+- **Durable Memory & Architectural Rules** — Dedicated modal for creating, editing, and rating durable project memories (1–5 stars) with category filters (Architecture, Conventions, Rules, Decisions).
+- **Information Directory Inspector** — Instant structural scanning of project dependencies (`package.json`, `Cargo.toml`, `requirements.txt`), workspace entrypoints, changelog histories, and semantic graph call edges.
+
+### Scoped Working Directory & Dedicated AI Terminals
+- **Sub-folder Scoping** — The agent autonomously switches its focus to target sub-folders (`frontend/`, `server/`, etc.) with `set_working_directory` and `get_working_directory`, confining file reads and build commands.
+- **Dedicated AI Terminal Fleet** — Up to 3 dedicated AI terminals (`🤖 Agent 1`, `🤖 Agent 2`, `🤖 Agent 3`) showing live execution states, running command status, and 1-click **[⏹ Kill Process]** controls.
+- **Critical Command Security Shield** — Destructive or sensitive terminal operations (`git push`, `git reset --hard`, `sudo`) are safely blocked and redirected to the user's terminal with a single-click prompt.
+
+### Elimination of Ghost File Hallucinations
+- **Truncated Extension Rejection** — Deep filter rules reject single-character and truncated file hallucination variants (such as `hello.j` generated alongside `hello.js`).
+- **Idempotent Tool Deduplication** — Prevents secondary safety writes from re-triggering file creations when tools have already written them.
 
 ### High-Speed Inline Code Suggestions
 - **Instant Contextual Antithesis** — Zero-latency (0ms) semantic inversion engine. When typing inside an `else` or fallback branch, it inspects the preceding `if` block, inverts semantic meaning (e.g., `can` $\rightarrow$ `cannot`, `valid` $\rightarrow$ `invalid`, `success` $\rightarrow$ `failed`), and instantly completes the full statement.

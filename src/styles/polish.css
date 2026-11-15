@@ -965,7 +965,7 @@ body.theme-light .settings-sidebar,
   font-weight: 500;
 }
 
-/* Zero-layout-shift docked message action bar */
+/* Zero-layout-shift docked message action bar (sticky, permanently visible) */
 .msg-action-bar {
   display: flex;
   align-items: center;
@@ -975,8 +975,7 @@ body.theme-light .settings-sidebar,
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   min-height: 28px;
-  opacity: 0.72;
-  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
 }
 .timeline-card:hover .msg-action-bar {
   opacity: 1;

@@ -156,34 +156,9 @@ export function getChangedFilesSummary() {
 
 /**
  * Synchronize existing AI changed files without polluting the list with human/git edits.
+ * Only verifies that AI-modified files are still tracked; never adds human edits from explorer.
  */
 export async function refreshChangedFiles() {
-  try {
-    const res = await invoke('get_git_status');
-    if (res && res.is_repo && res.raw) {
-      const gitFiles = new Set();
-      for (const line of res.raw.split('\n')) {
-        if (line.startsWith('##') || line.trim().length < 3) continue;
-        let p = line.slice(3).trim();
-        if (p.includes(' -> ')) {
-          p = p.slice(p.indexOf(' -> ') + 4).trim();
-        }
-        if (p.startsWith('"') && p.endsWith('"')) p = p.slice(1, -1);
-        if (!p) continue;
-        const norm = normalizeFilePath(p);
-        if (norm) gitFiles.add(norm.canonicalKey);
-      }
-
-      // If an AI-changed file was discarded or committed outside, update its presence
-      for (const [key, entry] of canonicalFilesMap.entries()) {
-        if (!gitFiles.has(key)) {
-          // File has no uncommitted changes left in git; can be marked clean or kept as reviewed
-        }
-      }
-    }
-  } catch (e) {
-    // Session tracker remains authoritative
-  }
   updateChangedFilesUI();
 }
 
@@ -194,18 +169,26 @@ export function getChangedFilesList() {
 export function updateChangedFilesUI() {
   const label = document.getElementById('agent-changed-files-label');
   const bar = document.getElementById('review-changes-bar');
+  const btnAcceptAll = document.getElementById('btn-header-accept-all');
+  const btnRejectAll = document.getElementById('btn-header-reject-all');
   const count = canonicalFilesMap.size;
 
   if (label) {
     if (count === 0) {
       label.textContent = '0 Files With Changes';
       if (bar) bar.classList.remove('has-changes');
+      if (btnAcceptAll) btnAcceptAll.style.display = 'none';
+      if (btnRejectAll) btnRejectAll.style.display = 'none';
     } else if (count === 1) {
       label.textContent = '1 File With Changes';
       if (bar) bar.classList.add('has-changes');
+      if (btnAcceptAll) btnAcceptAll.style.display = 'inline-flex';
+      if (btnRejectAll) btnRejectAll.style.display = 'inline-flex';
     } else {
       label.textContent = `${count} Files With Changes`;
       if (bar) bar.classList.add('has-changes');
+      if (btnAcceptAll) btnAcceptAll.style.display = 'inline-flex';
+      if (btnRejectAll) btnRejectAll.style.display = 'inline-flex';
     }
   }
 
@@ -356,6 +339,20 @@ export function initReviewChangesBar() {
     for (const f of all.slice(0, 10)) {
       await openFileDirectlyIntoEditor(f);
     }
+  });
+
+  document.getElementById('btn-header-accept-all')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const { acceptAllVfsFiles } = await import('../editor/monaco.js');
+    await acceptAllVfsFiles();
+    clearSessionChangedFiles();
+  });
+
+  document.getElementById('btn-header-reject-all')?.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const { rejectAllVfsFiles } = await import('../editor/monaco.js');
+    await rejectAllVfsFiles();
+    clearSessionChangedFiles();
   });
 
   // Listen for file changes emitted by agent — only AI mutations go into Review Changes

@@ -44,7 +44,7 @@
           <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
         </div>
 
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.0 (Click for About)">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.1 (Click for About)">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -372,6 +372,13 @@
           <div class="sidebar-header">
             <span>Project Memory</span>
             <div class="sidebar-actions">
+              <button class="icon-btn" id="btn-open-memory-modal-icon" title="Open Full Memory & Knowledge Page">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </button>
               <button class="icon-btn" id="btn-add-memory" title="Add Memory Rule">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -379,6 +386,12 @@
                 </svg>
               </button>
             </div>
+          </div>
+          <div style="padding: 6px 8px 0 8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-open-memory-modal" style="width: 100%; font-size: 11px; padding: 5px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; border-radius: 6px; background: rgba(57, 197, 187, 0.08); border-color: rgba(57, 197, 187, 0.25); color: var(--accent-cyan);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>Open Knowledge Directory ↗</span>
+            </button>
           </div>
           <div class="sidebar-content" id="memory-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
             <div style="color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 20px;">
@@ -665,13 +678,21 @@
                 </svg>
                 <span id="agent-changed-files-label" style="font-weight: 500;">0 Files With Changes</span>
               </div>
-              <button class="review-btn" id="btn-review-changes" title="Inspect changed files">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="16 18 22 12 16 6"></polyline>
-                  <polyline points="8 6 2 12 8 18"></polyline>
-                </svg>
-                Review Changes
-              </button>
+              <div class="review-actions-group" style="display: flex; align-items: center; gap: 4px;">
+                <button class="review-btn" id="btn-review-changes" title="Inspect changed files">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="16 18 22 12 16 6"></polyline>
+                    <polyline points="8 6 2 12 8 18"></polyline>
+                  </svg>
+                  <span>Review Changes</span>
+                </button>
+                <button class="btn btn-sm btn-header-accept-all" id="btn-header-accept-all" title="Accept all pending file changes" style="display: none; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.4); color: #22c55e; font-size: 10.5px; padding: 2px 7px; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                  ✓ Accept All
+                </button>
+                <button class="btn btn-sm btn-header-reject-all" id="btn-header-reject-all" title="Reject all pending file changes (reverts files)" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; font-size: 10.5px; padding: 2px 7px; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                  ✕ Reject All
+                </button>
+              </div>
             </div>
           </div>
 
@@ -970,6 +991,13 @@
           <span class="mode-dot" id="sb-model-dot" style="background-color: var(--accent-green);"></span>
           <span id="sb-model-text">Ollama (Local)</span>
           <span id="status-mode" style="opacity: 0.8; margin-left: 2px;">· <span id="sb-mode-text">Dev</span></span>
+        </div>
+        <!-- Live Speed & VRAM Gauge -->
+        <div class="status-item sb-live-speed-pill" id="sb-live-speed-gauge" title="Real-time Inference Speed & Ollama VRAM Fit (Click for Dashboard)" style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <span class="speed-sparkle" style="color: var(--accent-cyan); font-size: 10px;">⚡</span>
+          <span id="sb-live-tps" style="font-family: var(--font-mono, monospace); font-weight: 600; font-size: 10.5px; color: var(--accent-cyan);">~0 tok/s</span>
+          <span style="opacity: 0.35;">|</span>
+          <span id="sb-live-vram" style="font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--text-secondary);">0 MB VRAM</span>
         </div>
         <!-- Token Usage -->
         <div class="status-item" id="status-token-usage" title="Token Usage Counter (Click to open Dashboard)">
@@ -2000,7 +2028,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.4.0 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.4.1 · The AI-native IDE for everyone</div>
           </div>
         </div>
 
@@ -2133,6 +2161,134 @@
           <button class="btn btn-secondary btn-sm" id="btn-review-clear-session">Clear Tracker</button>
           <button class="btn btn-primary btn-sm" id="btn-review-modal-done">Done</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Memory & Knowledge Directory Management Page (Apple HIG) -->
+  <div class="modal-backdrop" id="modal-memory-manager" style="display: none;">
+    <div class="modal-container memory-manager-modal" role="dialog" aria-modal="true" aria-label="Project Memory & Knowledge Directory" style="width: 860px; max-width: 95vw; height: 82vh; max-height: 82vh; display: flex; flex-direction: column; position: relative; border-radius: 12px; overflow: hidden;">
+      <div class="modal-header" style="padding: 12px 18px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 28px; height: 28px; border-radius: 8px; background: rgba(57, 197, 187, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent-cyan);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+              <span>Memory &amp; Knowledge Directory</span>
+              <span class="memory-sync-badge" id="mem-sync-status-badge" style="font-size: 10px; padding: 2px 7px; border-radius: 10px; background: rgba(34, 197, 94, 0.12); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3);">● Synced with .orbital</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted);">Core workspace memory, architecture decisions, conventions &amp; dependency map</div>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-primary btn-sm" id="btn-modal-add-memory" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Add Memory</span>
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-modal-refresh-memory" title="Refresh &amp; Re-scan Knowledge" style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>Sync</span>
+          </button>
+          <button class="icon-btn" id="btn-close-memory-manager" title="Close (Esc)" style="font-size: 16px;">✕</button>
+        </div>
+      </div>
+
+      <!-- Segmented Navigation Tabs -->
+      <div class="memory-manager-tabs" style="display: flex; align-items: center; gap: 6px; padding: 8px 18px; border-bottom: 1px solid var(--border-subtle); background: rgba(0,0,0,0.12);">
+        <button class="memory-nav-tab active" data-mtab="core" id="mem-tab-core">
+          <span>🏛️ Core Memory</span>
+          <span class="tab-count-pill" id="mem-count-pill">0</span>
+        </button>
+        <button class="memory-nav-tab" data-mtab="info" id="mem-tab-info">
+          <span>📦 Dependencies &amp; Info Directory</span>
+        </button>
+        <button class="memory-nav-tab" data-mtab="graph" id="mem-tab-graph">
+          <span>🌐 Architectural Graph</span>
+        </button>
+      </div>
+
+      <!-- Body / Tab Panels -->
+      <div class="modal-body memory-manager-body" style="padding: 14px 18px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 12px;">
+        <!-- Tab 1: Core Memory -->
+        <div id="memory-panel-core" class="memory-tab-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <div class="memory-category-filters" id="mem-category-filters" style="display: flex; gap: 5px; flex-wrap: wrap;">
+              <button class="mem-filter-pill active" data-cat="all">All</button>
+              <button class="mem-filter-pill" data-cat="architecture">🏛️ Architecture</button>
+              <button class="mem-filter-pill" data-cat="convention">📏 Conventions</button>
+              <button class="mem-filter-pill" data-cat="rule">📋 Rules</button>
+              <button class="mem-filter-pill" data-cat="instruction">📝 Instructions</button>
+              <button class="mem-filter-pill" data-cat="decision">🎯 Decisions</button>
+            </div>
+            <div style="position: relative; width: 220px;">
+              <input type="text" id="memory-modal-search" class="input-text" placeholder="Search memories…" style="width: 100%; font-size: 11px; padding: 4px 8px; border-radius: 6px;" />
+            </div>
+          </div>
+
+          <div id="memory-modal-cards-grid" class="memory-cards-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; overflow-y: auto; flex: 1; padding-bottom: 8px;">
+            <!-- Rendered by memory.js -->
+          </div>
+        </div>
+
+        <!-- Tab 2: Information Directory & Dependencies -->
+        <div id="memory-panel-info" class="memory-tab-panel" style="display: none; flex-direction: column; gap: 14px;">
+          <div id="info-directory-content">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- Tab 3: Architectural Graph -->
+        <div id="memory-panel-graph" class="memory-tab-panel" style="display: none; flex-direction: column; gap: 14px;">
+          <div id="arch-graph-content">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Add/Edit Memory Sub-Modal (Inline Drawer/Overlay) -->
+      <div id="memory-edit-drawer" style="display: none; position: absolute; inset: 0; background: rgba(13, 17, 23, 0.96); backdrop-filter: blur(12px); z-index: 50; flex-direction: column; padding: 20px 24px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <div style="font-weight: 700; font-size: 15px;" id="mem-drawer-title">Add Durable Memory</div>
+          <button class="icon-btn" id="btn-close-mem-drawer">✕</button>
+        </div>
+        <form id="mem-edit-form" style="display: flex; flex-direction: column; gap: 12px; flex: 1;" onsubmit="return false;">
+          <input type="hidden" id="mem-edit-id" value="" />
+          <div>
+            <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Title</label>
+            <input type="text" id="mem-edit-title" class="input-text" placeholder="e.g. Build commands or API design convention" style="width: 100%; font-size: 12px; padding: 6px 10px;" required />
+          </div>
+          <div style="display: flex; gap: 12px;">
+            <div style="flex: 1;">
+              <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Category</label>
+              <select id="mem-edit-category" class="input-text" style="width: 100%; font-size: 12px; padding: 6px 10px;">
+                <option value="architecture">🏛️ Architecture</option>
+                <option value="convention" selected>📏 Conventions</option>
+                <option value="rule">📋 Rules</option>
+                <option value="instruction">📝 Instructions</option>
+                <option value="decision">🎯 Decisions</option>
+              </select>
+            </div>
+            <div style="width: 160px;">
+              <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Importance (1–5)</label>
+              <select id="mem-edit-importance" class="input-text" style="width: 100%; font-size: 12px; padding: 6px 10px;">
+                <option value="5">★★★★★ (Critical Anchor)</option>
+                <option value="4">★★★★☆ (High)</option>
+                <option value="3" selected>★★★☆☆ (Normal)</option>
+                <option value="2">★★☆☆☆ (Low)</option>
+                <option value="1">★☆☆☆☆ (Trivial)</option>
+              </select>
+            </div>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column;">
+            <label style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; display: block;">Memory Content (Direct instructions or technical details for the AI)</label>
+            <textarea id="mem-edit-content" class="input-text" style="width: 100%; flex: 1; min-height: 140px; font-size: 12px; line-height: 1.5; font-family: var(--font-mono, monospace); padding: 8px 10px; resize: none;" placeholder="Write specific rules, commands, or patterns the AI must always follow in this workspace..." required></textarea>
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+            <button type="button" class="btn btn-secondary" id="btn-cancel-mem-drawer">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btn-save-mem-drawer">Save Memory</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -2308,7 +2464,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.4.0 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.4.1 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

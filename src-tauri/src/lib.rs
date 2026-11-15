@@ -45,6 +45,7 @@ pub struct AppState {
     pub semantic_graph: Mutex<Option<semantic_graph::SemanticGraphEngine>>,
     pub diagnostics_service: Mutex<Option<diagnostics::DiagnosticService>>,
     pub vfs: Mutex<Option<vfs::VfsEngine>>,
+    pub agent_working_dir: Mutex<Option<PathBuf>>,
 }
 
 fn cancelled_response() -> ProviderResponse {
@@ -69,8 +70,17 @@ fn cancelled_response() -> ProviderResponse {
 fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a str, String> {
     for key in ["path", "file_path", "filePath"] {
         if let Some(p) = arguments.get(key).and_then(|v| v.as_str()) {
-            if !p.trim().is_empty() {
-                return Ok(p);
+            let trimmed = p.trim();
+            if !trimmed.is_empty() {
+                // Ghost file extension protection: reject truncated extensions like .j (unless standard 1-letter .c, .h, .d, .r)
+                if let Some(idx) = trimmed.rfind('.') {
+                    let ext = &trimmed[idx + 1..];
+                    if ext.len() == 1 && ext != "c" && ext != "h" && ext != "d" && ext != "r" && ext != "R" && ext != "C" && ext != "H" {
+                        let suggestion = if ext.eq_ignore_ascii_case("j") { "Did you mean '.js'?" } else { "Please provide full extension." };
+                        return Err(format!("{{\"error\":\"invalid_path\",\"tool\":\"{tool}\",\"message\":\"Truncated/hallucinated file extension '.{ext}' in path '{trimmed}'. {suggestion}\"}}"));
+                    }
+                }
+                return Ok(trimmed);
             }
         }
     }
@@ -1452,9 +1462,14 @@ async fn execute_tool(
 
             let cwd = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
-                match ws.get_root() {
-                    Some(r) => r.to_string_lossy().to_string(),
-                    None => std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
+                let agent_wd = state.agent_working_dir.lock().map_err(|e| e.to_string())?;
+                if let Some(ref scoped) = *agent_wd {
+                    scoped.to_string_lossy().to_string()
+                } else {
+                    match ws.get_root() {
+                        Some(r) => r.to_string_lossy().to_string(),
+                        None => std::env::current_dir().unwrap_or_default().to_string_lossy().to_string(),
+                    }
                 }
             };
 
@@ -1485,6 +1500,62 @@ async fn execute_tool(
                     }))
                 }
             }
+        }
+        "set_working_directory" => {
+            let dir_arg = arguments.get("directory").and_then(|d| d.as_str()).unwrap_or("").trim();
+            let ws_guard = state.workspace.lock().map_err(|e| e.to_string())?;
+            let root = ws_guard.get_root().ok_or("No workspace open to set working directory")?;
+            let mut agent_wd_guard = state.agent_working_dir.lock().map_err(|e| e.to_string())?;
+
+            if dir_arg.is_empty() || dir_arg == "." || dir_arg.eq_ignore_ascii_case("root") {
+                *agent_wd_guard = None;
+                return Ok(serde_json::json!({
+                    "success": true,
+                    "scoped_directory": ".",
+                    "absolute_path": root.to_string_lossy(),
+                    "message": "Scoped working directory reset to workspace root."
+                }));
+            }
+
+            let candidate = if Path::new(dir_arg).is_absolute() {
+                PathBuf::from(dir_arg)
+            } else {
+                root.join(dir_arg)
+            };
+
+            if !candidate.exists() || !candidate.is_dir() {
+                return Err(format!("Directory '{}' does not exist or is not a directory.", dir_arg));
+            }
+
+            let rel = candidate.strip_prefix(&root).unwrap_or(&candidate);
+            let rel_str = rel.to_string_lossy().to_string();
+            *agent_wd_guard = Some(candidate.clone());
+
+            Ok(serde_json::json!({
+                "success": true,
+                "scoped_directory": rel_str,
+                "absolute_path": candidate.to_string_lossy(),
+                "message": format!("Active working directory scoped to '{}'.", rel_str)
+            }))
+        }
+        "get_working_directory" => {
+            let ws_guard = state.workspace.lock().map_err(|e| e.to_string())?;
+            let root = ws_guard.get_root().ok_or("No workspace open")?;
+            let agent_wd_guard = state.agent_working_dir.lock().map_err(|e| e.to_string())?;
+
+            let (scoped, abs) = match &*agent_wd_guard {
+                Some(p) => {
+                    let rel = p.strip_prefix(&root).unwrap_or(p);
+                    (rel.to_string_lossy().to_string(), p.to_string_lossy().to_string())
+                }
+                None => (".".to_string(), root.to_string_lossy().to_string()),
+            };
+
+            Ok(serde_json::json!({
+                "scoped_directory": scoped,
+                "root_directory": root.to_string_lossy(),
+                "absolute_path": abs
+            }))
         }
         "run_tests" => {
             let (cmd, cwd) = {
@@ -1932,6 +2003,20 @@ fn save_memory_entry(
     let root = ws.get_root().ok_or("No workspace open")?;
     let mem = MemoryService::save_memory(&root, &category, &title, &content)?;
     Ok(serde_json::to_value(mem).unwrap_or_default())
+}
+
+#[tauri::command]
+fn get_information_directory(
+    query: Option<String>,
+    category: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = ws.get_root().ok_or("No workspace open")?;
+    let q = query.unwrap_or_default();
+    let cat = category.as_deref();
+    let res = MemoryService::query_information_directory(&root, &q, cat);
+    Ok(res)
 }
 
 #[tauri::command]
@@ -2987,6 +3072,7 @@ pub fn run() {
         semantic_graph: Mutex::new(None),
         diagnostics_service: Mutex::new(None),
         vfs: Mutex::new(None),
+        agent_working_dir: Mutex::new(None),
     };
 
     // P1: catch Rust panics into portable/user storage so a crash leaves a trace
@@ -3083,6 +3169,7 @@ pub fn run() {
             list_memories,
             delete_memory,
             set_memory_importance,
+            get_information_directory,
             list_checkpoints,
             notify_native,
             get_app_version,

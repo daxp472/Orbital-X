@@ -2,8 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const stagingDir = path.resolve('release/Orbital.X_Portable_v2.4.0');
-const zipPath = path.resolve('release/Orbital.X_2.4.0_portable_win64.zip');
+const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+const version = pkg.version || '2.4.1';
+
+const stagingDir = path.resolve(`release/Orbital.X_Portable_v${version}`);
+const zipPath = path.resolve(`release/Orbital.X_${version}_portable_win64.zip`);
 
 if (fs.existsSync(stagingDir)) {
   fs.rmSync(stagingDir, { recursive: true, force: true });
@@ -14,11 +17,11 @@ fs.mkdirSync(path.join(stagingDir, 'Data/.orbital/skills'), { recursive: true })
 fs.writeFileSync(path.join(stagingDir, 'Data/PORTABLE'), 'PORTABLE_MODE=1\n');
 
 // Copy binary
-fs.copyFileSync(path.resolve('release/orbital-x.exe'), path.join(stagingDir, 'orbital-x.exe'));
+fs.copyFileSync(path.resolve('src-tauri/target/release/orbital-x.exe'), path.join(stagingDir, 'orbital-x.exe'));
 
 // Create starter settings.json
 const settings = {
-  version: '2.4.0',
+  version: version,
   theme: 'space-cadet',
   portableMode: true,
   ai: {
@@ -31,7 +34,7 @@ const settings = {
 fs.writeFileSync(path.join(stagingDir, 'Data/.orbital/settings.json'), JSON.stringify(settings, null, 2));
 
 const readme = `========================================================================
-Orbital X Portable v2.4.0 — USB Development Environment
+Orbital X Portable v${version} — USB Development Environment
 ========================================================================
 
 Welcome to Orbital X Portable!

@@ -1,9 +1,14 @@
 // ==========================================================================
-// Orbital X — Project Memory Panel (memory.js)
+// Orbital X — Project Memory & Knowledge Management Page (memory.js)
 //
-// I6: grouped by category with icons, full-text search, importance stars
-// (1-5, the agent injects high-importance entries first), relative age,
-// and bulk delete. Backed by the Rust MemoryService (memory.json).
+// Apple HIG & Antigravity polished architecture:
+// 1. Core Memory Cards Grid: search, category filter, in-place edit, delete,
+//    dynamic 1-5 star importance rating, and custom add form drawer.
+// 2. Information Directory & Dependencies: real-time dependency inspector
+//    (Cargo.toml, package.json, requirements.txt), detected entrypoints, and
+//    changelog library records.
+// 3. Architectural Graph: structural AST nodes, component hierarchy, and
+//    dependency relations via Semantic Graph Engine.
 // ==========================================================================
 
 import { state } from '../state/store.js';
@@ -12,17 +17,78 @@ import { showConfirmDialog } from '../services/dialogs.js';
 import { showToast } from '../services/notifications.js';
 
 const CATEGORY_META = {
-  architecture: { icon: '🏛️', label: 'Architecture' },
-  convention: { icon: '📏', label: 'Conventions' },
-  rule: { icon: '📋', label: 'Rules' },
-  instruction: { icon: '📝', label: 'Instructions' },
+  architecture: { icon: '🏛️', label: 'Architecture', color: 'var(--accent-purple)' },
+  convention: { icon: '📏', label: 'Conventions', color: 'var(--accent-cyan)' },
+  rule: { icon: '📋', label: 'Rules', color: 'var(--accent-orange)' },
+  instruction: { icon: '📝', label: 'Instructions', color: 'var(--accent-green)' },
+  decision: { icon: '🎯', label: 'Decisions', color: 'var(--accent-blue)' },
 };
 
 let memorySearchQuery = '';
+let modalSearchQuery = '';
+let modalCategoryFilter = 'all';
 const selectedMemoryIds = new Set();
+let isInitialized = false;
 
 export function initMemory() {
-  document.getElementById('btn-add-memory')?.addEventListener('click', addMemoryPrompt);
+  if (isInitialized) return;
+  isInitialized = true;
+
+  // Sidebar controls
+  document.getElementById('btn-add-memory')?.addEventListener('click', () => openMemoryDrawer());
+  document.getElementById('btn-open-memory-modal')?.addEventListener('click', openMemoryManagerModal);
+  document.getElementById('btn-open-memory-modal-icon')?.addEventListener('click', openMemoryManagerModal);
+
+  // Modal controls
+  const modal = document.getElementById('modal-memory-manager');
+  document.getElementById('btn-close-memory-modal')?.addEventListener('click', closeMemoryManagerModal);
+
+  // Modal Tab switching
+  const tabs = document.querySelectorAll('.memory-tab-btn');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const targetTab = tab.dataset.mtab;
+      switchModalTab(targetTab);
+    });
+  });
+
+  // Modal search & category filters
+  const modalSearch = document.getElementById('mem-modal-search');
+  modalSearch?.addEventListener('input', () => {
+    modalSearchQuery = modalSearch.value;
+    renderModalCoreMemories();
+  });
+
+  const modalCatFilter = document.getElementById('mem-modal-cat-filter');
+  modalCatFilter?.addEventListener('change', () => {
+    modalCategoryFilter = modalCatFilter.value;
+    renderModalCoreMemories();
+  });
+
+  // Modal Add Memory button
+  document.getElementById('mem-modal-add-btn')?.addEventListener('click', () => openMemoryDrawer());
+
+  // Drawer Form controls (replaces prompt() with Apple HIG in-place drawer)
+  document.getElementById('btn-close-mem-drawer')?.addEventListener('click', closeMemoryDrawer);
+  document.getElementById('btn-cancel-mem-drawer')?.addEventListener('click', closeMemoryDrawer);
+  document.getElementById('btn-save-mem-drawer')?.addEventListener('click', saveMemoryFromDrawer);
+
+  // Close modal on Escape
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const drawer = document.getElementById('memory-edit-drawer');
+      if (drawer && drawer.style.display !== 'none') {
+        closeMemoryDrawer();
+        return;
+      }
+      if (modal && modal.style.display !== 'none') {
+        closeMemoryManagerModal();
+      }
+    }
+  });
+
   refreshMemories();
 }
 
@@ -43,34 +109,24 @@ function relAge(timestamp) {
 }
 
 export async function refreshMemories() {
-  const host = document.getElementById('memory-list-container');
-  if (!host) return;
   try {
     const mems = await invoke('list_memories');
-    state.memories = mems || [];
+    state.memories = Array.isArray(mems) ? mems : [];
   } catch (e) {
     state.memories = [];
   }
-  renderMemoryPanel();
+  renderSidebarPanel();
+  renderModalCoreMemories();
 }
 
-function renderMemoryPanel() {
+// ---------------------------------------------------------------------------
+// Sidebar Memory Panel
+// ---------------------------------------------------------------------------
+
+function renderSidebarPanel() {
   const host = document.getElementById('memory-list-container');
   if (!host) return;
   host.innerHTML = '';
-
-  // Search box (I6)
-  const search = document.createElement('input');
-  search.type = 'text';
-  search.className = 'input-text';
-  search.placeholder = 'Search memories…';
-  search.value = memorySearchQuery;
-  search.style.cssText = 'width: 100%; font-size: 11px; margin-bottom: 8px;';
-  search.addEventListener('input', () => {
-    memorySearchQuery = search.value;
-    renderMemoryPanel();
-  });
-  host.appendChild(search);
 
   const memories = state.memories || [];
   const q = memorySearchQuery.trim().toLowerCase();
@@ -87,42 +143,17 @@ function renderMemoryPanel() {
     return;
   }
   if (filtered.length === 0) {
-    host.insertAdjacentHTML('beforeend', '<div class="pack-empty">No memories match your search.</div>');
+    host.insertAdjacentHTML('beforeend', '<div class="pack-empty" style="padding: 12px; font-size: 11px; color: var(--text-muted); text-align: center;">No memories match search.</div>');
     return;
   }
 
-  // Bulk delete bar when anything is selected
-  if (selectedMemoryIds.size > 0) {
-    const bulk = document.createElement('div');
-    bulk.style.cssText = 'display: flex; gap: 6px; margin-bottom: 8px;';
-    bulk.innerHTML = `
-      <button class="btn btn-danger btn-sm" id="mem-bulk-delete" style="flex: 1;">Delete selected (${selectedMemoryIds.size})</button>
-      <button class="btn btn-secondary btn-sm" id="mem-bulk-clear">Clear</button>
-    `;
-    bulk.querySelector('#mem-bulk-delete').addEventListener('click', async () => {
-      if (!confirm(`Delete ${selectedMemoryIds.size} memory entries?`)) return;
-      for (const id of [...selectedMemoryIds]) {
-        try { await invoke('delete_memory', { id }); } catch (e) { console.warn(e); }
-      }
-      selectedMemoryIds.clear();
-      showToast('Memories deleted', 'success', 2200);
-      refreshMemories();
-    });
-    bulk.querySelector('#mem-bulk-clear').addEventListener('click', () => {
-      selectedMemoryIds.clear();
-      renderMemoryPanel();
-    });
-    host.appendChild(bulk);
-  }
-
-  // Group by category (I6)
+  // Group by category
   const groups = new Map();
   for (const m of filtered) {
     const cat = m.category || 'instruction';
     if (!groups.has(cat)) groups.set(cat, []);
     groups.get(cat).push(m);
   }
-  // High importance first within groups
   for (const list of groups.values()) {
     list.sort((a, b) => (b.importance || 3) - (a.importance || 3));
   }
@@ -135,97 +166,500 @@ function renderMemoryPanel() {
     host.appendChild(header);
 
     for (const m of list) {
-      host.appendChild(memoryCard(m));
+      host.appendChild(sidebarMemoryCard(m));
     }
   }
 }
 
-function memoryCard(m) {
+function sidebarMemoryCard(m) {
   const card = document.createElement('div');
   card.className = 'pack-card';
   const importance = m.importance || 3;
 
   card.innerHTML = `
     <div class="pack-title-row">
-      <input type="checkbox" class="mem-select" title="Select for bulk delete" ${selectedMemoryIds.has(m.id) ? 'checked' : ''}>
       <span class="pack-name" title="${esc(m.title)}">${esc(m.title)}</span>
       <span class="pack-meta">${esc(relAge(m.timestamp))}</span>
     </div>
-    <div class="pack-desc">${esc((m.content || '').slice(0, 160))}${(m.content || '').length > 160 ? '…' : ''}</div>
-    <div class="pack-actions">
-      <span class="mem-stars" title="Importance — the agent injects high-importance entries first">
-        ${[1, 2, 3, 4, 5].map(i => `<span class="mem-star ${i <= importance ? 'on' : ''}" data-star="${i}">★</span>`).join('')}
+    <div class="pack-desc">${esc((m.content || '').slice(0, 140))}${(m.content || '').length > 140 ? '…' : ''}</div>
+    <div class="pack-actions" style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+      <span class="mem-stars" title="Importance — the agent prioritizes higher ratings">
+        ${[1, 2, 3, 4, 5].map(i => `<span class="mem-star ${i <= importance ? 'on' : ''}" data-star="${i}" style="color: ${i <= importance ? '#eab308' : 'rgba(255,255,255,0.15)'}; font-size: 11px; cursor: pointer;">★</span>`).join('')}
       </span>
-      <button class="btn btn-secondary btn-sm mem-view" style="padding: 1px 8px; font-size: 10px;">View</button>
-      <button class="btn btn-danger btn-sm mem-del" style="padding: 1px 8px; font-size: 10px;">Delete</button>
+      <div style="display: flex; gap: 4px;">
+        <button class="btn btn-secondary btn-sm mem-edit" style="padding: 1px 7px; font-size: 10px;">Edit</button>
+        <button class="btn btn-danger btn-sm mem-del" style="padding: 1px 7px; font-size: 10px;">✕</button>
+      </div>
     </div>
-    <div class="pack-detail mem-full" style="display: none;"></div>
   `;
 
-  card.querySelector('.mem-select')?.addEventListener('change', (e) => {
-    if (e.target.checked) selectedMemoryIds.add(m.id);
-    else selectedMemoryIds.delete(m.id);
-    renderMemoryPanel();
-  });
-
   card.querySelectorAll('.mem-star').forEach(star => {
-    star.style.cursor = 'pointer';
     star.addEventListener('click', async () => {
       const val = parseInt(star.dataset.star, 10);
-      try {
-        const res = await invoke('set_memory_importance', { id: m.id, importance: val });
-        if (res && res.success) {
-          m.importance = val;
-          renderMemoryPanel();
-        } else {
-          showToast(res?.error || 'Could not set importance', 'error', 2500);
-        }
-      } catch (e) {
-        showToast(`Failed: ${e}`, 'error', 2500);
-      }
+      await updateImportance(m.id, val);
     });
   });
 
-  card.querySelector('.mem-view')?.addEventListener('click', () => {
-    const full = card.querySelector('.mem-full');
-    if (full.style.display === 'none') {
-      full.style.display = 'block';
-      full.textContent = m.content || '';
-    } else {
-      full.style.display = 'none';
-    }
+  card.querySelector('.mem-edit')?.addEventListener('click', () => {
+    openMemoryDrawer(m);
   });
 
   card.querySelector('.mem-del')?.addEventListener('click', async () => {
     if (!(await showConfirmDialog('Delete Memory', `Delete memory "${m.title}"?`, 'Delete', true))) return;
-    try {
-      await invoke('delete_memory', { id: m.id });
-      selectedMemoryIds.delete(m.id);
-      showToast('Memory deleted', 'success', 1800);
-      refreshMemories();
-    } catch (e) {
-      showToast(`Delete failed: ${e}`, 'error', 2500);
-    }
+    deleteMemoryById(m.id);
   });
 
   return card;
 }
 
-async function addMemoryPrompt() {
-  const title = prompt('Memory title (e.g. "Build commands"):');
-  if (!title || !title.trim()) return;
-  const category = prompt('Category (architecture / convention / rule / instruction):', 'convention') || 'convention';
-  const content = prompt('Memory content:');
-  if (!content || !content.trim()) return;
-  try {
-    await invoke('save_memory_entry', {
-      category: category.trim(),
-      title: title.trim(),
-      content: content.trim(),
+// ---------------------------------------------------------------------------
+// Full Knowledge Directory Modal
+// ---------------------------------------------------------------------------
+
+export function openMemoryManagerModal() {
+  const modal = document.getElementById('modal-memory-manager');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  refreshMemories();
+  switchModalTab('core');
+}
+
+export function closeMemoryManagerModal() {
+  const modal = document.getElementById('modal-memory-manager');
+  if (modal) modal.style.display = 'none';
+  closeMemoryDrawer();
+}
+
+function switchModalTab(tabId) {
+  const panels = {
+    core: document.getElementById('memory-panel-core'),
+    info: document.getElementById('memory-panel-info'),
+    graph: document.getElementById('memory-panel-graph'),
+  };
+
+  Object.keys(panels).forEach(k => {
+    if (panels[k]) {
+      panels[k].style.display = k === tabId ? 'flex' : 'none';
+    }
+  });
+
+  if (tabId === 'core') {
+    renderModalCoreMemories();
+  } else if (tabId === 'info') {
+    renderInformationDirectory();
+  } else if (tabId === 'graph') {
+    renderArchitecturalGraph();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modal Tab 1: Core Memory Cards Grid
+// ---------------------------------------------------------------------------
+
+function renderModalCoreMemories() {
+  const grid = document.getElementById('memory-modal-cards-grid');
+  const countPill = document.getElementById('mem-modal-count-pill');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const memories = state.memories || [];
+  if (countPill) countPill.textContent = `${memories.length} item${memories.length === 1 ? '' : 's'}`;
+
+  const q = modalSearchQuery.trim().toLowerCase();
+  const catFilter = modalCategoryFilter;
+
+  const filtered = memories.filter(m => {
+    if (catFilter !== 'all' && (m.category || '').toLowerCase() !== catFilter.toLowerCase()) return false;
+    if (q) {
+      return (m.title || '').toLowerCase().includes(q) ||
+             (m.content || '').toLowerCase().includes(q) ||
+             (m.category || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // Sort: highest importance first, then newest
+  filtered.sort((a, b) => {
+    const diff = (b.importance || 3) - (a.importance || 3);
+    if (diff !== 0) return diff;
+    return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+  });
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 16px; color: var(--text-muted); text-align: center;">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="opacity: 0.4; margin-bottom: 12px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">No memories found</div>
+        <div style="font-size: 12px; max-width: 320px;">${memories.length === 0 ? 'Click "+ Add Memory" to store workspace rules, tech stack decisions, or conventions.' : 'No memories match your current search or category filter.'}</div>
+      </div>
+    `;
+    return;
+  }
+
+  for (const m of filtered) {
+    grid.appendChild(modalMemoryCard(m));
+  }
+}
+
+function modalMemoryCard(m) {
+  const card = document.createElement('div');
+  card.className = 'memory-modal-card';
+  card.style.cssText = 'background: rgba(22, 27, 34, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; transition: all 0.15s ease; box-shadow: 0 2px 8px rgba(0,0,0,0.15);';
+
+  const cat = m.category || 'convention';
+  const meta = CATEGORY_META[cat] || { icon: '🗂️', label: cat, color: 'var(--accent-cyan)' };
+  const importance = m.importance || 3;
+
+  card.innerHTML = `
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+        <span style="font-size: 13px;">${meta.icon}</span>
+        <span style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${esc(m.title)}">${esc(m.title)}</span>
+      </div>
+      <span style="font-size: 9.5px; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.05); color: ${meta.color}; font-weight: 600; text-transform: uppercase;">${esc(meta.label)}</span>
+    </div>
+
+    <div style="font-size: 11.5px; line-height: 1.5; color: var(--text-secondary); font-family: var(--font-mono, monospace); white-space: pre-wrap; word-break: break-word; background: rgba(0,0,0,0.25); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); flex: 1; max-height: 180px; overflow-y: auto;">${esc(m.content || '')}</div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; pt: 4px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 6px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="mem-stars" title="Click stars to set importance (1-5)" style="display: flex; gap: 2px;">
+          ${[1, 2, 3, 4, 5].map(i => `<span class="mem-modal-star ${i <= importance ? 'on' : ''}" data-star="${i}" style="color: ${i <= importance ? '#eab308' : 'rgba(255,255,255,0.15)'}; font-size: 13px; cursor: pointer; transition: transform 0.1s;">★</span>`).join('')}
+        </span>
+        <span style="font-size: 10px; color: var(--text-muted);">${esc(relAge(m.timestamp))}</span>
+      </div>
+
+      <div style="display: flex; gap: 6px;">
+        <button class="btn btn-secondary btn-sm btn-card-edit" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px;">Edit</button>
+        <button class="btn btn-danger btn-sm btn-card-del" style="font-size: 10.5px; padding: 3px 8px; border-radius: 5px;">Delete</button>
+      </div>
+    </div>
+  `;
+
+  card.querySelectorAll('.mem-modal-star').forEach(star => {
+    star.addEventListener('click', async () => {
+      const val = parseInt(star.dataset.star, 10);
+      await updateImportance(m.id, val);
     });
-    showToast('Memory saved', 'success', 1800);
-    refreshMemories();
+  });
+
+  card.querySelector('.btn-card-edit')?.addEventListener('click', () => {
+    openMemoryDrawer(m);
+  });
+
+  card.querySelector('.btn-card-del')?.addEventListener('click', async () => {
+    if (!(await showConfirmDialog('Delete Memory', `Delete memory "${m.title}"?`, 'Delete', true))) return;
+    deleteMemoryById(m.id);
+  });
+
+  return card;
+}
+
+async function updateImportance(id, importance) {
+  try {
+    const res = await invoke('set_memory_importance', { id, importance });
+    if (res && res.success) {
+      const item = (state.memories || []).find(x => x.id === id);
+      if (item) item.importance = importance;
+      renderSidebarPanel();
+      renderModalCoreMemories();
+    }
   } catch (e) {
-    showToast(`Save failed: ${e}`, 'error', 2500);
+    showToast(`Failed: ${e}`, 'error', 2000);
+  }
+}
+
+async function deleteMemoryById(id) {
+  try {
+    await invoke('delete_memory', { id });
+    selectedMemoryIds.delete(id);
+    state.memories = (state.memories || []).filter(x => x.id !== id);
+    showToast('Memory removed', 'success', 1800);
+    renderSidebarPanel();
+    renderModalCoreMemories();
+  } catch (e) {
+    showToast(`Delete failed: ${e}`, 'error', 2500);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Drawer Form (In-place modal overlay — replaces prompt())
+// ---------------------------------------------------------------------------
+
+function openMemoryDrawer(existing = null) {
+  const drawer = document.getElementById('memory-edit-drawer');
+  if (!drawer) return;
+
+  const titleHeader = document.getElementById('mem-drawer-title');
+  const idInput = document.getElementById('mem-edit-id');
+  const titleInput = document.getElementById('mem-edit-title');
+  const catSelect = document.getElementById('mem-edit-category');
+  const impSelect = document.getElementById('mem-edit-importance');
+  const contentInput = document.getElementById('mem-edit-content');
+
+  if (existing) {
+    if (titleHeader) titleHeader.textContent = 'Edit Durable Memory';
+    if (idInput) idInput.value = existing.id || '';
+    if (titleInput) titleInput.value = existing.title || '';
+    if (catSelect) catSelect.value = existing.category || 'convention';
+    if (impSelect) impSelect.value = String(existing.importance || 3);
+    if (contentInput) contentInput.value = existing.content || '';
+  } else {
+    if (titleHeader) titleHeader.textContent = 'Add Durable Memory';
+    if (idInput) idInput.value = '';
+    if (titleInput) titleInput.value = '';
+    if (catSelect) catSelect.value = 'convention';
+    if (impSelect) impSelect.value = '3';
+    if (contentInput) contentInput.value = '';
+  }
+
+  drawer.style.display = 'flex';
+  setTimeout(() => titleInput?.focus(), 50);
+}
+
+function closeMemoryDrawer() {
+  const drawer = document.getElementById('memory-edit-drawer');
+  if (drawer) drawer.style.display = 'none';
+}
+
+async function saveMemoryFromDrawer() {
+  const id = document.getElementById('mem-edit-id')?.value;
+  const title = document.getElementById('mem-edit-title')?.value?.trim();
+  const category = document.getElementById('mem-edit-category')?.value || 'convention';
+  const importance = parseInt(document.getElementById('mem-edit-importance')?.value || '3', 10);
+  const content = document.getElementById('mem-edit-content')?.value?.trim();
+
+  if (!title) {
+    showToast('Please enter a memory title', 'error', 2200);
+    document.getElementById('mem-edit-title')?.focus();
+    return;
+  }
+  if (!content) {
+    showToast('Please enter memory instructions/content', 'error', 2200);
+    document.getElementById('mem-edit-content')?.focus();
+    return;
+  }
+
+  try {
+    // If editing existing, delete old first
+    if (id) {
+      await invoke('delete_memory', { id });
+    }
+
+    const saved = await invoke('save_memory_entry', {
+      category,
+      title,
+      content,
+    });
+
+    if (saved && saved.id && importance !== 3) {
+      await invoke('set_memory_importance', { id: saved.id, importance });
+    }
+
+    showToast('✓ Memory saved to project store', 'success', 2200);
+    closeMemoryDrawer();
+    refreshMemories();
+  } catch (err) {
+    showToast(`Save failed: ${err}`, 'error', 3000);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modal Tab 2: Information Directory & Dependencies
+// ---------------------------------------------------------------------------
+
+async function renderInformationDirectory() {
+  const host = document.getElementById('info-directory-content');
+  if (!host) return;
+  host.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);"><span class="spinner"></span> Scanning project dependencies and information library…</div>';
+
+  try {
+    // 1. Fetch librarian directory records
+    const dirRecords = await invoke('get_information_directory', { query: '', category: null }).catch(() => []);
+    
+    // 2. Fetch dependencies directly by checking workspace root files
+    let packageJson = null;
+    let cargoToml = null;
+    let requirementsTxt = null;
+
+    try {
+      const res = await invoke('read_file', { path: 'package.json' });
+      if (res && res.content) packageJson = JSON.parse(res.content);
+    } catch (_) {}
+
+    try {
+      const res = await invoke('read_file', { path: 'Cargo.toml' });
+      if (res && res.content) cargoToml = res.content;
+    } catch (_) {}
+
+    try {
+      const res = await invoke('read_file', { path: 'requirements.txt' });
+      if (res && res.content) requirementsTxt = res.content;
+    } catch (_) {}
+
+    let html = '<div style="display: flex; flex-direction: column; gap: 16px; overflow-y: auto; max-height: calc(85vh - 180px); padding-right: 4px;">';
+
+    // Section 1: Detected Dependencies & Stack
+    html += `
+      <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+            <span>📦</span> Workspace Dependencies &amp; Toolchain
+          </div>
+          <span style="font-size: 10px; color: var(--text-muted); font-family: var(--font-mono, monospace);">Auto-detected</span>
+        </div>
+    `;
+
+    if (packageJson) {
+      const deps = packageJson.dependencies || {};
+      const devDeps = packageJson.devDependencies || {};
+      const allDepKeys = Object.keys(deps);
+      const allDevKeys = Object.keys(devDeps);
+
+      html += `
+        <div style="margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 600; color: var(--accent-cyan); margin-bottom: 6px;">Node.js / NPM Packages (${allDepKeys.length + allDevKeys.length})</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            ${allDepKeys.map(k => `<span style="font-size: 10.5px; font-family: var(--font-mono, monospace); background: rgba(57, 197, 187, 0.1); border: 1px solid rgba(57, 197, 187, 0.25); color: var(--accent-cyan); padding: 2px 7px; border-radius: 4px;">${esc(k)}@${esc(deps[k])}</span>`).join('')}
+            ${allDevKeys.map(k => `<span style="font-size: 10.5px; font-family: var(--font-mono, monospace); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-secondary); padding: 2px 7px; border-radius: 4px;">${esc(k)} (dev)</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (cargoToml) {
+      const lines = cargoToml.split('\n').filter(l => l.includes('=') && !l.trim().startsWith('#')).slice(0, 20);
+      html += `
+        <div style="margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 600; color: var(--accent-orange); margin-bottom: 6px;">Rust Crates (Cargo.toml)</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            ${lines.map(l => {
+              const [k, v] = l.split('=');
+              return `<span style="font-size: 10.5px; font-family: var(--font-mono, monospace); background: rgba(255, 159, 10, 0.1); border: 1px solid rgba(255, 159, 10, 0.25); color: var(--accent-orange); padding: 2px 7px; border-radius: 4px;">${esc(k.trim())}</span>`;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (requirementsTxt) {
+      const pyLines = requirementsTxt.split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+      html += `
+        <div style="margin-bottom: 10px;">
+          <div style="font-size: 11px; font-weight: 600; color: var(--accent-green); margin-bottom: 6px;">Python Packages (requirements.txt)</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 5px;">
+            ${pyLines.map(l => `<span style="font-size: 10.5px; font-family: var(--font-mono, monospace); background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.25); color: var(--accent-green); padding: 2px 7px; border-radius: 4px;">${esc(l)}</span>`).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    if (!packageJson && !cargoToml && !requirementsTxt) {
+      html += `<div style="font-size: 11px; color: var(--text-muted);">No package manifests found at workspace root.</div>`;
+    }
+
+    html += `</div>`;
+
+    // Section 2: Historical Changelogs & Information Directory
+    html += `
+      <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
+        <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+          <span>📚</span> Knowledge Library Records &amp; Changelogs (${Array.isArray(dirRecords) ? dirRecords.length : 0})
+        </div>
+    `;
+
+    if (Array.isArray(dirRecords) && dirRecords.length > 0) {
+      html += '<div style="display: flex; flex-direction: column; gap: 8px;">';
+      for (const rec of dirRecords) {
+        html += `
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.04); border-radius: 6px; padding: 10px 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+              <span style="font-size: 12px; font-weight: 600; color: var(--text-primary);">${esc(rec.title || rec.id)}</span>
+              <span style="font-size: 9.5px; color: var(--accent-purple); text-transform: uppercase; font-weight: 600;">${esc(rec.source || 'Knowledge')}</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.45; font-family: var(--font-mono, monospace); white-space: pre-wrap;">${esc((rec.content || '').slice(0, 300))}${(rec.content || '').length > 300 ? '…' : ''}</div>
+          </div>
+        `;
+      }
+      html += '</div>';
+    } else {
+      html += `<div style="font-size: 11.5px; color: var(--text-muted); padding: 8px 0;">No changelog markdown files found in \`changelogs/\`. As the agent completes milestones, records are stored here automatically.</div>`;
+    }
+
+    html += `</div></div>`;
+    host.innerHTML = html;
+  } catch (err) {
+    host.innerHTML = `<div style="color: var(--accent-red); padding: 16px;">Failed to load information directory: ${err}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modal Tab 3: Architectural Graph
+// ---------------------------------------------------------------------------
+
+async function renderArchitecturalGraph() {
+  const host = document.getElementById('arch-graph-content');
+  if (!host) return;
+  host.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);"><span class="spinner"></span> Querying Semantic Graph Engine…</div>';
+
+  try {
+    const stats = await invoke('graph_get_stats').catch(() => null);
+    const focused = await invoke('graph_get_focused_context', { activeFile: state.editor?.activeTabPath || '' }).catch(() => null);
+
+    let html = `
+      <div style="display: flex; flex-direction: column; gap: 14px; overflow-y: auto; max-height: calc(85vh - 180px); padding-right: 4px;">
+        <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span>🕸️</span> Semantic Graph Architecture Summary
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 10px;">
+            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Indexed Files</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--accent-cyan); margin-top: 2px;">${stats?.file_count ?? stats?.indexed_files ?? 'Active'}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Symbols &amp; AST Nodes</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--accent-purple); margin-top: 2px;">${stats?.symbol_count ?? 'Computed'}</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.25); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.04);">
+              <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Graph Edges / Calls</div>
+              <div style="font-size: 18px; font-weight: 700; color: var(--accent-green); margin-top: 2px;">${stats?.edge_count ?? 'Indexed'}</div>
+            </div>
+          </div>
+        </div>
+    `;
+
+    if (focused && focused.components) {
+      html += `
+        <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 14px 16px;">
+          <div style="font-weight: 700; font-size: 13px; color: var(--text-primary); margin-bottom: 8px;">Key Components &amp; Entrypoints</div>
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            ${(focused.components || []).map(c => `
+              <div style="font-size: 11px; font-family: var(--font-mono, monospace); color: var(--text-secondary); background: rgba(0,0,0,0.2); padding: 6px 8px; border-radius: 4px;">${esc(c)}</div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    html += `
+        <div style="background: rgba(57, 197, 187, 0.05); border: 1px solid rgba(57, 197, 187, 0.2); border-radius: 8px; padding: 12px 14px; font-size: 11.5px; color: var(--text-secondary); display: flex; align-items: center; justify-content: space-between;">
+          <span>💡 Semantic Code Graph continuously indexes symbols and call hierarchies in background.</span>
+          <button class="btn btn-secondary btn-sm" id="btn-reindex-graph" style="font-size: 10.5px; padding: 3px 8px;">Re-index Workspace</button>
+        </div>
+      </div>
+    `;
+
+    host.innerHTML = html;
+    document.getElementById('btn-reindex-graph')?.addEventListener('click', async () => {
+      showToast('Re-indexing semantic AST code graph…', 'info', 2200);
+      try {
+        await invoke('query_code_graph', { query: 'reindex', mode: 'all' });
+        showToast('✓ Code graph index refreshed', 'success', 2000);
+        renderArchitecturalGraph();
+      } catch (_) {}
+    });
+  } catch (err) {
+    host.innerHTML = `<div style="color: var(--accent-red); padding: 16px;">Failed to load architectural graph: ${err}</div>`;
   }
 }

@@ -385,6 +385,7 @@ impl PolicyEngine {
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"
+                    | "query_information_directory" | "set_working_directory" | "get_working_directory"
                     | "update_task_status"
                     // External research — read-only, returns clearly-labelled
                     // untrusted reference data
@@ -470,6 +471,7 @@ impl PolicyEngine {
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff" | "git_log"
+                    | "query_information_directory" | "set_working_directory" | "get_working_directory"
                     | "get_diagnostics" | "validate_changes" | "update_task_status"
                     | "web_search" | "fetch_page"
                     | "list_skills" | "read_skill" => {
@@ -594,6 +596,7 @@ impl PolicyEngine {
                     | "read_file_lines" | "read_multiple_files" | "find_symbol"
                     | "get_project_structure" | "get_project_map" | "search_context"
                     | "search_project_memory" | "list_memories" | "git_status" | "git_diff"
+                    | "query_information_directory" | "set_working_directory" | "get_working_directory"
                     | "web_search" | "fetch_page" | "list_skills" | "read_skill" => {
                         PolicyDecision {
                             allowed: true,

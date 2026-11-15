@@ -25,10 +25,15 @@ export function initChatSessions() {
   loadSessions();
 
   const btnNewChat = document.getElementById('btn-new-chat');
+  const welcomeBtnNewChat = document.getElementById('welcome-btn-new-chat');
   const btnHistory = document.getElementById('btn-chat-history');
   const titleElem = document.getElementById('agent-session-title');
 
   btnNewChat?.addEventListener('click', () => {
+    createNewSession();
+  });
+
+  welcomeBtnNewChat?.addEventListener('click', () => {
     createNewSession();
   });
 

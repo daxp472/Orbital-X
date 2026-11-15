@@ -579,6 +579,34 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
         {
             "type": "function",
             "function": {
+                "name": "set_working_directory",
+                "description": "Set the agent's active sub-working directory relative to workspace root (e.g. 'src/frontend' or 'backend'). Future terminal commands, file reads, and searches will be scoped to this directory. Call with '.' or empty string to reset back to root.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Relative path of sub-folder to focus on (e.g. 'frontend', 'crates/core', '.')"
+                        }
+                    },
+                    "required": ["directory"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_working_directory",
+                "description": "Get the current scoped active working directory and root directory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "undo_agent_change",
                 "description": "Undo the most recent agent file modification (write, patch, or delete), restoring the previous state.",
                 "parameters": {
