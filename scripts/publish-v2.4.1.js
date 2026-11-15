@@ -125,6 +125,22 @@ async function main() {
     {
       name: 'orbital-x.exe',
       path: path.resolve('release/orbital-x.exe')
+    },
+    {
+      name: 'Orbital.X_2.4.1_aarch64.dmg',
+      path: path.resolve('release/Orbital.X_2.4.1_aarch64.dmg')
+    },
+    {
+      name: 'Orbital.X_aarch64.app.tar.gz',
+      path: path.resolve('release/Orbital.X_aarch64.app.tar.gz')
+    },
+    {
+      name: 'Orbital.X_2.4.1_amd64.AppImage',
+      path: path.resolve('release/Orbital.X_2.4.1_amd64.AppImage')
+    },
+    {
+      name: 'Orbital.X_2.4.1_amd64.deb',
+      path: path.resolve('release/Orbital.X_2.4.1_amd64.deb')
     }
   ];
 
