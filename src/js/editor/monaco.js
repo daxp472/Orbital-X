@@ -244,6 +244,7 @@ function detectModelIndent(model) {
 
 const TAB_SESSION_KEY = 'orbital_editor_session_v1';
 let persistTimer = null;
+let draftPersistTimer = null;
 
 function scheduleTabPersist() {
   clearTimeout(persistTimer);
@@ -264,12 +265,157 @@ function persistTabSession() {
   } catch (e) { /* best effort */ }
 }
 
+export function startDraftRecoveryTimer() {
+  if (draftPersistTimer) clearInterval(draftPersistTimer);
+  draftPersistTimer = setInterval(persistDirtyDraftsToDisk, 3000);
+}
+
+export async function persistDirtyDraftsToDisk() {
+  const allTabs = [];
+  const collect = (tabs, panel) => {
+    for (const t of tabs) {
+      const model = editorModels.get(t.path);
+      const content = model ? model.getValue() : (t.content || '');
+      const isDirty = tabDirtyMap.has(t.id) ? tabDirtyMap.get(t.id) : (t.isDirty || false);
+      const editor = panel === 'left' ? editors.left : editors.right;
+      let cursor_line = 1;
+      let cursor_column = 1;
+      if (editor && panelState(panel).activeTabId === t.id) {
+        const pos = editor.getPosition();
+        if (pos) {
+          cursor_line = pos.lineNumber;
+          cursor_column = pos.column;
+        }
+      }
+      allTabs.push({
+        path: t.path,
+        name: t.name,
+        content,
+        is_dirty: !!isDirty,
+        is_pinned: !!t.isPinned,
+        cursor_line,
+        cursor_column,
+        panel
+      });
+    }
+  };
+
+  collect(state.editor.tabs || [], 'left');
+  if (state.editor.splitMode && state.editor.rightTabs) {
+    collect(state.editor.rightTabs, 'right');
+  }
+
+  const hasDirty = allTabs.some(t => t.is_dirty);
+  if (!hasDirty && allTabs.length === 0) {
+    invoke('clear_editor_drafts').catch(() => {});
+    return;
+  }
+
+  const leftActive = state.editor.tabs?.find(t => t.id === state.editor.activeTabId);
+  const rightActive = state.editor.rightTabs?.find(t => t.id === state.editor.rightActiveTabId);
+
+  const session = {
+    active_tab_left: leftActive?.path || null,
+    active_tab_right: rightActive?.path || null,
+    split_mode: !!state.editor.splitMode,
+    tabs: allTabs,
+    saved_at: Date.now()
+  };
+
+  try {
+    await invoke('save_editor_drafts', { session });
+  } catch (e) {
+    // best-effort
+  }
+}
+
 export async function restoreEditorSession() {
+  // 1. Try restoring crash-safe draft session from .orbital/drafts/
+  try {
+    const draftSession = await invoke('load_editor_drafts');
+    if (draftSession && Array.isArray(draftSession.tabs) && draftSession.tabs.length > 0) {
+      let restoredDirtyCount = 0;
+      if (draftSession.split_mode) {
+        openSplitRight();
+      }
+
+      for (const dTab of draftSession.tabs) {
+        const panel = dTab.panel || 'left';
+        const fileData = {
+          path: dTab.path,
+          name: dTab.name,
+          relative_path: dTab.name,
+          content: dTab.content,
+          is_binary: false,
+          language: detectLanguage(dTab.name)
+        };
+        openFileInTab(fileData, { panel, silent: true });
+        const p = panelState(panel);
+        const t = p.tabs.find(x => x.path === dTab.path);
+        if (t) {
+          if (dTab.is_pinned) t.isPinned = true;
+          if (dTab.is_dirty) {
+            tabDirtyMap.set(t.id, true);
+            t.isDirty = true;
+            restoredDirtyCount++;
+            // Fetch clean disk original to preserve accurate dirty diff
+            invoke('read_file', { path: dTab.path }).then(orig => {
+              if (orig && typeof orig.content === 'string') {
+                t.originalContent = orig.content;
+              }
+            }).catch(() => {});
+          }
+        }
+      }
+
+      if (draftSession.active_tab_left) {
+        const t = panelState('left').tabs.find(x => x.path === draftSession.active_tab_left);
+        if (t) {
+          switchToTab(t.id, 'left');
+          const dTab = draftSession.tabs.find(x => x.path === draftSession.active_tab_left);
+          if (dTab && editors.left && dTab.cursor_line) {
+            setTimeout(() => {
+              editors.left.setPosition({ lineNumber: dTab.cursor_line, column: dTab.cursor_column || 1 });
+              editors.left.revealPositionInCenter({ lineNumber: dTab.cursor_line, column: dTab.cursor_column || 1 });
+            }, 100);
+          }
+        }
+      }
+
+      if (draftSession.active_tab_right && state.editor.splitMode) {
+        const t = panelState('right').tabs.find(x => x.path === draftSession.active_tab_right);
+        if (t) {
+          switchToTab(t.id, 'right');
+          const dTab = draftSession.tabs.find(x => x.path === draftSession.active_tab_right);
+          if (dTab && editors.right && dTab.cursor_line) {
+            setTimeout(() => {
+              editors.right.setPosition({ lineNumber: dTab.cursor_line, column: dTab.cursor_column || 1 });
+              editors.right.revealPositionInCenter({ lineNumber: dTab.cursor_line, column: dTab.cursor_column || 1 });
+            }, 100);
+          }
+        }
+      }
+
+      renderTabs('left');
+      renderTabs('right');
+      startDraftRecoveryTimer();
+      if (restoredDirtyCount > 0) {
+        showToast(`⚡ Crash Recovery: Restored ${restoredDirtyCount} unsaved tab draft${restoredDirtyCount > 1 ? 's' : ''}`, 'info', 3500);
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn('Draft recovery skipped, falling back to localStorage session:', e);
+  }
+
   let saved;
   try {
     saved = JSON.parse(localStorage.getItem(TAB_SESSION_KEY) || 'null');
   } catch (e) { saved = null; }
-  if (!saved || !saved.left) return;
+  if (!saved || !saved.left) {
+    startDraftRecoveryTimer();
+    return;
+  }
 
   const openPanel = async (data, panel) => {
     if (!data || !Array.isArray(data.paths)) return;
@@ -301,6 +447,7 @@ export async function restoreEditorSession() {
   renderTabs('left');
   renderTabs('right');
   persistTabSession();
+  startDraftRecoveryTimer();
 }
 
 // ---------------------------------------------------------------------------

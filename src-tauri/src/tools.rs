@@ -380,6 +380,35 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
                         "timeout_seconds": {
                             "type": "integer",
                             "description": "Max execution time in seconds (default 60, use 120 for npm install, 90 for builds)"
+                        },
+                        "slot": {
+                            "type": "integer",
+                            "description": "Which agent terminal to run in (1, 2, or 3). Default is 1."
+                        },
+                        "purpose": {
+                            "type": "string",
+                            "description": "Brief tag describing purpose (e.g. 'Build', 'Test', 'Git', 'Database', 'Script')"
+                        }
+                    },
+                    "required": ["command"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "suggest_user_terminal_command",
+                "description": "Send a shell command directly into the user's interactive terminal for them to inspect and run (or ask the user to execute it in their own terminal). Opens the terminal panel and populates the prompt.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "Command to suggest to the user terminal (e.g. 'git push origin main' or 'npm run dev')"
+                        },
+                        "explanation": {
+                            "type": "string",
+                            "description": "Short explanation of why this command is needed"
                         }
                     },
                     "required": ["command"]

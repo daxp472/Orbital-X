@@ -308,10 +308,11 @@ class TerminalSession {
   tabTitle() {
     if (this.isAgent) {
       const slot = this.agentSlot || 1;
+      const purposeTag = this.purpose ? ` · ${this.purpose}` : '';
       const status = this.isRunning
         ? (this.runningCmd ? ` (● ${this.runningCmd.slice(0, 14)}…)` : ' (● Running)')
         : ' (Idle)';
-      return `🤖 Agent ${slot}${status}`;
+      return `🤖 Agent ${slot}${purposeTag}${status}`;
     }
     const isCmd = /cmd\.exe|cmd$/i.test(this.shell);
     const isPwsh = /powershell/i.test(this.shell);
@@ -1554,7 +1555,7 @@ async function handleTabCompletion(inputElem) {
 // Dedicated AI Terminals (Up to 3: 🤖 Agent 1, 🤖 Agent 2, 🤖 Agent 3)
 // ===========================================================================
 
-export function getOrCreateAgentTerminal(slot = 1) {
+export function getOrCreateAgentTerminal(slot = 1, purpose = '') {
   const safeSlot = Math.min(Math.max(1, slot), 3);
   let term = terminalInstances.find(t => t.isAgent && t.agentSlot === safeSlot);
   if (!term) {
@@ -1563,10 +1564,13 @@ export function getOrCreateAgentTerminal(slot = 1) {
     term = new TerminalSession(nextId, defaultProfile.shell, 'A');
     term.isAgent = true;
     term.agentSlot = safeSlot;
+    term.purpose = purpose || `Slot ${safeSlot}`;
     term.name = `🤖 Agent ${safeSlot}`;
     terminalInstances.push(term);
     term.startBackendShell();
     renderPanes();
+  } else if (purpose) {
+    term.purpose = purpose;
   }
   return term;
 }
@@ -1578,6 +1582,7 @@ export function isCriticalCommand(command) {
     /\bgit\s+push\b/,
     /\bgit\s+reset\s+--hard\b/,
     /\bgit\s+clean\s+-f/,
+    /\bgit\s+checkout\s+--\s+\./,
     /\brm\s+-rf\s+[\/~]/,
     /\bformat\s+[a-z]:/i,
     /\bsudo\s+/,
@@ -1586,7 +1591,7 @@ export function isCriticalCommand(command) {
   return criticalPatterns.some(re => re.test(c));
 }
 
-export async function sendCommandToUserTerminal(command) {
+export async function sendCommandToUserTerminal(command, explanation = '') {
   const userTerm = terminalInstances.find(t => !t.isAgent) || terminalInstances[0];
   if (!userTerm) return;
   const bottomPanel = document.getElementById('bottom-panel');
@@ -1599,30 +1604,43 @@ export async function sendCommandToUserTerminal(command) {
     inputA.value = command;
     inputA.focus();
   }
-  showToast(`Sent to user terminal (${userTerm.name}): ready to inspect and press Enter`, 'info', 3000);
+  const expText = explanation ? ` (${explanation})` : '';
+  showToast(`Sent to user terminal: ${command}${expText} — press Enter to run`, 'info', 4000);
 }
 
-export async function executeAgentTerminalCommand(command, cwd = null, slot = 1) {
-  const term = getOrCreateAgentTerminal(slot);
+export async function executeAgentTerminalCommand(command, cwd = null, slot = 1, purpose = 'Task') {
+  const safeSlot = Math.min(Math.max(1, slot), 3);
+  const term = getOrCreateAgentTerminal(safeSlot, purpose);
   term.isRunning = true;
   term.runningCmd = command;
+  term.purpose = purpose;
+
+  // Reveal bottom panel & switch to active agent terminal
+  const bottomPanel = document.getElementById('bottom-panel');
+  if (bottomPanel) bottomPanel.classList.remove('collapsed');
+  const termTab = document.querySelector('.panel-tab[data-tab="terminal"]');
+  termTab?.click();
+  switchTerminalInstance(term.id);
   renderPanes();
 
   const formattedCwd = cwd || state.workspace.rootPath || '';
-  term.buffer += `\r\n\x1b[36m🤖 [AI Terminal - Agent ${slot}]\x1b[0m \x1b[90m(${formattedCwd})\x1b[0m\r\n\x1b[32m$ ${command}\x1b[0m\r\n`;
+  term.buffer += `\r\n\x1b[36m🤖 [Agent ${safeSlot} - ${purpose}]\x1b[0m \x1b[90m(${formattedCwd})\x1b[0m\r\n\x1b[32m$ ${command}\x1b[0m\r\n`;
   renderPanes();
 
   try {
     const res = await invoke('run_command', {
       command,
       cwd: formattedCwd,
-      timeoutSeconds: 60,
+      timeoutSeconds: 90,
     });
     if (res.stdout) {
       term.buffer += res.stdout;
     }
     if (res.stderr) {
       term.buffer += `\x1b[31m${res.stderr}\x1b[0m`;
+    }
+    if (res.exit_code !== undefined && res.exit_code !== 0) {
+      term.buffer += `\r\n\x1b[31m[Process exited with code ${res.exit_code}]\x1b[0m\r\n`;
     }
     term.isRunning = false;
     term.runningCmd = null;

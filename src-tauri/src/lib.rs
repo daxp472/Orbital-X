@@ -1557,6 +1557,16 @@ async fn execute_tool(
                 "absolute_path": abs
             }))
         }
+        "suggest_user_terminal_command" => {
+            let cmd = arguments.get("command").and_then(|c| c.as_str()).ok_or("Missing command")?;
+            let explanation = arguments.get("explanation").and_then(|e| e.as_str()).unwrap_or("User requested action");
+            Ok(serde_json::json!({
+                "success": true,
+                "command": cmd,
+                "explanation": explanation,
+                "note": "Command sent to user interactive terminal for review and execution."
+            }))
+        }
         "run_tests" => {
             let (cmd, cwd) = {
                 let ws = state.workspace.lock().map_err(|e| e.to_string())?;
@@ -2029,6 +2039,87 @@ fn list_memories(state: State<'_, AppState>) -> Result<serde_json::Value, String
         }
         None => Ok(serde_json::json!([])),
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EditorDraftTab {
+    pub path: String,
+    pub name: String,
+    pub content: String,
+    pub is_dirty: bool,
+    pub is_pinned: bool,
+    pub cursor_line: u32,
+    pub cursor_column: u32,
+    pub panel: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EditorDraftSession {
+    pub active_tab_left: Option<String>,
+    pub active_tab_right: Option<String>,
+    pub split_mode: bool,
+    pub tabs: Vec<EditorDraftTab>,
+    pub saved_at: i64,
+}
+
+#[tauri::command]
+fn save_editor_drafts(
+    session: EditorDraftSession,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = match ws.get_root() {
+        Some(r) => r,
+        None => dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("orbital-x"),
+    };
+    let drafts_dir = root.join(".orbital").join("drafts");
+    let _ = std::fs::create_dir_all(&drafts_dir);
+    let session_file = drafts_dir.join("session.json");
+    let json_bytes = serde_json::to_vec_pretty(&session).map_err(|e| e.to_string())?;
+    std::fs::write(&session_file, json_bytes).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn load_editor_drafts(
+    state: State<'_, AppState>,
+) -> Result<Option<EditorDraftSession>, String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = match ws.get_root() {
+        Some(r) => r,
+        None => dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("orbital-x"),
+    };
+    let session_file = root.join(".orbital").join("drafts").join("session.json");
+    if session_file.exists() {
+        if let Ok(bytes) = std::fs::read(&session_file) {
+            if let Ok(sess) = serde_json::from_slice::<EditorDraftSession>(&bytes) {
+                return Ok(Some(sess));
+            }
+        }
+    }
+    Ok(None)
+}
+
+#[tauri::command]
+fn clear_editor_drafts(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let ws = state.workspace.lock().map_err(|e| e.to_string())?;
+    let root = match ws.get_root() {
+        Some(r) => r,
+        None => dirs::data_local_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join("orbital-x"),
+    };
+    let session_file = root.join(".orbital").join("drafts").join("session.json");
+    if session_file.exists() {
+        let _ = std::fs::remove_file(session_file);
+    }
+    Ok(())
 }
 
 /// Sets the importance (1-5) of a memory entry — agent prompt injection
@@ -3216,7 +3307,10 @@ pub fn run() {
             record_agent_turn_end,
             list_agent_turns,
             get_agent_turn_diff,
-            time_travel_rollback
+            time_travel_rollback,
+            save_editor_drafts,
+            load_editor_drafts,
+            clear_editor_drafts
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

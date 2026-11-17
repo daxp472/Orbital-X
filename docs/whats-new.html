@@ -3,43 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>What's New in Orbital X v2.4.1 — Release Highlights &amp; Features</title>
-  <meta name="description" content="Explore the new features in Orbital X v2.4.1: High-Speed Inline Code Suggestions (<2s latency), Screenshot-to-Agent Multimodal Intelligence, Transactional VFS Code Review, Dedicated OX Error Framework, and Apple HIG Notifications.">
-  <link rel="icon" type="image/png" href="favicon.png">
+  <title>What's New in Orbital X v2.4.2 — Release Highlights</title>
+  <meta name="description" content="Explore what's new in Orbital X v2.4.2: Multi-Slot Agent Terminals, Crash-Safe Draft Recovery, 60s Guided Tour & Sample Project, Zero-Freeze Large Repo AST Guardrails, and Conversational Continuity.">
+  <link rel="icon" type="image/png" href="logo.png">
   <link rel="stylesheet" href="style.css">
-  <meta property="og:title" content="What's New in Orbital X v2.4.1">
-  <meta property="og:description" content="High-speed inline code suggestions, visual multimodal intelligence, transactional VFS in-editor review, and structured error handling.">
+  <meta property="og:title" content="What's New in Orbital X v2.4.2 — Release Highlights">
+  <meta property="og:description" content="Multi-Slot Agent Terminals, Crash-Safe Draft Recovery, 60s Guided Tour & Sample Project, Zero-Freeze Large Repos, and Copilot Grounding.">
   <meta property="og:image" content="https://daxp472.github.io/Orbital-X/logo.png">
-  <meta property="og:type" content="website">
-  <meta name="theme-color" content="#07090e">
 </head>
 <body>
-
-  <!-- Navigation -->
+  <!-- Navigation Header -->
   <nav class="navbar">
-    <div class="container" style="display: flex; align-items: center; justify-content: space-between;">
-      <a href="index.html" class="nav-brand" style="display: flex; align-items: center; gap: 10px; text-decoration: none;">
-        <img src="logo.png" alt="Orbital X" style="width: 28px; height: 28px; border-radius: 50%;">
-        <span style="font-weight: 700; color: #fff; font-size: 1.05rem;">Orbital X</span>
-        <span class="nav-version-pill" data-gh-tag>v2.4.1</span>
+    <div class="container nav-content">
+      <a href="index.html" class="brand">
+        <img src="logo.png" alt="Orbital X" class="brand-logo">
+        <span class="brand-text">Orbital X</span>
+        <span class="nav-version-pill" data-gh-tag>v2.4.2</span>
       </a>
-
-      <ul class="nav-links">
-        <li><a href="index.html#features">Features</a></li>
-        <li><a href="whats-new.html" style="color: var(--accent-cyan);">Updates</a></li>
-        <li><a href="download.html">Download</a></li>
-        <li><a href="docs.html">Docs</a></li>
-        <li><a href="index.html#models">Hardware</a></li>
-      </ul>
-
-      <div class="nav-actions">
-        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="btn btn-secondary btn-sm nav-btn-gh" title="GitHub Repository">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <div class="nav-links">
+        <a href="index.html">Home</a>
+        <a href="whats-new.html" class="active">What's New</a>
+        <a href="download.html">Download</a>
+        <a href="docs.html">Documentation</a>
+        <a href="https://github.com/daxp472/Orbital-X" target="_blank" rel="noopener" class="nav-github-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
           </svg>
-          <span>GitHub</span>
+          GitHub
         </a>
-        <a href="download.html" class="btn btn-primary btn-sm">Download</a>
       </div>
     </div>
   </nav>
@@ -49,19 +40,19 @@
     <div class="container">
       <div class="download-os-pill">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        <span>Release Highlights • <strong data-gh-tag>v2.4.1</strong></span>
+        <span>Release Highlights • <strong data-gh-tag>v2.4.2</strong></span>
       </div>
 
       <h1 style="font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px;">
-        What's New in Orbital X v2.4.1
+        What's New in Orbital X v2.4.2
       </h1>
       <p style="font-size: 1.15rem; color: var(--text-secondary); max-width: 720px; margin: 0 auto;">
-        Welcome to Orbital X v2.4.1. This release delivers high-speed inline code suggestions (<2s latency), screenshot-to-agent multimodal intelligence, transactional VFS in-editor diff review, dedicated structured error handling, and Apple HIG notification center design.
+        Welcome to Orbital X v2.4.2. This release introduces dedicated multi-slot agent terminals (Slots 1, 2, 3), crash-safe Monaco draft persistence, first-launch 60-second guided onboarding with sample testing suite, zero-freeze AST large repository guardrails, and conversational follow-up grounding.
       </p>
 
       <div style="display: flex; justify-content: center; gap: 14px; margin-top: 30px;">
-        <a href="download.html" class="btn btn-primary" style="padding: 12px 24px;">Download v2.4.1</a>
-        <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.4.1" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 12px 24px;">View on GitHub ↗</a>
+        <a href="download.html" class="btn btn-primary" style="padding: 12px 24px;">Download v2.4.2</a>
+        <a href="https://github.com/daxp472/Orbital-X/releases/tag/v2.4.2" target="_blank" rel="noopener" class="btn btn-secondary" style="padding: 12px 24px;">View on GitHub ↗</a>
       </div>
     </div>
   </header>
@@ -70,7 +61,119 @@
   <main class="container whatsnew-section">
     <div class="whatsnew-grid">
 
-      <!-- Feature 1: High-Speed Inline Code Suggestions -->
+      <!-- Feature 1: Multi-Slot Agent Terminals -->
+      <div class="whatsnew-card">
+        <div>
+          <div class="whatsnew-header">
+            <div class="whatsnew-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 17 10 11 4 5"></polyline>
+                <line x1="12" y1="19" x2="20" y2="19"></line>
+              </svg>
+            </div>
+            <div>
+              <div class="whatsnew-pill">Terminal Execution &amp; Visibility</div>
+              <div class="whatsnew-title">Dedicated Multi-Slot Agent Terminals (1, 2, 3)</div>
+            </div>
+          </div>
+
+          <div class="whatsnew-points">
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What's New:</span>
+              <span>Dedicated concurrent agent terminals (<code>🤖 Agent 1</code>, <code>🤖 Agent 2</code>, <code>🤖 Agent 3</code>) with dynamic purpose badges (<code>Build</code>, <code>Test Suite</code>, <code>Git Action</code>) and active process indicators.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What Changed:</span>
+              <span>Bottom terminal drawer automatically opens and focuses the active agent slot during command execution. Added 1-click <code>[⏹ Kill]</code> button and security approval checks for critical Git commands (<code>git push</code>, <code>git reset --hard</code>).</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">How It Helps:</span>
+              <span>Observe live terminal outputs and compilation logs in real time as the agent executes commands, with complete control to interrupt runaway commands at any moment.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">Why It Matters:</span>
+              <span>Full execution transparency and ironclad safety guardrails preventing unintentional repository disruptions.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 2: Crash-Safe Session & Draft Recovery -->
+      <div class="whatsnew-card">
+        <div>
+          <div class="whatsnew-header">
+            <div class="whatsnew-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+            </div>
+            <div>
+              <div class="whatsnew-pill">Crash Resilience</div>
+              <div class="whatsnew-title">Crash-Safe Session &amp; Draft Recovery</div>
+            </div>
+          </div>
+
+          <div class="whatsnew-points">
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What's New:</span>
+              <span>Automatic background persistence of unsaved Monaco buffers, tab active states, dirty indicators, and cursor positions every 3 seconds to <code>.orbital/drafts/session.json</code>.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What Changed:</span>
+              <span>On startup, the IDE detects any unclean shutdown or power cut and safely rehydrates dirty editor models with an unobtrusive recovery notification.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">How It Helps:</span>
+              <span>Never lose code edits, architectural notes, or draft functions during unexpected battery depletion or OS reboots.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">Why It Matters:</span>
+              <span>Mission-critical peace of mind for deep flow programming sessions without constant manual saving.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 3: 60-Second Guided Tour & Sample Project -->
+      <div class="whatsnew-card">
+        <div>
+          <div class="whatsnew-header">
+            <div class="whatsnew-icon-box">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polygon points="10 8 16 12 10 16 10 8"></polygon>
+              </svg>
+            </div>
+            <div>
+              <div class="whatsnew-pill">Onboarding &amp; Getting Started</div>
+              <div class="whatsnew-title">60-Second Guided Tour &amp; Interactive Sample</div>
+            </div>
+          </div>
+
+          <div class="whatsnew-points">
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What's New:</span>
+              <span>Interactive 5-step guided walkthrough highlighting key IDE controls: Agent Chat (<code>Ctrl+L</code>), Memory &amp; Knowledge (<code>Ctrl+Shift+M</code>), Terminals (<code>Ctrl+`</code>), and Monaco Diff Review.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">What Changed:</span>
+              <span>Auto-detects Ollama daemon status; provides 1-click <code>⚡ Pull Recommended Model (qwen2.5-coder:7b)</code> and 1-click <code>🚀 Launch Interactive Sample Project</code>.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">How It Helps:</span>
+              <span>Spins up a lightweight <code>calculator.js</code> and unit test suite in seconds, pre-populating an agent task so you can test features instantly.</span>
+            </div>
+            <div class="whatsnew-point-row">
+              <span class="whatsnew-point-label">Why It Matters:</span>
+              <span>Enables new developers to experience private local AI code generation in under a minute without manual repo setup.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 4: Zero-Freeze Large Repo AST Guardrails -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
@@ -80,216 +183,102 @@
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Performance &amp; Ergonomics</div>
-              <div class="whatsnew-title">High-Speed Inline Code Suggestions (&lt;2s Latency)</div>
+              <div class="whatsnew-pill">Architecture &amp; Indexer</div>
+              <div class="whatsnew-title">Zero-Freeze Large Repo AST Guardrails</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Decoupled completion inference from primary chat reasoning. Configure a dedicated lightweight model (e.g. <code>qwen2.5-coder:1.5b</code>) for ghost text completions that never interrupts ongoing agent conversations.</span>
+              <span>Sub-300ms workspace opening on large-scale repositories with tens of thousands of source files.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Tight completion budgets (36 tokens) and targeted context (400 chars prefix / 120 chars suffix) backed by an in-memory LRU cache (&lt;20ms for repeated tokens) and immediate keystroke cancellation.</span>
+              <span>Rust indexer integrates <code>.gitignore</code> rules, hardcoded heavy exclusions (<code>node_modules</code>, <code>target</code>, <code>dist</code>, <code>build</code>), file size caps (&lt;500 KB per AST file), and a 2,500 file indexing ceiling.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Accept inline ghost text instantly with native Monaco <code>Tab</code> keybinding. Live millisecond latency telemetry streams to the status bar (#sb-complete-indicator).</span>
+              <span>Eliminates IDE sluggishness, thread locks, and CPU freezing when opening massive enterprise or monorepo workspaces.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Eliminates 10-second completion stalls. You get fast, consistent suggestions engineered specifically for local hardware constraints.</span>
+              <span>Instantaneous semantic graph lookups while keeping system memory and CPU consumption feather-light.</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feature 2: Screenshot-to-Agent Multimodal Intelligence -->
+      <!-- Feature 5: Multi-Turn Conversational Continuity -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Multimodal Visual Intelligence</div>
-              <div class="whatsnew-title">Screenshot-to-Agent &amp; Visual Debugging</div>
+              <div class="whatsnew-pill">Conversational AI Ergonomics</div>
+              <div class="whatsnew-title">Conversational Continuity &amp; Copilot Grounding</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Paste screenshots directly from clipboard into the prompt composer (<code>Ctrl+V</code>), drag and drop image files, or use the dedicated image attachment button with 1-click thumbnail previews.</span>
+              <span>Conversational continuity block automatically grounds short follow-up prompts (e.g. <em>"add the sum function to it"</em> or <em>"now write unit tests"</em>) to the prior turn's target files and tool execution state.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>Honest model validation with <code>OX-415</code> error guidance. If a text-only model is selected, the IDE guides you to a vision-capable model (Ollama <code>llama3.2-vision</code>, <code>gpt-4o</code>, <code>claude-3-5-sonnet</code>, <code>gemini-2.0-flash</code>) instead of hallucinating.</span>
+              <span>Removed duplicate system prompt context concatenation, saving hundreds of context tokens per turn while sharpening local LLM instruction adherence.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Debug CSS visual bugs, inspect mockups, and troubleshoot UI layout defects by showing the agent the exact screen render. Attached images render directly in chat with full-screen zoom.</span>
+              <span>Speak to the agent naturally as you would with GitHub Copilot or Antigravity, without tediously repeating filenames or parameters.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Full visual intelligence integrated into local and cloud workflows without clunky file dialogues or fake image understanding.</span>
+              <span>Eliminates file targeting hallucinations and delivers predictable, coherent multi-turn code iterations.</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Feature 3: Transactional VFS In-Editor Review -->
+      <!-- Feature 6: Scientific Verification Persistence -->
       <div class="whatsnew-card">
         <div>
           <div class="whatsnew-header">
             <div class="whatsnew-icon-box">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                <line x1="15" y1="9" x2="15.01" y2="9"></line>
               </svg>
             </div>
             <div>
-              <div class="whatsnew-pill">Transactional Code Integrity</div>
-              <div class="whatsnew-title">In-Editor VFS Review &amp; Diff Acceptance Bar</div>
+              <div class="whatsnew-pill">Empirical Evidence Engine</div>
+              <div class="whatsnew-title">Scientific Verification (&Psi;) Session Persistence</div>
             </div>
           </div>
 
           <div class="whatsnew-points">
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What's New:</span>
-              <span>Docked top-mounted review bar inside Monaco displaying filename, added lines (+green), and removed lines (-red) before changes are written to disk.</span>
+              <span>Full persistence of scientific verification badges (&Psi;) and model calibration confidence scores across conversation session switches and restarts.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">What Changed:</span>
-              <span>AI-proposed modifications are staged inside the Virtual File System shadow layer. Interactive inline green/red diff highlights appear directly inside the active editor view.</span>
+              <span>Chat timeline renderer binds recorded calibration scores directly to reloaded assistant turns with visual confidence level indicators.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Review changes line-by-line. Click <code>[Accept]</code> to commit changes to disk or <code>[Reject]</code> to revert to original code without touching git working state.</span>
+              <span>Review empirical confidence levels for code suggestions created in earlier chat sessions at a glance.</span>
             </div>
             <div class="whatsnew-point-row">
               <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Zero unverified edits. You retain complete human-in-the-loop control over every file the agent attempts to modify.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feature 4: Dedicated OX Structured Error Framework -->
-      <div class="whatsnew-card">
-        <div>
-          <div class="whatsnew-header">
-            <div class="whatsnew-icon-box">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-              </svg>
-            </div>
-            <div>
-              <div class="whatsnew-pill">Developer Diagnostic Suite</div>
-              <div class="whatsnew-title">Structured OX Error Framework &amp; 1-Click Fixes</div>
-            </div>
-          </div>
-
-          <div class="whatsnew-points">
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What's New:</span>
-              <span>Standardized error codes across the entire IDE: <code>OX-101</code> (Syntax &amp; Diagnostics), <code>OX-403</code> (Sandbox Policy), <code>OX-409</code> (VFS Conflicts), <code>OX-415</code> (Vision Required), and <code>OX-503</code> (Ollama Daemon Offline).</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What Changed:</span>
-              <span>Replaced raw stack traces with actionable error cards featuring plain-English explanations, 1-click remediation buttons, clipboard export, and collapsible technical logs.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Instantly test Ollama connectivity, switch sandbox safety modes, or auto-fix compiler errors without searching docs or opening external terminals.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Turns cryptic runtime errors into guided, self-healing developer workflows directly inside the IDE timeline.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feature 5: Apple HIG Liquid Glass Notification Center -->
-      <div class="whatsnew-card">
-        <div>
-          <div class="whatsnew-header">
-            <div class="whatsnew-icon-box">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-            </div>
-            <div>
-              <div class="whatsnew-pill">Apple HIG UI/UX Redesign</div>
-              <div class="whatsnew-title">Liquid Glass Activity &amp; Notification Center</div>
-            </div>
-          </div>
-
-          <div class="whatsnew-points">
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What's New:</span>
-              <span>28px backdrop blur vibrancy, squircle category badges, Apple-style segmented filter track (All, Build, Security, Agent), and clean empty/loading states.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What Changed:</span>
-              <span>Completely eliminated emoji UI in favor of crisp SVG vector icons, subtle borders, refined card typography, and reliable Clear All / dismiss interactions.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Track background builds, security sandbox decisions, and agent operations without visual noise or permanent unnecessary scrollbars.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Developer-grade notification experience comparable to macOS native utilities, VS Code, and Cursor.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Feature 6: Explorer DND & Context Staging -->
-      <div class="whatsnew-card">
-        <div>
-          <div class="whatsnew-header">
-            <div class="whatsnew-icon-box">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-            </div>
-            <div>
-              <div class="whatsnew-pill">Productivity &amp; Context Staging</div>
-              <div class="whatsnew-title">File Explorer Drag-and-Drop &amp; Rich Staging</div>
-            </div>
-          </div>
-
-          <div class="whatsnew-points">
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What's New:</span>
-              <span>Drag any file or folder from the Explorer tree directly into the chat prompt composer to automatically tag <code>@path</code> in your message.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">What Changed:</span>
-              <span>Extended non-file context staging: stage package dependencies (<code>package.json</code>, <code>Cargo.toml</code>), compiler diagnostics, and working memory buffers to local models with one click.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">How It Helps:</span>
-              <span>Target local LLM attention precisely to relevant files and dependencies, minimizing context bloat and maximizing reasoning accuracy.</span>
-            </div>
-            <div class="whatsnew-point-row">
-              <span class="whatsnew-point-label">Why It Matters:</span>
-              <span>Provides small 7B/14B parameter local models with dense, high-signal information for superior code generation.</span>
+              <span>Maintains rigorous verification standards and traceability across long-running development workflows.</span>
             </div>
           </div>
         </div>
@@ -301,7 +290,7 @@
     <div style="margin-top: 60px; padding: 40px; background: linear-gradient(135deg, rgba(13, 18, 28, 0.9) 0%, rgba(22, 28, 42, 0.8) 100%); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); text-align: center;">
       <h3 style="font-size: 1.8rem; font-weight: 700; margin-bottom: 12px;">Experience the next level of private AI coding.</h3>
       <p style="font-size: 1rem; color: var(--text-secondary); max-width: 600px; margin: 0 auto 24px;">
-        Download Orbital X v2.4.1 today. Choose the official installer for your operating system or try the zero-install Portable USB package.
+        Download Orbital X v2.4.2 today. Choose the official installer for your operating system or try the zero-install Portable USB package.
       </p>
       <div style="display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;">
         <a href="download.html" class="btn btn-primary" style="padding: 12px 28px;">Open Download Center</a>
@@ -318,7 +307,7 @@
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
             <img src="logo.png" alt="Orbital X" style="width: 24px; height: 24px; border-radius: 50%;">
             <span style="font-weight: 700; color: #fff;">Orbital X</span>
-            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;" data-gh-tag>v2.4.1</span>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.15); padding: 2px 6px; border-radius: 4px;" data-gh-tag>v2.4.2</span>
           </div>
           <div class="footer-copy">
             Open-Source Community Desktop IDE Project. Licensed under the MIT License.
