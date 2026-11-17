@@ -151,9 +151,24 @@ async function main() {
     }
 
     const stats = fs.statSync(asset.path);
-    const existingAsset = release.assets ? release.assets.find(a => a.name === asset.name) : null;
+
+    // Fetch latest assets for this release to be 100% in sync
+    const curReleaseRes = await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/${release.id}`, {
+      headers: {
+        'Authorization': `token ${token}`,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Orbital-X-Release'
+      }
+    });
+    const curRelease = await curReleaseRes.json();
+    const existingAsset = curRelease.assets ? curRelease.assets.find(a => a.name === asset.name) : null;
+
     if (existingAsset) {
-      console.log(`Asset ${asset.name} already attached (${existingAsset.size} bytes). Deleting older version...`);
+      if (existingAsset.size === stats.size) {
+        console.log(`✓ Asset ${asset.name} is already attached and verified (${(existingAsset.size / 1024 / 1024).toFixed(2)} MB). Skipping.`);
+        continue;
+      }
+      console.log(`Asset ${asset.name} exists with different size. Deleting older version...`);
       await fetchWithRetry(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/assets/${existingAsset.id}`, {
         method: 'DELETE',
         headers: {
@@ -162,6 +177,7 @@ async function main() {
           'User-Agent': 'Orbital-X-Release'
         }
       });
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     console.log(`Uploading ${asset.name} (${(stats.size / 1024 / 1024).toFixed(2)} MB)...`);
