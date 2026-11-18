@@ -2419,3 +2419,99 @@ body.theme-light .settings-sidebar,
   border-radius: 10px;
   color: var(--text-secondary);
 }
+
+/* ==========================================================================
+   BLOCK 2: Consistent Polish Across All Sub-Pages & Modals
+   Standardizes border radii (8px/12px), spacing rhythm, backdrop blur,
+   button states, and scrollbars across Settings, Knowledge Manager,
+   Extensions & Skills, and Welcome Hero pages.
+   ========================================================================== */
+
+/* Standardize Modal Backdrops & Containers */
+.modal-backdrop,
+.notif-backdrop,
+.quick-open-backdrop {
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  transition: opacity 0.18s var(--ease-apple);
+}
+
+.modal-container,
+.settings-modal-container,
+.memory-manager-modal,
+.extensions-modal-container,
+.quick-open-container {
+  border-radius: var(--radius-lg, 12px) !important;
+  border: 1px solid var(--border-subtle) !important;
+  box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--border-subtle) !important;
+  backdrop-filter: var(--glass-blur-lg);
+  -webkit-backdrop-filter: var(--glass-blur-lg);
+  transition: transform 0.2s var(--ease-spring), opacity 0.18s var(--ease-apple);
+}
+
+/* Modal Headers & Footers Spacing Rhythm */
+.modal-header,
+.settings-header,
+.mem-drawer-header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-footer,
+.settings-footer,
+.mem-drawer-footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Modal Inner Scrollbars */
+.modal-body,
+.settings-content-pane,
+.memory-manager-body,
+.extensions-body,
+.notif-content-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+.modal-body::-webkit-scrollbar,
+.settings-content-pane::-webkit-scrollbar,
+.memory-manager-body::-webkit-scrollbar,
+.extensions-body::-webkit-scrollbar,
+.notif-content-list::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.modal-body::-webkit-scrollbar-thumb,
+.settings-content-pane::-webkit-scrollbar-thumb,
+.memory-manager-body::-webkit-scrollbar-thumb,
+.extensions-body::-webkit-scrollbar-thumb,
+.notif-content-list::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-full);
+}
+
+/* Standardized Button States Across Modals */
+.modal-container .btn,
+.settings-modal-container .btn,
+.memory-manager-modal .btn {
+  border-radius: var(--radius-sm, 6px);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--trans-fast);
+}
+
+.modal-container .btn:active,
+.settings-modal-container .btn:active,
+.memory-manager-modal .btn:active {
+  transform: scale(0.98);
+}

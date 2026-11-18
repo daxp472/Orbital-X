@@ -275,7 +275,24 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
   // Always record into activity history with category
   recordActivity(message, safeType, meta);
 
-  // Persona toast suppression:
+  // Persona toast suppression & silent routing for routine updates
+  const lowMsg = (message || '').toLowerCase();
+  const isRoutine = lowMsg.includes('ast indexed') ||
+                    lowMsg.includes('draft saved') ||
+                    lowMsg.includes('auto-saved') ||
+                    lowMsg.includes('semantic graph indexed') ||
+                    lowMsg.includes('graph ready');
+  if (isRoutine && safeType === 'info') {
+    // Route silently into status bar indicator instead of popup spam
+    const sb = document.getElementById('sb-graph-text') || document.getElementById('sb-pillars-text');
+    if (sb) {
+      const prev = sb.textContent;
+      sb.textContent = message.slice(0, 32);
+      setTimeout(() => { sb.textContent = prev; }, 3000);
+    }
+    return { dismiss: () => {} };
+  }
+
   // If user prefers 'milestones', suppress repetitive micro toasts (e.g. minor file reads)
   const persona = getNotificationPersona();
   const cat = determineCategory(message, safeType, meta);
@@ -283,11 +300,11 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
     return { dismiss: () => {} };
   }
 
-  // Max 5 visible stacked toasts
+  // Max 3 visible stacked toasts (Claude-Grade non-intrusive stack)
   const existing = container.querySelectorAll('.toast-item:not(.toast-hide)');
-  if (existing.length >= 5) {
+  if (existing.length >= 3) {
     existing[existing.length - 1].classList.add('toast-hide');
-    setTimeout(() => existing[existing.length - 1]?.remove(), 280);
+    setTimeout(() => existing[existing.length - 1]?.remove(), 250);
   }
 
   const toast = document.createElement('div');

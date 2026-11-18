@@ -66,6 +66,8 @@ body.theme-light, [data-theme="theme-light"], [data-theme="nebula-light"] {
   --bg-active: rgba(0, 0, 0, 0.1);
   --bg-input: #ffffff;
   --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-dropdown: #ffffff;
   --bg-glass-translucent: rgba(255, 255, 255, 0.86);
 
   --border-color: #d0d7de;
@@ -963,4 +965,353 @@ body.theme-light .mem-tip-box,
   background: rgba(5, 150, 105, 0.08) !important;
   border: 1px solid rgba(5, 150, 105, 0.25) !important;
   color: #1f2328 !important;
+}
+
+/* ==========================================================================
+   BLOCK 1 & 2: Complete Light / White Theme Parity for Menus, Headers & Telemetry
+   ========================================================================== */
+
+/* 1. Top Menubar Dropdowns (White Theme) */
+body.theme-light .menubar-dropdown,
+[data-theme="theme-light"] .menubar-dropdown,
+[data-theme="nebula-light"] .menubar-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light .menubar-dropdown-item,
+[data-theme="theme-light"] .menubar-dropdown-item,
+[data-theme="nebula-light"] .menubar-dropdown-item {
+  color: #24292f !important;
+}
+
+body.theme-light .menubar-dropdown-item:hover,
+[data-theme="theme-light"] .menubar-dropdown-item:hover,
+[data-theme="nebula-light"] .menubar-dropdown-item:hover {
+  background: rgba(9, 105, 218, 0.08) !important;
+  color: #0969da !important;
+}
+
+body.theme-light .menubar-dropdown-item .item-shortcut,
+[data-theme="theme-light"] .menubar-dropdown-item .item-shortcut,
+[data-theme="nebula-light"] .menubar-dropdown-item .item-shortcut {
+  color: #8c959f !important;
+}
+
+body.theme-light .menubar-dropdown-divider,
+[data-theme="theme-light"] .menubar-dropdown-divider,
+[data-theme="nebula-light"] .menubar-dropdown-divider {
+  background: #e1e4e8 !important;
+}
+
+/* 2. Top Titlebar & Interactive Command Pill (White Theme) */
+body.theme-light .titlebar,
+[data-theme="theme-light"] .titlebar,
+[data-theme="nebula-light"] .titlebar {
+  background: rgba(246, 248, 250, 0.95) !important;
+  border-bottom: 1px solid #d0d7de !important;
+  color: #24292f !important;
+}
+
+body.theme-light .titlebar-menus .menu-item,
+[data-theme="theme-light"] .titlebar-menus .menu-item,
+[data-theme="nebula-light"] .titlebar-menus .menu-item {
+  color: #57606a !important;
+}
+
+body.theme-light .titlebar-menus .menu-item:hover,
+[data-theme="theme-light"] .titlebar-menus .menu-item:hover,
+[data-theme="nebula-light"] .titlebar-menus .menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .titlebar-menus .menu-item.active,
+[data-theme="theme-light"] .titlebar-menus .menu-item.active,
+[data-theme="nebula-light"] .titlebar-menus .menu-item.active {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .titlebar-brand-name,
+[data-theme="theme-light"] .titlebar-brand-name,
+[data-theme="nebula-light"] .titlebar-brand-name {
+  background: linear-gradient(135deg, #1f2328 40%, #059669 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+body.theme-light .titlebar-command-pill,
+body.theme-light .workspace-badge,
+[data-theme="theme-light"] .titlebar-command-pill,
+[data-theme="theme-light"] .workspace-badge,
+[data-theme="nebula-light"] .titlebar-command-pill,
+[data-theme="nebula-light"] .workspace-badge {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid #d0d7de !important;
+  color: #24292f !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+}
+
+body.theme-light .titlebar-command-pill:hover,
+body.theme-light .workspace-badge:hover,
+[data-theme="theme-light"] .titlebar-command-pill:hover,
+[data-theme="theme-light"] .workspace-badge:hover,
+[data-theme="nebula-light"] .titlebar-command-pill:hover,
+[data-theme="nebula-light"] .workspace-badge:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: #0969da !important;
+  color: #1f2328 !important;
+}
+
+body.theme-light .pill-project,
+[data-theme="theme-light"] .pill-project,
+[data-theme="nebula-light"] .pill-project {
+  color: #1f2328 !important;
+  font-weight: 600 !important;
+}
+
+body.theme-light .pill-sep,
+[data-theme="theme-light"] .pill-sep,
+[data-theme="nebula-light"] .pill-sep {
+  color: #8c959f !important;
+}
+
+body.theme-light .pill-breadcrumb,
+[data-theme="theme-light"] .pill-breadcrumb,
+[data-theme="nebula-light"] .pill-breadcrumb {
+  color: #57606a !important;
+}
+
+body.theme-light .pill-git-branch,
+[data-theme="theme-light"] .pill-git-branch,
+[data-theme="nebula-light"] .pill-git-branch {
+  background: rgba(9, 105, 218, 0.08) !important;
+  border: 1px solid rgba(9, 105, 218, 0.2) !important;
+  color: #0969da !important;
+}
+
+/* 3. Operating Mode Selector & Mode Dropdown (White Theme) */
+body.theme-light #header-mode-pill,
+[data-theme="theme-light"] #header-mode-pill,
+[data-theme="nebula-light"] #header-mode-pill {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #d0d7de !important;
+  color: #24292f !important;
+}
+
+body.theme-light #header-mode-pill:hover,
+[data-theme="theme-light"] #header-mode-pill:hover,
+[data-theme="nebula-light"] #header-mode-pill:hover {
+  background: rgba(0, 0, 0, 0.09) !important;
+}
+
+body.theme-light .mode-switcher-dropdown,
+[data-theme="theme-light"] .mode-switcher-dropdown,
+[data-theme="nebula-light"] .mode-switcher-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light .mode-option,
+[data-theme="theme-light"] .mode-option,
+[data-theme="nebula-light"] .mode-option {
+  color: #24292f !important;
+}
+
+body.theme-light .mode-option:hover,
+[data-theme="theme-light"] .mode-option:hover,
+[data-theme="nebula-light"] .mode-option:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+body.theme-light .mode-option.active,
+[data-theme="theme-light"] .mode-option.active,
+[data-theme="nebula-light"] .mode-option.active {
+  background: rgba(9, 105, 218, 0.08) !important;
+  border-color: rgba(9, 105, 218, 0.25) !important;
+}
+
+body.theme-light .mode-option-title,
+[data-theme="theme-light"] .mode-option-title,
+[data-theme="nebula-light"] .mode-option-title {
+  color: #1f2328 !important;
+}
+
+body.theme-light .mode-option-desc,
+[data-theme="theme-light"] .mode-option-desc,
+[data-theme="nebula-light"] .mode-option-desc {
+  color: #57606a !important;
+}
+
+/* 4. Developer Mode Telemetry Trackers in Statusbar (White Theme) */
+body.theme-light .sb-pillar-pill,
+body.theme-light .sb-live-speed-pill,
+body.theme-light #status-token-usage,
+body.theme-light #status-model-indicator,
+body.theme-light #status-workspace,
+[data-theme="theme-light"] .sb-pillar-pill,
+[data-theme="theme-light"] .sb-live-speed-pill,
+[data-theme="theme-light"] #status-token-usage,
+[data-theme="theme-light"] #status-model-indicator,
+[data-theme="theme-light"] #status-workspace,
+[data-theme="nebula-light"] .sb-pillar-pill,
+[data-theme="nebula-light"] .sb-live-speed-pill,
+[data-theme="nebula-light"] #status-token-usage,
+[data-theme="nebula-light"] #status-model-indicator,
+[data-theme="nebula-light"] #status-workspace {
+  color: #24292f !important;
+  border-color: #d0d7de !important;
+}
+
+body.theme-light #sb-live-tps,
+[data-theme="theme-light"] #sb-live-tps,
+[data-theme="nebula-light"] #sb-live-tps {
+  color: #0969da !important;
+}
+
+body.theme-light #sb-live-vram,
+[data-theme="theme-light"] #sb-live-vram,
+[data-theme="nebula-light"] #sb-live-vram {
+  color: #57606a !important;
+}
+
+/* 5. File Explorer Typography & Indent Guides (White Theme) */
+body.theme-light .tree-node,
+[data-theme="theme-light"] .tree-node,
+[data-theme="nebula-light"] .tree-node {
+  color: #24292f !important;
+}
+
+body.theme-light .tree-node:hover,
+[data-theme="theme-light"] .tree-node:hover,
+[data-theme="nebula-light"] .tree-node:hover {
+  background-color: rgba(0, 0, 0, 0.06) !important;
+  color: #0f172a !important;
+}
+
+body.theme-light .tree-node.selected,
+[data-theme="theme-light"] .tree-node.selected,
+[data-theme="nebula-light"] .tree-node.selected {
+  background-color: rgba(9, 105, 218, 0.12) !important;
+  color: #0969da !important;
+  font-weight: 600 !important;
+}
+
+body.theme-light .tree-subtree,
+[data-theme="theme-light"] .tree-subtree,
+[data-theme="nebula-light"] .tree-subtree {
+  border-left-color: rgba(0, 0, 0, 0.09) !important;
+}
+
+/* 6. Claude-Grade Notification Toasts (White Theme) */
+body.theme-light .toast-item,
+[data-theme="theme-light"] .toast-item,
+[data-theme="nebula-light"] .toast-item {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border: 1px solid #d0d7de !important;
+  color: #1f2328 !important;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+body.theme-light .toast-message,
+[data-theme="theme-light"] .toast-message,
+[data-theme="nebula-light"] .toast-message {
+  color: #1f2328 !important;
+}
+
+body.theme-light .toast-close-btn,
+[data-theme="theme-light"] .toast-close-btn,
+[data-theme="nebula-light"] .toast-close-btn {
+  color: #8c959f !important;
+}
+
+body.theme-light .toast-close-btn:hover,
+[data-theme="theme-light"] .toast-close-btn:hover,
+[data-theme="nebula-light"] .toast-close-btn:hover {
+  color: #1f2328 !important;
+}
+
+body.theme-light .toast-action-btn,
+[data-theme="theme-light"] .toast-action-btn,
+[data-theme="nebula-light"] .toast-action-btn {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid #d0d7de !important;
+  color: #24292f !important;
+}
+
+body.theme-light .toast-action-btn:hover,
+[data-theme="theme-light"] .toast-action-btn:hover,
+[data-theme="nebula-light"] .toast-action-btn:hover {
+  background: rgba(9, 105, 218, 0.08) !important;
+  color: #0969da !important;
+}
+
+/* 7. Chat Thinking Section & Code Blocks (White Theme) */
+body.theme-light .think-section,
+[data-theme="theme-light"] .think-section,
+[data-theme="nebula-light"] .think-section {
+  background: #f6f8fa !important;
+  border-color: #d0d7de !important;
+}
+
+body.theme-light .think-summary,
+[data-theme="theme-light"] .think-summary,
+[data-theme="nebula-light"] .think-summary {
+  background: rgba(5, 150, 105, 0.08) !important;
+  color: #059669 !important;
+}
+
+body.theme-light .think-body,
+[data-theme="theme-light"] .think-body,
+[data-theme="nebula-light"] .think-body {
+  color: #57606a !important;
+  border-top-color: #e1e4e8 !important;
+}
+
+body.theme-light .code-block-wrapper,
+[data-theme="theme-light"] .code-block-wrapper,
+[data-theme="nebula-light"] .code-block-wrapper {
+  background: #f6f8fa !important;
+  border-color: #d0d7de !important;
+}
+
+body.theme-light .code-block-wrapper .code-block-header,
+[data-theme="theme-light"] .code-block-wrapper .code-block-header,
+[data-theme="nebula-light"] .code-block-wrapper .code-block-header {
+  background: #ffffff !important;
+  color: #57606a !important;
+  border-bottom-color: #e1e4e8 !important;
+}
+
+body.theme-light .btn-restore-checkpoint,
+[data-theme="theme-light"] .btn-restore-checkpoint,
+[data-theme="nebula-light"] .btn-restore-checkpoint {
+  border-color: #d0d7de !important;
+  color: #57606a !important;
+}
+
+body.theme-light .btn-restore-checkpoint:hover,
+[data-theme="theme-light"] .btn-restore-checkpoint:hover,
+[data-theme="nebula-light"] .btn-restore-checkpoint:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #0969da !important;
+  border-color: #0969da !important;
+}
+
+body.theme-light .turn-activity-tray,
+[data-theme="theme-light"] .turn-activity-tray,
+[data-theme="nebula-light"] .turn-activity-tray {
+  background: #f6f8fa !important;
+  border-color: #d0d7de !important;
+}
+
+body.theme-light .recon-cluster-pill,
+[data-theme="theme-light"] .recon-cluster-pill,
+[data-theme="nebula-light"] .recon-cluster-pill {
+  background: #ffffff !important;
+  border: 1px solid #d0d7de !important;
+  color: #24292f !important;
 }

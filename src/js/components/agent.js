@@ -164,6 +164,18 @@ export function displayOrbitalError(err, context = {}) {
   return card;
 }
 
+// Prompt history for composer navigation (ArrowUp / ArrowDown)
+const promptHistory = [];
+let promptHistoryIndex = -1;
+let currentPromptDraft = '';
+
+// Active clustered reconnaissance tool steps
+let activeReconCluster = null;
+const RECON_TOOLS = new Set([
+  'read_file', 'list_files', 'list_dir', 'get_file_tree',
+  'search_files', 'search_code', 'query_code_graph', 'get_diagnostics'
+]);
+
 export function initAgent() {
   const sendBtn = document.getElementById('btn-agent-send');
   const stopBtn = document.getElementById('btn-agent-stop');
@@ -439,6 +451,44 @@ function initChatDropZone() {
     inputElem.addEventListener('keydown', (e) => {
       // H3: when a slash/@ dropdown is open, it owns the keyboard
       if (composerDropdownKeydown(e, inputElem)) return;
+
+      // Escape cancels an active in-flight stream immediately
+      if (e.key === 'Escape') {
+        if (isLoopRunning) {
+          e.preventDefault();
+          stopBtn?.click();
+          showToast('Agent stream canceled', 'info', 1800);
+          return;
+        }
+      }
+
+      // Prompt History Recall on ArrowUp / ArrowDown
+      if (e.key === 'ArrowUp' && (inputElem.selectionStart === 0 || !inputElem.value.includes('\n'))) {
+        if (promptHistory.length > 0) {
+          e.preventDefault();
+          if (promptHistoryIndex === -1) currentPromptDraft = inputElem.value;
+          if (promptHistoryIndex < promptHistory.length - 1) {
+            promptHistoryIndex++;
+            inputElem.value = promptHistory[promptHistory.length - 1 - promptHistoryIndex];
+            inputElem.selectionStart = inputElem.selectionEnd = inputElem.value.length;
+          }
+          return;
+        }
+      }
+      if (e.key === 'ArrowDown' && (inputElem.selectionStart === inputElem.value.length || !inputElem.value.includes('\n'))) {
+        if (promptHistoryIndex >= 0) {
+          e.preventDefault();
+          promptHistoryIndex--;
+          if (promptHistoryIndex >= 0) {
+            inputElem.value = promptHistory[promptHistory.length - 1 - promptHistoryIndex];
+          } else {
+            inputElem.value = currentPromptDraft;
+          }
+          inputElem.selectionStart = inputElem.selectionEnd = inputElem.value.length;
+          return;
+        }
+      }
+
       // Task 5: Tag entire codebase on Ctrl+Alt+Enter (or Alt+Enter) and send
       if (e.altKey && e.key === 'Enter') {
         e.preventDefault();
@@ -1270,6 +1320,16 @@ async function interruptAndSendImmediate(promptText) {
   const userMid = newMessageId();
   const currentImages = pendingImages.map(img => img.dataUrl || img.base64);
   clearImages();
+
+  // Save prompt to history
+  const trimmedPrompt = (promptText || '').trim();
+  if (trimmedPrompt && (promptHistory.length === 0 || promptHistory[promptHistory.length - 1] !== trimmedPrompt)) {
+    promptHistory.push(trimmedPrompt);
+    if (promptHistory.length > 50) promptHistory.shift();
+  }
+  promptHistoryIndex = -1;
+  currentPromptDraft = '';
+
   appendTimelineCard('user', promptText, now, { messageId: userMid, images: currentImages });
   state.conversation.push({ role: 'user', content: promptText, timestamp: now, mid: userMid });
 
@@ -1507,7 +1567,7 @@ function renderComposerDropdown(kind, items, index, inputEl) {
   const dd = document.createElement('div');
   dd.id = `composer-${kind}-dropdown`;
   dd.className = 'command-palette';
-  dd.style.cssText = 'position: fixed; width: 420px; max-width: 92vw; z-index: 2600;';
+  dd.style.cssText = 'position: fixed; width: 440px; max-width: 92vw; z-index: 2600;';
   dd.innerHTML = `<div class="command-palette-list" style="max-height: 260px;"></div>`;
   const list = dd.querySelector('.command-palette-list');
   items.forEach((item, i) => {
@@ -1516,29 +1576,35 @@ function renderComposerDropdown(kind, items, index, inputEl) {
     if (kind === 'slash') {
       el.innerHTML = `<span class="cp-icon">⌘</span><span class="cp-title" style="font-family: var(--font-mono);">${escapeHtml(item.cmd)}</span><span class="cp-group">${escapeHtml(item.desc)}</span>`;
     } else {
-      el.innerHTML = `<span class="cp-icon">📄</span><span class="cp-title" style="font-family: var(--font-mono); font-size: 11px;">${escapeHtml(item)}</span>`;
+      const icon = item.type === 'git' ? '🌿' :
+                   item.type === 'terminal' ? '🖥️' :
+                   item.type === 'symbol' ? '🔣' :
+                   item.type === 'codebase' ? '🌐' : '📄';
+      const labelText = typeof item === 'object' ? item.label : String(item);
+      const descText = (typeof item === 'object' && item.desc) ? `<span class="cp-group" style="font-size: 10px; margin-left: 8px; opacity: 0.7;">${escapeHtml(item.desc)}</span>` : '';
+      el.innerHTML = `<span class="cp-icon">${icon}</span><span class="cp-title" style="font-family: var(--font-mono); font-size: 11px;">${escapeHtml(labelText)}</span>${descText}`;
     }
     el.addEventListener('mousedown', (e) => { e.preventDefault(); selectComposerDropdownItem(kind, item, inputEl); });
     list.appendChild(el);
   });
   document.body.appendChild(dd);
   const rect = inputEl.getBoundingClientRect();
-  dd.style.left = `${Math.min(rect.left, window.innerWidth - 440)}px`;
+  dd.style.left = `${Math.min(rect.left, window.innerWidth - 460)}px`;
   dd.style.bottom = `${window.innerHeight - rect.top + 6}px`;
-  // Already positioned above the input (bottom-anchored) — no flip needed
 }
 
 function selectComposerDropdownItem(kind, item, inputEl) {
   if (kind === 'slash') {
     inputEl.value = item.cmd + ' ';
   } else {
-    // Replace the partial @token with the chosen file
+    // Replace the partial @token with the chosen context token or file
+    const label = typeof item === 'object' ? item.label : String(item);
     const caret = inputEl.selectionStart ?? inputEl.value.length;
     const before = inputEl.value.slice(0, caret);
     const after = inputEl.value.slice(caret);
     const atIdx = before.lastIndexOf('@');
     if (atIdx !== -1) {
-      inputEl.value = before.slice(0, atIdx) + `@${item} ` + after;
+      inputEl.value = before.slice(0, atIdx) + `@${label} ` + after;
     }
   }
   dismissComposerDropdown();
@@ -1559,15 +1625,43 @@ async function handleComposerInput(inputEl) {
     return;
   }
 
-  // @ mention picker — after an @ with a partial token
+  // @ mention picker — after an @ with a partial token (files, AST symbols, @git, @terminal)
   const before = value.slice(0, caret);
   const atMatch = before.match(/@([^\s@]*)$/);
   if (atMatch) {
     const q = atMatch[1].toLowerCase();
+
+    // Context System Mentions
+    const systemTokens = [
+      { type: 'git', label: 'git', desc: 'Active git working tree diff & branch status' },
+      { type: 'terminal', label: 'terminal', desc: 'Recent terminal output & command history' },
+      { type: 'codebase', label: 'codebase', desc: 'Workspace index & symbol architecture graph' },
+      { type: 'problems', label: 'problems', desc: 'Active workspace compiler & lint diagnostics' }
+    ].filter(s => s.label.includes(q));
+
+    // Workspace Files
     const files = await getWorkspaceFileList();
-    const filtered = files.filter(f => f.toLowerCase().includes(q)).slice(0, 12);
-    atState = { open: true, items: filtered, index: 0 };
-    renderComposerDropdown('at', filtered, 0, inputEl);
+    const matchedFiles = files.filter(f => f.toLowerCase().includes(q)).slice(0, 8)
+      .map(f => ({ type: 'file', label: f, desc: 'Workspace file' }));
+
+    // AST / Semantic Code Graph Symbols
+    let matchedSymbols = [];
+    if (q.length >= 2) {
+      try {
+        const graphRes = await invoke('query_code_graph', { query: q, limit: 5 });
+        if (graphRes && Array.isArray(graphRes.symbols)) {
+          matchedSymbols = graphRes.symbols.slice(0, 5).map(s => ({
+            type: 'symbol',
+            label: s.name,
+            desc: `${s.kind || 'symbol'} in ${s.file || 'code'}`
+          }));
+        }
+      } catch (_) {}
+    }
+
+    const items = [...systemTokens, ...matchedFiles, ...matchedSymbols].slice(0, 14);
+    atState = { open: true, items, index: 0 };
+    renderComposerDropdown('at', items, 0, inputEl);
     return;
   }
 
@@ -4123,13 +4217,17 @@ function formatMarkdownInner(text) {
   // Re-insert tables
   out = out.replace(/\u0000ORBTABLE_(\d+)\u0000/g, (_, i) => renderSafeTable(tableBlocks[Number(i)] || []));
 
-  // Re-insert code blocks with Copy button + async colorization hook
+  // Re-insert code blocks with Apply to File, Insert at Cursor, and Copy buttons
   out = out.replace(new RegExp(`${CODE_BLOCK_PLACEHOLDER}(\\d+)_([a-zA-Z0-9_.-]+)\u0000`, 'g'), (match, i, lang) => {
     if (blocks[Number(i)] === undefined) return match;
     return `<div class="code-block-wrapper" style="margin: 8px 0; background: var(--bg-activity); border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
-      <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg-surface); font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); border-bottom: 1px solid var(--border-subtle);">
+      <div class="code-block-header" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: var(--bg-surface); font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); border-bottom: 1px solid var(--border-subtle);">
         <span>${escapeHtml(lang)}</span>
-        <button class="btn btn-secondary btn-sm btn-copy-code" style="padding: 1px 6px; font-size: 10px; height: 20px;">Copy</button>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <button class="btn btn-secondary btn-sm btn-apply-to-file" title="Apply to active editor file via VFS Diff Review" style="padding: 1px 6px; font-size: 10px; height: 20px;">Apply to File</button>
+          <button class="btn btn-secondary btn-sm btn-insert-cursor" title="Insert at editor cursor" style="padding: 1px 6px; font-size: 10px; height: 20px;">Insert at Cursor</button>
+          <button class="btn btn-secondary btn-sm btn-copy-code" style="padding: 1px 6px; font-size: 10px; height: 20px;">Copy</button>
+        </div>
       </div>
       <pre style="margin: 0; padding: 8px; font-family: var(--font-mono); font-size: 11px; overflow-x: auto; background: transparent; border: none;"><code data-lang="${escapeHtml(lang)}">${escapeHtml(blocks[Number(i)])}</code></pre>
     </div>`;
@@ -4138,7 +4236,7 @@ function formatMarkdownInner(text) {
   return out;
 }
 
-/** Binds copy buttons, external links, and syntax highlighting on a rendered body. */
+/** Binds copy buttons, smart code actions, external links, and syntax highlighting on a rendered body. */
 function enhanceRenderedBody(container) {
   bindCodeCopyButtons(container);
   colorizeCodeBlocks(container);
@@ -4155,6 +4253,7 @@ function enhanceRenderedBody(container) {
 }
 
 function bindCodeCopyButtons(container) {
+  // 1. Copy button
   container.querySelectorAll('.btn-copy-code').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -4162,6 +4261,54 @@ function bindCodeCopyButtons(container) {
       if (pre) navigator.clipboard.writeText(pre.textContent);
       btn.textContent = 'Copied!';
       setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+  });
+
+  // 2. Insert at Cursor button
+  container.querySelectorAll('.btn-insert-cursor').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const pre = btn.closest('.code-block-wrapper')?.querySelector('pre');
+      if (!pre) return;
+      const code = pre.textContent;
+      try {
+        const { getActiveEditor } = await import('../editor/monaco.js');
+        const ed = getActiveEditor?.();
+        if (ed) {
+          const selection = ed.getSelection();
+          ed.executeEdits('chat-insert', [{ range: selection, text: code, forceMoveMarkers: true }]);
+          ed.focus();
+          showToast('Snippet inserted at cursor', 'success', 2000);
+        } else {
+          showToast('No active editor tab found to insert snippet', 'warning', 2200);
+        }
+      } catch (err) {
+        showToast(`Insert failed: ${err}`, 'error', 2500);
+      }
+    });
+  });
+
+  // 3. Apply to File via VFS Diff Review
+  container.querySelectorAll('.btn-apply-to-file').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const pre = btn.closest('.code-block-wrapper')?.querySelector('pre');
+      if (!pre) return;
+      const code = pre.textContent;
+      try {
+        const { getActiveEditor, getActiveTabPath, showVfsFileReview } = await import('../editor/monaco.js');
+        const activePath = getActiveTabPath ? getActiveTabPath() : null;
+        const ed = getActiveEditor?.();
+        const currentContent = ed?.getModel()?.getValue() || '';
+        if (activePath && ed) {
+          showVfsFileReview(activePath, currentContent, code);
+          showToast(`Diff review opened for ${activePath.split(/[/\\]/).pop()}`, 'info', 2200);
+        } else {
+          showToast('Please open the target file in editor first', 'warning', 2500);
+        }
+      } catch (err) {
+        showToast(`Apply failed: ${err}`, 'error', 2500);
+      }
     });
   });
 }
@@ -4271,13 +4418,14 @@ function renderTurnFileReviewDeck(card, modifiedFilesMap) {
 }
 
 /**
- * Streaming assistant card: tokens are appended as plain text (inherently
- * safe), then the finalized text is rendered through the safe markdown path.
+ * Streaming assistant card: incremental flicker-free markdown streaming
+ * with live collapsible <think> reasoning accordion and elapsed timer.
  */
 function beginStreamingCard() {
   const timeline = document.getElementById('agent-timeline');
   if (!timeline) return null;
   document.getElementById('chat-welcome-hero')?.remove();
+  activeReconCluster = null;
 
   const card = document.createElement('div');
   card.className = 'timeline-card assistant-msg streaming';
@@ -4294,7 +4442,7 @@ function beginStreamingCard() {
       </div>
       <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${getRelativeTimeString(msgTime)}</span>
     </div>
-    <div class="turn-activity-tray" style="display: none; margin: 8px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(0,0,0,0.18); overflow: hidden;">
+    <div class="turn-activity-tray" style="display: none; margin: 8px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface); overflow: hidden;">
       <details class="turn-activity-details" open>
         <summary class="turn-activity-summary" style="padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none;">
           <span style="display: flex; align-items: center; gap: 6px; color: var(--accent-cyan);">
@@ -4306,21 +4454,40 @@ function beginStreamingCard() {
         <div class="turn-activity-list" style="display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--border-subtle);"></div>
       </details>
     </div>
-    <div class="timeline-card-body streaming-body" style="white-space: pre-wrap; font-size: 12px; line-height: 1.55;"></div>
+    <details class="think-section stream-think-accordion" open style="display: none; margin: 8px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface); overflow: hidden;">
+      <summary class="think-summary" style="padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; color: var(--accent-cyan); background: rgba(57, 197, 187, 0.08);">
+        <span class="think-title" style="display: flex; align-items: center; gap: 6px;">
+          <span class="spinner stream-think-spinner" style="width: 10px; height: 10px; border-width: 1.5px;"></span>
+          <span class="think-label stream-think-label">Thinking… 0.0s</span>
+        </span>
+        <span style="font-size: 10px; color: var(--text-muted);">▾</span>
+      </summary>
+      <div class="think-body stream-think-body" style="padding: 8px 10px; font-size: 11px; line-height: 1.5; color: var(--text-secondary); max-height: 220px; overflow-y: auto; white-space: pre-wrap; border-top: 1px solid var(--border-subtle);"></div>
+    </details>
+    <div class="timeline-card-body persistent-streaming-body" style="font-size: 12px; line-height: 1.55;"></div>
   `;
 
   timeline.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth' });
 
-  const bodyEl = card.querySelector('.streaming-body');
+  const bodyEl = card.querySelector('.persistent-streaming-body');
   const statusEl = card.querySelector('.stream-status');
   const activityTray = card.querySelector('.turn-activity-tray');
   const activityList = card.querySelector('.turn-activity-list');
   const activityLabel = card.querySelector('.turn-activity-label');
   const activityStatus = card.querySelector('.turn-activity-status');
+
+  const thinkSection = card.querySelector('.stream-think-accordion');
+  const thinkLabel = card.querySelector('.stream-think-label');
+  const thinkSpinner = card.querySelector('.stream-think-spinner');
+  const thinkBody = card.querySelector('.stream-think-body');
+
   let toolCount = 0;
   let acc = '';
   let raf = null;
+  let thinkStartTime = null;
+  let thinkTimer = null;
+  let thinkCompleted = false;
 
   return {
     card,
@@ -4335,8 +4502,45 @@ function beginStreamingCard() {
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = null;
+
+        let displayThink = '';
+        let displayAnswer = acc;
+
+        if (acc.includes('<think>')) {
+          if (!thinkStartTime) {
+            thinkStartTime = Date.now();
+            thinkSection.style.display = 'block';
+            thinkTimer = setInterval(() => {
+              if (!thinkCompleted && thinkStartTime) {
+                const s = ((Date.now() - thinkStartTime) / 1000).toFixed(1);
+                if (thinkLabel) thinkLabel.textContent = `Thinking… ${s}s`;
+              }
+            }, 100);
+          }
+
+          const thinkEndIdx = acc.indexOf('</think>');
+          if (thinkEndIdx !== -1) {
+            displayThink = acc.slice(acc.indexOf('<think>') + 7, thinkEndIdx).trim();
+            displayAnswer = acc.slice(thinkEndIdx + 8).trimStart();
+            if (!thinkCompleted) {
+              thinkCompleted = true;
+              if (thinkTimer) clearInterval(thinkTimer);
+              const elapsed = ((Date.now() - thinkStartTime) / 1000).toFixed(1);
+              if (thinkLabel) thinkLabel.textContent = `Thought for ${elapsed}s`;
+              if (thinkSpinner) thinkSpinner.style.display = 'none';
+              thinkSection.removeAttribute('open'); // auto-collapse
+            }
+          } else {
+            displayThink = acc.slice(acc.indexOf('<think>') + 7);
+            displayAnswer = '';
+          }
+
+          if (thinkBody) thinkBody.textContent = displayThink;
+        }
+
         if (bodyEl) {
-          bodyEl.textContent = acc;
+          bodyEl.innerHTML = formatMarkdown(displayAnswer);
+          enhanceRenderedBody(bodyEl);
           const isNearBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 160;
           if (isNearBottom) {
             timeline.scrollTop = timeline.scrollHeight;
@@ -4349,17 +4553,43 @@ function beginStreamingCard() {
     },
     fail(message) {
       if (raf) cancelAnimationFrame(raf);
-      if (bodyEl) bodyEl.textContent = acc || message;
+      if (thinkTimer) clearInterval(thinkTimer);
+      if (bodyEl) bodyEl.innerHTML = formatMarkdown(acc || message);
       if (statusEl) statusEl.textContent = '';
       if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-red);">✗ Error</span>`;
     },
     finalize(fullText, calibration = null, modifiedFilesMap = null) {
       if (raf) cancelAnimationFrame(raf);
+      if (thinkTimer) clearInterval(thinkTimer);
       if (statusEl) statusEl.textContent = '';
       if (activityStatus) activityStatus.innerHTML = `<span style="color: var(--accent-green);">✓ Complete</span>`;
       card.classList.remove('streaming');
-      if (bodyEl) bodyEl.remove();
-      const effectiveCalibration = calibration || evidenceLedger.computeCalibration(fullText || acc, '');
+
+      const raw = fullText || acc;
+      let finalThink = '';
+      let finalAnswer = raw;
+
+      if (raw.includes('<think>')) {
+        const tStart = raw.indexOf('<think>');
+        const tEnd = raw.indexOf('</think>');
+        if (tEnd !== -1) {
+          finalThink = raw.slice(tStart + 7, tEnd).trim();
+          finalAnswer = raw.slice(tEnd + 8).trimStart();
+        } else {
+          finalThink = raw.slice(tStart + 7).trim();
+          finalAnswer = '';
+        }
+        if (thinkSection) {
+          thinkSection.style.display = 'block';
+          thinkSection.removeAttribute('open');
+          if (thinkBody) thinkBody.textContent = finalThink;
+          if (thinkSpinner) thinkSpinner.style.display = 'none';
+          const totalSec = thinkStartTime ? ((Date.now() - thinkStartTime) / 1000).toFixed(1) : '1.2';
+          if (thinkLabel) thinkLabel.textContent = `Thought for ${totalSec}s`;
+        }
+      }
+
+      const effectiveCalibration = calibration || evidenceLedger.computeCalibration(finalAnswer, '');
       const headerLeft = card.querySelector('.timeline-card-header > div');
       if (headerLeft && effectiveCalibration) {
         const badgeHtml = renderEvidenceBadge(effectiveCalibration);
@@ -4369,16 +4599,18 @@ function beginStreamingCard() {
           headerLeft.appendChild(badgeSpan.firstElementChild);
         }
       }
-      const md = document.createElement('div');
-      md.className = 'timeline-card-body';
-      md.innerHTML = formatMarkdown(fullText || acc);
-      enhanceRenderedBody(md);
-      card.appendChild(md);
-      attachRunCommandChip(card, fullText || acc);
+
+      // Keep persistent bodyEl with zero layout jump
+      if (bodyEl) {
+        bodyEl.innerHTML = formatMarkdown(finalAnswer);
+        enhanceRenderedBody(bodyEl);
+      }
+      attachRunCommandChip(card, finalAnswer);
 
       if (modifiedFilesMap && modifiedFilesMap.size > 0) {
         renderTurnFileReviewDeck(card, modifiedFilesMap);
       }
+      activeReconCluster = null;
     },
   };
 }
@@ -4407,6 +4639,13 @@ export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}
     ? renderEvidenceBadge(opts.calibration || { psi: 0.94, omegaLogic: 0.95, omegaEvidence: 0.93, label: 'Verified', icon: '✓', theme: 'success', assumptions: [], contradictions: [] })
     : '';
 
+  const restoreBtnHtml = role === 'user'
+    ? `<button class="btn-restore-checkpoint" title="Restore workspace snapshot to this turn" style="background: transparent; border: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 10px; padding: 1px 6px; border-radius: var(--radius-xs); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; transition: all 0.15s ease;">
+        <span>↺</span>
+        <span>Restore</span>
+      </button>`
+    : '';
+
   card.innerHTML = `
     <div class="timeline-card-header">
       <div style="display: flex; align-items: center; gap: 6px;">
@@ -4414,10 +4653,29 @@ export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}
         ${providerMeta}
       ${evidenceBadgeHtml}
       </div>
-      <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${relativeTime}</span>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        ${restoreBtnHtml}
+        <span class="timeline-timestamp" data-timestamp="${msgTime}" style="font-size: 10px; color: var(--text-muted);">${relativeTime}</span>
+      </div>
     </div>
     <div class="timeline-card-body"></div>
   `;
+
+  const restoreBtn = card.querySelector('.btn-restore-checkpoint');
+  if (restoreBtn) {
+    restoreBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const ok = confirm('Rollback workspace files to the checkpoint before this turn?');
+      if (!ok) return;
+      try {
+        const { rollbackVfsAll } = await import('../services/tauri.js');
+        await rollbackVfsAll();
+        showToast('Workspace rolled back to checkpoint', 'success', 2500);
+      } catch (err) {
+        showToast(`Checkpoint restore failed: ${err}`, 'error', 3000);
+      }
+    });
+  }
 
   const bodyEl = card.querySelector('.timeline-card-body');
   const { thinking, display } = role === 'assistant' ? extractThinking(text) : { thinking: null, display: text };
@@ -4490,16 +4748,74 @@ function appendToolBox(name, args, risk) {
     ? activeTurnCard.getActivityList()
     : timeline;
 
+  const target = name === 'run_command' || name === 'run_tests'
+    ? (args.command || '')
+    : (args.path || args.query || args.url || args.symbol || (args.paths ? `${args.paths.length} files` : ''));
+
+  // Cluster consecutive read-only reconnaissance calls into compact pills
+  if (RECON_TOOLS.has(name) && targetParent) {
+    if (activeReconCluster && activeReconCluster.parent === targetParent) {
+      activeReconCluster.count++;
+      if (name.includes('graph') || name.includes('symbol')) {
+        activeReconCluster.symbols++;
+      } else {
+        activeReconCluster.files++;
+      }
+      const elapsed = Date.now() - activeReconCluster.startTime;
+      if (activeReconCluster.labelEl) {
+        activeReconCluster.labelEl.textContent = `Explored ${activeReconCluster.files} file${activeReconCluster.files > 1 ? 's' : ''}${activeReconCluster.symbols > 0 ? ` · ${activeReconCluster.symbols} symbol${activeReconCluster.symbols > 1 ? 's' : ''}` : ''} (${elapsed}ms)`;
+      }
+      const itemRow = document.createElement('div');
+      itemRow.style.cssText = 'padding: 3px 0; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); border-bottom: 1px dashed var(--border-subtle); display: flex; justify-content: space-between; gap: 8px;';
+      itemRow.innerHTML = `<span style="color: var(--accent-cyan); font-weight: 600;">${escapeHtml(name)}</span><span style="opacity: 0.85; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(String(target || '').slice(0, 80))}</span>`;
+      activeReconCluster.listEl?.appendChild(itemRow);
+      return activeReconCluster.id;
+    } else {
+      const clusterBox = document.createElement('details');
+      const id = 'recon_' + Math.random().toString(36).substring(2, 9);
+      clusterBox.id = id;
+      clusterBox.className = 'recon-cluster-pill';
+      clusterBox.style.cssText = 'margin: 4px 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: var(--bg-surface); overflow: hidden;';
+      clusterBox.innerHTML = `
+        <summary style="padding: 5px 10px; font-size: 11px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: space-between; user-select: none; color: var(--text-primary);">
+          <span style="display: flex; align-items: center; gap: 6px;">
+            <span>🔍</span>
+            <span class="cluster-summary-label">Explored 1 file (0ms)</span>
+          </span>
+          <span style="font-size: 10px; color: var(--text-muted);">▾</span>
+        </summary>
+        <div class="cluster-item-list" style="padding: 6px 10px; max-height: 140px; overflow-y: auto; background: var(--bg-app); border-top: 1px solid var(--border-subtle);">
+          <div style="padding: 3px 0; font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); border-bottom: 1px dashed var(--border-subtle); display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: var(--accent-cyan); font-weight: 600;">${escapeHtml(name)}</span>
+            <span style="opacity: 0.85; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(String(target || '').slice(0, 80))}</span>
+          </div>
+        </div>
+      `;
+      targetParent.appendChild(clusterBox);
+      activeReconCluster = {
+        id,
+        parent: targetParent,
+        element: clusterBox,
+        labelEl: clusterBox.querySelector('.cluster-summary-label'),
+        listEl: clusterBox.querySelector('.cluster-item-list'),
+        count: 1,
+        files: 1,
+        symbols: (name.includes('graph') || name.includes('symbol')) ? 1 : 0,
+        startTime: Date.now()
+      };
+      return id;
+    }
+  }
+
+  // File mutations or command execution breaks the cluster
+  activeReconCluster = null;
+
   const box = document.createElement('div');
   const id = 'toolbox_' + Math.random().toString(36).substring(2, 9);
   box.id = id;
   const category = getToolCategory(name);
   box.className = `tool-box ${category.class}`;
 
-  // Concise target next to the tool name — escaped, model-controlled data
-  const target = name === 'run_command' || name === 'run_tests'
-    ? (args.command || '')
-    : (args.path || args.query || args.url || args.symbol || (args.paths ? `${args.paths.length} files` : ''));
   const targetLabel = target ? `<span class="tool-target" title="${escapeHtml(String(target))}" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(String(target).slice(0, 100))}</span>` : '';
 
   box.innerHTML = `
@@ -4537,6 +4853,16 @@ function appendToolBox(name, args, risk) {
 }
 
 function updateToolBoxStatus(boxId, statusText, statusType) {
+  if (boxId && boxId.startsWith('recon_')) {
+    if (activeReconCluster && activeReconCluster.id === boxId) {
+      const elapsed = Date.now() - activeReconCluster.startTime;
+      if (activeReconCluster.labelEl) {
+        activeReconCluster.labelEl.textContent = `Explored ${activeReconCluster.files} file${activeReconCluster.files > 1 ? 's' : ''}${activeReconCluster.symbols > 0 ? ` · ${activeReconCluster.symbols} symbol${activeReconCluster.symbols > 1 ? 's' : ''}` : ''} (${elapsed}ms)`;
+      }
+    }
+    return;
+  }
+
   const statusElem = document.getElementById(`${boxId}_status`);
   if (!statusElem) return;
 

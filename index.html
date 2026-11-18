@@ -35,21 +35,14 @@
 
   <div id="app">
     <!-- Top Titlebar -->
-    <header class="titlebar">
-      <div class="titlebar-left">
-        <!-- Traffic Light Window Controls -->
-        <div class="window-controls traffic-lights">
-          <span class="window-control close" id="win-close" title="Close"></span>
-          <span class="window-control minimize" id="win-minimize" title="Minimize"></span>
-          <span class="window-control maximize" id="win-maximize" title="Maximize"></span>
-        </div>
-
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.1 (Click for About)">
+    <header class="titlebar" id="app-titlebar" data-tauri-drag-region>
+      <div class="titlebar-left" data-tauri-drag-region="false">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.3 (Click for About)" data-tauri-drag-region="false">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
 
-        <nav class="titlebar-menus">
+        <nav class="titlebar-menus" data-tauri-drag-region="false">
           <div class="menu-item" id="menu-file">File</div>
           <div class="menu-item" id="menu-edit">Edit</div>
           <div class="menu-item" id="menu-selection">Selection</div>
@@ -62,15 +55,22 @@
         </nav>
       </div>
 
-      <div class="titlebar-center">
-        <div class="workspace-badge" id="btn-open-workspace" title="Click to open or change workspace directory">
-          <span style="font-weight: 600; color: var(--text-primary-bright);" id="header-workspace-name">Orbital X</span>
-          <span style="opacity: 0.5;">—</span>
-          <span style="opacity: 0.8;" id="header-active-filename">Orbital X</span>
-        </div>
+      <div class="titlebar-center" data-tauri-drag-region>
+        <button class="titlebar-command-pill" id="btn-open-workspace" title="Open workspace / search files (Ctrl+P / Ctrl+O)" data-tauri-drag-region="false">
+          <svg class="command-pill-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+          </svg>
+          <span class="pill-project" id="header-workspace-name">Orbital X</span>
+          <span class="pill-sep">/</span>
+          <span class="pill-breadcrumb" id="header-active-filename">Workspace</span>
+          <span class="pill-git-branch" id="header-git-branch" title="Current Git Branch">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+            <span id="header-branch-name">main</span>
+          </span>
+        </button>
       </div>
 
-      <div class="titlebar-right">
+      <div class="titlebar-right" data-tauri-drag-region="false">
         <!-- Quick Mode Pill in Header with Interactive Switcher -->
         <div style="position: relative;">
           <div class="mode-pill dev" id="header-mode-pill" title="Click to choose Agent Operating Mode">
@@ -159,6 +159,19 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
           </svg>
         </button>
+
+        <!-- Window Controls (Antigravity & Desktop IDE Standard) -->
+        <div class="window-controls" id="titlebar-window-controls" data-tauri-drag-region="false">
+          <button class="win-btn win-minimize" id="win-minimize" title="Minimize" aria-label="Minimize" data-tauri-drag-region="false">
+            <svg width="10" height="1" viewBox="0 0 10 1"><rect width="10" height="1" fill="currentColor"/></svg>
+          </button>
+          <button class="win-btn win-maximize" id="win-maximize" title="Maximize" aria-label="Maximize" data-tauri-drag-region="false">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="0.5" y="0.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1"/></svg>
+          </button>
+          <button class="win-btn win-close" id="win-close" title="Close" aria-label="Close" data-tauri-drag-region="false">
+            <svg width="10" height="10" viewBox="0 0 10 10"><line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2"/><line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.2"/></svg>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -2028,7 +2041,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.4.1 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.4.3 · The AI-native IDE for everyone</div>
           </div>
         </div>
 
@@ -2500,7 +2513,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.4.1 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.4.3 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

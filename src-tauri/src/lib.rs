@@ -3003,6 +3003,15 @@ fn window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn window_is_maximized(app: AppHandle) -> Result<bool, String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.is_maximized().map_err(|e| e.to_string())
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
+#[tauri::command]
 fn window_toggle_fullscreen(app: AppHandle) -> Result<bool, String> {
     if let Some(win) = app.get_webview_window("main") {
         let is_fs = win.is_fullscreen().map_err(|e| e.to_string())?;
@@ -3195,6 +3204,7 @@ pub fn run() {
             window_close,
             window_minimize,
             window_toggle_maximize,
+            window_is_maximized,
             window_toggle_fullscreen,
 
             set_workspace,

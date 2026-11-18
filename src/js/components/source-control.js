@@ -162,6 +162,10 @@ function parseRawStatus(raw) {
 // ---------------------------------------------------------------------------
 
 function renderPanel() {
+  const headerBranch = document.getElementById('header-branch-name');
+  if (headerBranch && panelState.branch) {
+    headerBranch.textContent = panelState.branch;
+  }
   const container = document.getElementById('source-control-content');
   if (!container) return;
   container.innerHTML = '';

@@ -1457,16 +1457,6 @@ export function renderTabs(panel = 'left') {
 
   dom.tabsBar.innerHTML = '';
 
-  // Split controls (only in the left tab bar)
-  if (panel === 'left') {
-    const splitBtn = document.createElement('button');
-    splitBtn.className = 'icon-btn tabbar-split-btn';
-    splitBtn.title = state.editor.splitMode ? 'Close split editor (Ctrl+\\)' : 'Split editor right (Ctrl+\\)';
-    splitBtn.innerHTML = state.editor.splitMode ? '❙❙' : '⫲';
-    splitBtn.addEventListener('click', () => toggleSplitEditor());
-    dom.tabsBar.appendChild(splitBtn);
-  }
-
   const sorted = [...p.tabs].sort(tabOrderComparator);
   // Sorting a copy visually while the source array keeps chronological order
   // breaks drag-reorder math — instead apply the sort to the real array.
@@ -1579,6 +1569,16 @@ export function renderTabs(panel = 'left') {
       : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
     mdBtn.addEventListener('click', () => toggleMarkdownPreview());
     actionsWrap.appendChild(mdBtn);
+
+    const splitBtn = document.createElement('button');
+    splitBtn.className = 'icon-btn tabbar-split-btn';
+    splitBtn.title = state.editor.splitMode ? 'Close split editor (Ctrl+\\)' : 'Split editor right (Ctrl+\\)';
+    splitBtn.innerHTML = state.editor.splitMode
+      ? `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M2 2h12v12H2V2zm1 1v10h10V3H3z"/></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 2H2C1.45 2 1 2.45 1 3V13C1 13.55 1.45 14 2 14H14C14.55 14 15 13.55 15 13V3C15 2.45 14.55 2 14 2ZM7.5 13H2V3H7.5V13ZM14 13H8.5V3H14V13Z"/></svg>`;
+    splitBtn.addEventListener('click', () => toggleSplitEditor());
+    actionsWrap.appendChild(splitBtn);
+
     dom.tabsBar.appendChild(actionsWrap);
   }
 
@@ -1856,6 +1856,10 @@ function updateBreadcrumbFor(panel) {
   const dom = panelDom(panel);
   const p = panelState(panel);
   const tab = p.tabs.find(t => t.id === p.activeTabId);
+  const headerActive = document.getElementById('header-active-filename');
+  if (headerActive) {
+    headerActive.textContent = tab ? (tab.name || tab.relativePath?.split(/[/\\]/).pop() || 'Workspace') : 'Workspace';
+  }
   if (!dom.breadcrumb) return;
   if (!tab) { dom.breadcrumb.textContent = ''; return; }
   const relativePath = (tab.relativePath || tab.name || tab.path || '').replace(/\\/g, '/');
@@ -2728,13 +2732,26 @@ function ensureVfsReviewBar() {
       <span class="vfs-bar-stats" id="vfs-bar-stats">+0 / -0</span>
     </div>
     <div class="vfs-bar-actions">
+      <!-- Per-Hunk Inline Controls -->
+      <div class="vfs-hunk-controls" id="vfs-hunk-controls" style="display: none; align-items: center; gap: 5px;">
+        <span class="vfs-hunk-tag" id="vfs-hunk-tag" style="font-size: 11px; padding: 2px 7px; border-radius: var(--radius-xs); background: rgba(57, 197, 187, 0.12); color: var(--accent-cyan); font-weight: 600;">Hunk 1/1</span>
+        <button class="btn btn-sm btn-vfs-accept" id="btn-vfs-bar-accept-hunk" title="Accept current changed block">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>Accept Hunk</span>
+        </button>
+        <button class="btn btn-sm btn-vfs-reject" id="btn-vfs-bar-reject-hunk" title="Reject and revert current block">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>Reject Hunk</span>
+        </button>
+        <div class="vfs-bar-sep"></div>
+      </div>
       <button class="btn btn-sm btn-vfs-accept" id="btn-vfs-bar-accept" title="Accept changes for this file (commits to disk)">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-        <span>Accept</span>
+        <span>Accept File</span>
       </button>
       <button class="btn btn-sm btn-vfs-reject" id="btn-vfs-bar-reject" title="Reject changes for this file (reverts to original)">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        <span>Reject</span>
+        <span>Reject File</span>
       </button>
       <div class="vfs-bar-sep"></div>
       <button class="btn btn-sm btn-vfs-all" id="btn-vfs-bar-accept-all" title="Accept all pending file changes">
@@ -2754,7 +2771,45 @@ function ensureVfsReviewBar() {
     document.body.appendChild(bar);
   }
 
-  // Action listeners
+  // Action listeners for hunks
+  bar.querySelector('#btn-vfs-bar-accept-hunk').addEventListener('click', () => {
+    const activePath = getActiveTabPath() || pendingVfsReviews.keys().next().value;
+    const review = pendingVfsReviews.get(activePath);
+    if (!review || !review.hunks || review.hunks.length === 0) return;
+    review.hunks.shift();
+    if (review.hunks.length === 0) {
+      acceptVfsFile(activePath);
+    } else {
+      updateVfsReviewBarUI(activePath);
+      review.editor?.revealLineInCenter(review.hunks[0].startLine);
+    }
+  });
+
+  bar.querySelector('#btn-vfs-bar-reject-hunk').addEventListener('click', () => {
+    const activePath = getActiveTabPath() || pendingVfsReviews.keys().next().value;
+    const review = pendingVfsReviews.get(activePath);
+    if (!review || !review.hunks || review.hunks.length === 0) return;
+    const hunk = review.hunks.shift();
+    const ed = review.editor;
+    const model = ed?.getModel();
+    if (model && review.oldLinesChunk) {
+      const start = hunk.startLine;
+      const end = hunk.endLine;
+      const origText = review.oldLinesChunk[hunk.hunkIndex] || '';
+      ed.executeEdits('vfs-reject-hunk', [{
+        range: new monaco.Range(start, 1, end, model.getLineMaxColumn(end)),
+        text: origText
+      }]);
+    }
+    if (review.hunks.length === 0) {
+      rejectVfsFile(activePath);
+    } else {
+      updateVfsReviewBarUI(activePath);
+      review.editor?.revealLineInCenter(review.hunks[0].startLine);
+    }
+  });
+
+  // Action listeners for files
   bar.querySelector('#btn-vfs-bar-accept').addEventListener('click', () => {
     const activePath = getActiveTabPath();
     if (activePath && pendingVfsReviews.has(activePath)) {
@@ -2799,15 +2854,25 @@ function updateVfsReviewBarUI(targetPath = null) {
   const filenameEl = bar.querySelector('#vfs-bar-filename');
   const statsEl = bar.querySelector('#vfs-bar-stats');
   const countEl = bar.querySelector('#vfs-bar-total-count');
+  const hunkControls = bar.querySelector('#vfs-hunk-controls');
+  const hunkTag = bar.querySelector('#vfs-hunk-tag');
 
   if (countEl) countEl.textContent = String(pendingVfsReviews.size);
 
   if (review) {
     filenameEl.textContent = activePath.split(/[/\\]/).pop();
     statsEl.textContent = `+${review.addedCount} / -${review.deletedCount} lines`;
+    if (review.hunks && review.hunks.length > 0) {
+      if (hunkControls) hunkControls.style.display = 'flex';
+      const cur = review.hunks[0];
+      if (hunkTag) hunkTag.textContent = `Hunk 1 of ${review.hunks.length} (Ln ${cur.startLine}-${cur.endLine})`;
+    } else if (hunkControls) {
+      hunkControls.style.display = 'none';
+    }
   } else {
     filenameEl.textContent = `${pendingVfsReviews.size} files modified`;
     statsEl.textContent = 'Review pending';
+    if (hunkControls) hunkControls.style.display = 'none';
   }
 }
 
@@ -2826,20 +2891,23 @@ export function showVfsFileReview(filePath, oldContent, newContent, diff = null)
   const model = ed?.getModel();
   if (!ed || !model) return;
 
-  // 2. Compute lines added and modified
+  // 2. Compute lines added and modified into hunks
   const oldLines = oldContent.split('\n');
   const newLines = newContent.split('\n');
   const oldSet = new Set(oldLines);
 
   const decorations = [];
+  const hunks = [];
+  let currentHunk = null;
   let addedCount = 0;
 
   for (let i = 0; i < newLines.length; i++) {
     const line = newLines[i];
     if (!oldSet.has(line)) {
       addedCount++;
+      const lineNum = i + 1;
       decorations.push({
-        range: new monaco.Range(i + 1, 1, i + 1, 1),
+        range: new monaco.Range(lineNum, 1, lineNum, 1),
         options: {
           isWholeLine: true,
           className: 'inline-diff-add',
@@ -2849,8 +2917,18 @@ export function showVfsFileReview(filePath, oldContent, newContent, diff = null)
           },
         },
       });
+
+      if (!currentHunk) {
+        currentHunk = { startLine: lineNum, endLine: lineNum, hunkIndex: hunks.length };
+      } else if (currentHunk.endLine === lineNum - 1) {
+        currentHunk.endLine = lineNum;
+      } else {
+        hunks.push(currentHunk);
+        currentHunk = { startLine: lineNum, endLine: lineNum, hunkIndex: hunks.length };
+      }
     }
   }
+  if (currentHunk) hunks.push(currentHunk);
 
   // Apply decorations
   const appliedDecorations = ed.deltaDecorations([], decorations);
@@ -2864,6 +2942,8 @@ export function showVfsFileReview(filePath, oldContent, newContent, diff = null)
     editor: ed,
     addedCount,
     deletedCount,
+    hunks,
+    oldLinesChunk: [oldContent],
   });
 
   // Reveal first changed line

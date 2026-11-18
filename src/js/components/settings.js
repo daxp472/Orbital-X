@@ -952,6 +952,10 @@ export function applyTheme(themeName) {
   // Set data-theme on documentElement for styling compatibility
   const legacyDataTheme = norm === 'theme-light' ? 'nebula-light' : (norm === 'theme-hc' ? 'theme-hc' : 'orbit-dark');
   document.documentElement.setAttribute('data-theme', legacyDataTheme);
+  document.documentElement.setAttribute('data-theme-name', norm);
+  document.documentElement.classList.remove('theme-dark', 'theme-light', 'theme-hc', 'midnight-blue');
+  document.documentElement.classList.add(norm);
+  document.body.setAttribute('data-theme', legacyDataTheme);
 
   // Persist to localStorage
   localStorage.setItem('orbital_theme', norm);
@@ -1158,6 +1162,8 @@ export function applyAccentColor(hex) {
   document.documentElement.style.setProperty('--accent-cyan', hex);
   document.documentElement.style.setProperty('--accent-primary', hex);
   document.documentElement.style.setProperty('--accent-focus', hex);
+  document.documentElement.style.setProperty('--border-focus', hex);
+  document.documentElement.style.setProperty('--shadow-glow-cyan', `0 0 20px ${hex}44`);
 }
 
 export function applyGlassBlur(level) {
@@ -1179,8 +1185,12 @@ export function applyGlassBlur(level) {
 export function applyUiDensity(density) {
   if (density === 'compact') {
     document.body.classList.add('density-compact');
+    document.documentElement.style.setProperty('--sidebar-row-height', '22px');
+    document.documentElement.style.setProperty('--tree-row-height', '22px');
   } else {
     document.body.classList.remove('density-compact');
+    document.documentElement.style.setProperty('--sidebar-row-height', '26px');
+    document.documentElement.style.setProperty('--tree-row-height', '25px');
   }
 }
 

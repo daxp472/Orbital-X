@@ -270,12 +270,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   btnToggleAgent?.addEventListener('click', () => {
     agentPanelEl?.classList.toggle('hidden');
-    btnToggleAgent.classList.toggle('active', !agentPanelEl?.classList.contains('hidden'));
+    const isHidden = agentPanelEl?.classList.contains('hidden');
+    btnToggleAgent.classList.toggle('active', !isHidden);
+    const resizerAgent = document.getElementById('resizer-agent');
+    if (resizerAgent) resizerAgent.style.display = isHidden ? 'none' : '';
+    if (!isHidden && agentPanelEl) {
+      const curW = parseInt(agentPanelEl.style.width, 10);
+      if (isNaN(curW) || curW < 320) agentPanelEl.style.width = '380px';
+    }
   });
 
   document.getElementById('btn-close-agent-panel')?.addEventListener('click', () => {
     agentPanelEl?.classList.add('hidden');
     btnToggleAgent?.classList.remove('active');
+    const resizerAgent = document.getElementById('resizer-agent');
+    if (resizerAgent) resizerAgent.style.display = 'none';
   });
 
 
@@ -1019,6 +1028,60 @@ function initWindowControls() {
     }
   };
 
+  const maxBtn = document.getElementById('win-maximize');
+
+  const updateMaximizeState = (isMaximized) => {
+    if (!maxBtn) return;
+    if (isMaximized) {
+      maxBtn.title = 'Restore';
+      maxBtn.setAttribute('aria-label', 'Restore');
+      maxBtn.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+          <path d="M2.5 2.5V1.3A0.8 0.8 0 0 1 3.3 0.5H8.7A0.8 0.8 0 0 1 9.5 1.3V6.7A0.8 0.8 0 0 1 8.7 7.5H7.5"/>
+          <rect x="0.5" y="2.5" width="7" height="7" rx="1" fill="none"/>
+        </svg>
+      `;
+    } else {
+      maxBtn.title = 'Maximize';
+      maxBtn.setAttribute('aria-label', 'Maximize');
+      maxBtn.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <rect x="0.5" y="0.5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1"/>
+        </svg>
+      `;
+    }
+  };
+
+  const syncMaximized = async () => {
+    try {
+      const isMax = await invoke('window_is_maximized');
+      updateMaximizeState(Boolean(isMax));
+    } catch {
+      try {
+        const win = await getWin();
+        if (win?.isMaximized) {
+          const isMax = await win.isMaximized();
+          updateMaximizeState(Boolean(isMax));
+        }
+      } catch {}
+    }
+  };
+
+  const toggleMaximize = async () => {
+    try {
+      const isNowMax = await invoke('window_toggle_maximize');
+      updateMaximizeState(Boolean(isNowMax));
+    } catch {
+      try {
+        const win = await getWin();
+        if (win?.toggleMaximize) {
+          await win.toggleMaximize();
+          setTimeout(syncMaximized, 50);
+        }
+      } catch {}
+    }
+  };
+
   document.getElementById('win-close')?.addEventListener('click', async () => {
     try {
       await invoke('window_close');
@@ -1043,16 +1106,26 @@ function initWindowControls() {
     }
   });
 
-  document.getElementById('win-maximize')?.addEventListener('click', async () => {
-    try {
-      await invoke('window_toggle_maximize');
-    } catch {
-      const win = await getWin();
-      if (win?.toggleMaximize) {
-        await win.toggleMaximize();
-      }
+  maxBtn?.addEventListener('click', toggleMaximize);
+
+  // Double click titlebar background / drag region to toggle maximize (native OS behavior)
+  const titlebar = document.getElementById('app-titlebar') || document.querySelector('.titlebar');
+  titlebar?.addEventListener('dblclick', (e) => {
+    if (e.target.closest('button, .menu-item, .mode-pill, .mode-switcher-dropdown, .icon-btn, .win-btn, .titlebar-command-pill, input, select, [data-tauri-drag-region="false"]')) {
+      return;
     }
+    toggleMaximize();
   });
+
+  // Track window resize to dynamically update maximize/restore icon (e.g., Win + Arrow shortcuts or OS snaps)
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(syncMaximized, 100);
+  });
+
+  // Initial state check
+  setTimeout(syncMaximized, 100);
 
   // Global F11 key shortcut for full-screen toggle
   window.addEventListener('keydown', async (e) => {
@@ -1060,6 +1133,7 @@ function initWindowControls() {
       e.preventDefault();
       try {
         await invoke('window_toggle_fullscreen');
+        setTimeout(syncMaximized, 150);
       } catch (err) {
         console.warn('Fullscreen toggle error:', err);
       }
@@ -1947,7 +2021,14 @@ function initResizerPersistence() {
   }
   const agent = document.getElementById('agent-panel');
   const savedAgent = localStorage.getItem(AGENT_KEY);
-  if (savedAgent && agent) agent.style.width = `${savedAgent}px`;
+  const parsedAgent = parseInt(savedAgent, 10);
+  if (agent) {
+    if (!isNaN(parsedAgent) && parsedAgent >= 320) {
+      agent.style.width = `${parsedAgent}px`;
+    } else {
+      agent.style.width = '380px';
+    }
+  }
 
   // observe drags: the existing setupResizer handlers update inline styles —
   // hook mouseup on the handles to persist.
