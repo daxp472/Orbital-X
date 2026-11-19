@@ -583,14 +583,15 @@ body.theme-light .settings-sidebar,
 .terminal-output-scroll {
   flex: 1;
   overflow-y: auto;
-  overflow-x: auto;
-  padding: 6px 10px;
+  overflow-x: hidden;
+  padding: 8px 12px;
   white-space: pre-wrap;
   word-break: break-all;
-  font-family: var(--font-mono);
+  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace);
   color: var(--text-primary);
   background: var(--bg-activity);
   min-height: 0;
+  cursor: text;
 }
 .terminal-split-resizer {
   width: 5px;
@@ -600,54 +601,168 @@ body.theme-light .settings-sidebar,
 }
 .terminal-split-resizer:hover { background: var(--accent-blue); }
 
-/* Inline terminal prompt — sits inside the pane below the output, so the
-   output scrolls above it and the prompt stays pinned to the bottom
-   (Antigravity / VS Code behaviour). */
-.terminal-inline-prompt {
+/* VS Code & Antigravity Terminal Stream with Gutter Markers & Command Styling */
+.term-command-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  padding: 4px 12px 6px;
-  background: var(--bg-activity);
-  border-top: 1px solid var(--border-subtle);
+  align-items: baseline;
+  min-height: 22px;
+  line-height: 22px;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
-.terminal-prompt-label {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--accent-cyan);
-  white-space: nowrap;
-  user-select: none;
-  opacity: 0.95;
-  letter-spacing: -0.2px;
-  max-width: 48%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.terminal-inline-prompt .terminal-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  font-family: var(--font-mono);
-  font-size: 12px;
+
+.term-output-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 20px;
+  line-height: 20px;
+  font-family: inherit;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
   color: var(--text-primary);
-  outline: none;
-  padding: 4px 6px;
-  border-radius: 4px;
 }
-.terminal-inline-prompt .terminal-input:focus {
-  background: rgba(57, 197, 187, 0.08);
+
+.term-gutter-circle {
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  margin-right: 8px;
+  font-size: 12px;
+  user-select: none;
+  line-height: 1;
+  flex-shrink: 0;
 }
-.terminal-inline-run {
+
+.term-gutter-circle.term-gutter-done {
+  color: #388bfd; /* blue circle ● */
+}
+
+.term-gutter-circle.term-gutter-active {
+  color: #8b949e; /* hollow circle ○ */
+}
+
+.term-gutter-circle.term-gutter-blank {
+  visibility: hidden;
+}
+
+.term-prompt-txt {
+  color: var(--text-primary-bright);
+  font-weight: 500;
+  margin-right: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.term-command-syntax {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Active command line editor integrated seamlessly into terminal output stream */
+.term-active-prompt-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 22px;
+  line-height: 22px;
+  position: relative;
+  cursor: text;
+  margin-top: 2px;
+}
+
+.term-input-editor-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: baseline;
+  flex: 1;
+  min-width: 50px;
+}
+
+.term-input-syntax {
+  white-space: pre-wrap;
+  word-break: break-all;
+  pointer-events: none;
+  user-select: none;
+}
+
+.term-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1.15em;
+  background: var(--text-primary-bright, #e6edf3);
+  vertical-align: text-bottom;
+  margin-left: 1px;
+  animation: termCursorBlink 1s infinite steps(2);
+}
+
+@keyframes termCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.terminal-stealth-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
   background: transparent;
   border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  color: transparent;
+  caret-color: transparent;
+  z-index: 2;
+}
+
+/* Syntax token classes matching VS Code Terminal */
+.term-syntax-cmd {
+  color: #dcdcaa !important; /* gold/yellow */
+  font-weight: 600;
+}
+
+.term-syntax-flag {
+  color: #c586c0 !important; /* purple */
+}
+
+.term-syntax-str {
+  color: #4ec9b0 !important; /* cyan */
+}
+
+.term-syntax-path {
+  color: #4ec9b0 !important; /* cyan */
+}
+
+.term-syntax-subcmd {
+  color: #9cdcfe !important; /* light blue */
+}
+
+.term-syntax-num {
+  color: #b5cea8 !important; /* light green */
+}
+
+.term-syntax-op {
+  color: #569cd6 !important; /* deep blue */
+  font-weight: 700;
+}
+
+.term-syntax-arg {
+  color: var(--text-primary, #cccccc) !important;
+}
+
+/* Inline terminal prompt fallback / legacy compatibility */
+.terminal-inline-prompt {
+  display: none !important;
+}
   transition: background 0.12s ease, color 0.12s ease;
 }
 .terminal-inline-run:hover {

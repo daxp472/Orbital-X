@@ -208,10 +208,26 @@ body {
 
 .titlebar-right {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   height: 100%;
   align-self: stretch;
-  gap: 4px;
+  gap: 0;
+}
+
+.titlebar-right > .icon-btn,
+.titlebar-right > .layout-toggle-btn,
+.titlebar-right > .mode-pill {
+  align-self: center;
+  margin-right: 4px;
+}
+
+.titlebar-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--border-color);
+  align-self: center;
+  margin: 0 4px;
+  opacity: 0.6;
 }
 
 /* Window Controls (Native Windows / Antigravity IDE standard) */
@@ -220,14 +236,15 @@ body {
   align-items: stretch;
   height: 100%;
   align-self: stretch;
-  margin-left: 8px;
-  margin-right: 0;
+  margin: 0;
+  padding: 0;
+  gap: 0;
 }
 
 .win-btn {
   width: 46px;
   height: 100%;
-  min-height: 36px;
+  min-height: 100%;
   align-self: stretch;
   display: flex;
   align-items: center;
@@ -236,21 +253,34 @@ body {
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 0 !important;
   margin: 0;
   padding: 0;
-  transition: background var(--trans-fast), color var(--trans-fast);
+  transition: background 0.1s ease, color 0.1s ease;
   -webkit-app-region: no-drag;
 }
 
 .win-btn:hover {
   background: rgba(255, 255, 255, 0.12);
-  color: var(--text-primary-bright);
+  color: var(--text-primary-bright, #ffffff);
+}
+
+.win-btn:active {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .win-btn.win-close:hover {
   background: #e81123 !important;
   color: #ffffff !important;
+}
+
+.win-btn.win-close:active {
+  background: #f1707a !important;
+  color: #ffffff !important;
+}
+
+.win-btn svg {
+  pointer-events: none;
 }
 
 .layout-toggle-btn {
@@ -597,6 +627,10 @@ body {
   height: 35px !important;
 }
 
+.bottom-panel.maximized {
+  height: 75vh !important;
+}
+
 .bottom-panel.collapsed .panel-body {
   display: none !important;
 }
@@ -619,41 +653,122 @@ body {
 .panel-tabs {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 6px;
 }
 
 .panel-tab {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 6px 0;
+  gap: 6px;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 3px 9px;
+  border-radius: 4px;
   position: relative;
   transition: all var(--trans-fast);
+  user-select: none;
 }
 
 .panel-tab:hover {
   color: var(--text-primary-bright);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
 }
 
 .panel-tab.active {
   color: var(--text-primary-bright);
-  font-weight: 600;
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.08));
+  font-weight: 500;
 }
 
 .panel-tab.active::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background-color: #ffffff;
+  display: none;
+}
+
+.panel-tab-badge {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--text-secondary);
+  line-height: 14px;
+}
+
+.panel-tab-more-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.panel-tab-more-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.terminal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terminal-shell-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--text-primary);
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+  margin-right: 4px;
+}
+
+.terminal-shell-pill:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.term-shell-glyph {
+  font-weight: 700;
+  color: var(--accent-cyan, #388bfd);
+  font-size: 10.5px;
+  opacity: 0.9;
+}
+
+.term-shell-label {
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.term-shell-alert {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.term-plus-dropdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 3px 5px !important;
+}
+
+.panel-header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-subtle, rgba(255, 255, 255, 0.12));
+  margin: 0 4px;
 }
 
 .panel-body {

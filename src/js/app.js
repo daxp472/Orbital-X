@@ -366,6 +366,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Rich status bar interactions (Part C): language picker, indent settings,
 // format button — plus editor session restore after workspace load.
 function initStatusBarExtras() {
+  // USB Portable Mode Detection
+  invoke('is_portable_mode').then((isPortable) => {
+    if (isPortable) {
+      const pill = document.getElementById('sb-portable-pill');
+      if (pill) {
+        pill.style.display = 'inline-flex';
+        pill.addEventListener('click', async () => {
+          try {
+            const status = await invoke('get_portable_status');
+            showToast(`Zero-Trace USB Portable Active (${status.data_dir})`, 'info', 4000);
+          } catch (_) {
+            showToast('Zero-Trace USB Portable Active', 'info', 3000);
+          }
+        });
+      }
+    }
+  }).catch(() => {});
+
   document.getElementById('status-language')?.addEventListener('click', () => {
     import('./editor/monaco.js').then(m => m.openLanguagePicker());
   });

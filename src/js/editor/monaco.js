@@ -1600,7 +1600,9 @@ function moveTabWithinPanel(panel, draggedId, targetTab, beforeTarget) {
 function updateEmptyState(panel) {
   const dom = panelDom(panel);
   const p = panelState(panel);
-  if (dom.emptyState) dom.emptyState.style.display = p.tabs.length === 0 ? 'flex' : 'none';
+  const isEmpty = p.tabs.length === 0;
+  if (dom.emptyState) dom.emptyState.style.display = isEmpty ? 'flex' : 'none';
+  if (dom.container) dom.container.style.display = isEmpty ? 'none' : 'block';
   if (panel === 'left') {
     const langElem = document.getElementById('status-language');
     const active = p.tabs.find(t => t.id === p.activeTabId);

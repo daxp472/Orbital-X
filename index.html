@@ -160,6 +160,8 @@
           </svg>
         </button>
 
+        <div class="titlebar-separator" data-tauri-drag-region="false"></div>
+
         <!-- Window Controls (Antigravity & Desktop IDE Standard) -->
         <div class="window-controls" id="titlebar-window-controls" data-tauri-drag-region="false">
           <button class="win-btn win-minimize" id="win-minimize" title="Minimize" aria-label="Minimize" data-tauri-drag-region="false">
@@ -540,38 +542,90 @@
         <!-- Bottom Panel (Problems, Output, Debug Console, Terminal, Ports) -->
         <section class="bottom-panel" id="bottom-panel">
           <div class="panel-header">
-            <div class="panel-tabs">
-              <div class="panel-tab active" data-tab="terminal" style="display: flex; align-items: center; gap: 6px; font-weight: 600; letter-spacing: 0.5px;">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <polyline points="4 17 10 11 4 5"></polyline>
-                  <line x1="12" y1="19" x2="20" y2="19"></line>
-                </svg>
-                <span>TERMINAL</span>
+            <div class="panel-tabs" id="bottom-panel-tabs">
+              <div class="panel-tab" data-tab="problems">
+                <span>Problems</span>
+                <span class="panel-tab-badge" id="panel-badge-problems">0</span>
               </div>
+              <div class="panel-tab" data-tab="output">
+                <span>Output</span>
+                <span class="panel-tab-badge" id="panel-badge-output">1</span>
+              </div>
+              <div class="panel-tab active" data-tab="terminal">
+                <span>Terminal</span>
+              </div>
+              <div class="panel-tab" data-tab="ai-agents">
+                <span>AI Agents</span>
+                <span class="panel-tab-badge" id="panel-badge-agents">3</span>
+              </div>
+              <button class="panel-tab-more-btn" id="btn-panel-tabs-more" title="More Panel Views...">···</button>
             </div>
 
-            <div class="sidebar-actions">
-              <!-- New Terminal + -->
-              <button class="icon-btn" id="btn-new-terminal" title="New Terminal (Command Prompt)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <div class="sidebar-actions terminal-header-actions">
+              <!-- Active Shell Profile Indicator / Switcher Pill -->
+              <div class="terminal-shell-pill" id="terminal-shell-badge" title="Active Shell: Click to switch or rename">
+                <span class="term-shell-glyph">&gt;_</span>
+                <span class="term-shell-label" id="terminal-active-name">powershell</span>
+                <span class="term-shell-alert" title="Shell profile running">⚠️</span>
+              </div>
+
+              <!-- New Terminal + v (Dropdown) -->
+              <button class="icon-btn term-plus-dropdown" id="btn-new-terminal" title="New Terminal (Select Shell Profile)">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-left: 1px;">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
               </button>
+
               <!-- Split Terminal -->
               <button class="icon-btn" id="btn-split-terminal" title="Split Terminal">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                   <line x1="12" y1="3" x2="12" y2="21"></line>
                 </svg>
               </button>
-              <!-- Clear output -->
-              <button class="icon-btn" id="btn-clear-terminal" title="Clear Terminal (cls)">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+              <!-- Kill Terminal Instance (Trash Icon) -->
+              <button class="icon-btn" id="btn-kill-terminal" title="Kill Terminal Instance">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"></polyline>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
               </button>
+
+              <!-- Clear output (hidden fallback accessible via Ctrl+K) -->
+              <button class="icon-btn" id="btn-clear-terminal" title="Clear Terminal (Ctrl+K)" style="display: none;">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+
+              <!-- Terminal more options (...) -->
+              <button class="icon-btn" id="btn-terminal-more" title="More Terminal Actions">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="1.5"></circle>
+                  <circle cx="19" cy="12" r="1.5"></circle>
+                  <circle cx="5" cy="12" r="1.5"></circle>
+                </svg>
+              </button>
+
+              <!-- Header separator -->
+              <div class="panel-header-divider"></div>
+
+              <!-- Maximize Panel Toggle -->
+              <button class="icon-btn" id="btn-maximize-panel" title="Maximize Panel (^)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <polyline points="9 21 3 21 3 15"></polyline>
+                  <line x1="21" y1="3" x2="14" y2="10"></line>
+                  <line x1="3" y1="21" x2="10" y2="14"></line>
+                </svg>
+              </button>
+
               <!-- Close panel -->
               <button class="icon-btn" id="btn-collapse-panel" title="Close Panel (Ctrl+`)">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -589,6 +643,26 @@
               <div id="terminal-mount" style="display: flex; flex: 1; min-height: 0; width: 100%; flex-direction: column;"></div>
             </div>
 
+            <!-- Problems Tab Body -->
+            <div id="tab-content-problems" style="display: none; padding: 12px; overflow-y: auto; height: 100%;">
+              <div id="problems-list" style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+                <div style="color: var(--text-muted); font-size: 11.5px;">No problems detected in workspace.</div>
+              </div>
+            </div>
+
+            <!-- Generic Output Tab Body -->
+            <div id="tab-content-output" style="display: none; padding: 12px; font-family: var(--font-mono, monospace); font-size: 11px; color: var(--text-secondary); overflow-y: auto; height: 100%;" id="generic-output-panel">
+              <div style="color: var(--accent-cyan); font-weight: 600; margin-bottom: 6px;">[Orbital X System Output]</div>
+              <div>[Core] Ready. All services operational.</div>
+            </div>
+
+            <!-- AI Agents Tab Body -->
+            <div id="tab-content-ai-agents" style="display: none; padding: 12px; overflow-y: auto; height: 100%;">
+              <div id="ai-agents-panel-list" style="display: flex; flex-direction: column; gap: 8px;">
+                <!-- Managed by terminal.js -->
+              </div>
+            </div>
+
             <!-- Validation Tab Body -->
             <div id="tab-content-validation" style="display: none; padding: 12px; overflow-y: auto;">
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -600,11 +674,6 @@
               <div id="validation-report-card" style="background: var(--bg-surface); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); font-size: 12px;">
                 <div style="color: var(--text-secondary);">No validation checks executed yet. Click "Run Tests" or ask the Agent.</div>
               </div>
-            </div>
-
-            <!-- Generic Output Tab Body -->
-            <div id="tab-content-generic" style="display: none; padding: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);" id="generic-output-panel">
-              [Orbital X Core] Ready.
             </div>
           </div>
         </section>
@@ -774,8 +843,20 @@
           </div>
         </div>
 
+        <!-- Floating Scroll to Latest Message Button -->
+        <button id="btn-chat-scroll-bottom" class="chat-scroll-bottom-btn" title="Scroll to latest message" style="display: none;">
+          <span class="scroll-bottom-indicator" id="scroll-bottom-indicator" style="display: none;"></span>
+          <span class="scroll-bottom-label" id="scroll-bottom-label">Latest</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
         <!-- Agent Composer (Matches exact Cursor/Antigravity bottom box) -->
         <div class="agent-composer">
+          <!-- Queued Messages Tray -->
+          <div id="queued-messages-tray" class="queued-messages-tray" style="display: none;"></div>
+
           <!-- Developer Action Chips -->
           <div class="composer-chips-bar" id="composer-chips-bar" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none;">
             <button class="action-chip" id="chip-tag-codebase" title="Tag entire codebase context and send (Alt+Enter)">
@@ -980,6 +1061,11 @@
         <div class="status-item sb-pillar-pill" id="sb-pillars-pill" title="Enterprise Core Pillars: Active&#10;• Sandbox: Active&#10;• Semantic Graph: Ready&#10;• Diagnostics: Healthy&#10;• VFS Bridge: Clean&#10;Click to Inspect System Status" style="cursor: pointer; display: flex; align-items: center; gap: 5px;">
           <span class="mode-dot" id="sb-pillars-dot" style="background-color: var(--accent-green); width: 6px; height: 6px; border-radius: 50%;"></span>
           <span id="sb-pillars-text" style="font-weight: 500;">Pillars: OK</span>
+        </div>
+
+        <!-- USB Portable Mode Indicator -->
+        <div class="status-item sb-portable-pill" id="sb-portable-pill" style="display: none; cursor: pointer;" title="Zero-Trace USB Portable Mode: Active&#10;• Config & History: ./Data/.orbital/&#10;• Zero host registry or APPDATA writes">
+          <span style="font-size: 11px;">💾 USB Portable</span>
         </div>
         <!-- Background listeners for individual pillars to preserve real-time updates -->
         <div style="display: none;">

@@ -12,6 +12,8 @@ release/*.tar.gz
 release/*.zip
 release/Orbital x 2/
 release/Orbital x 3/
+release/Orbital x 4/
+release/Orbital x */
 release/Orbital.X_Portable_*/
 
 # Tauri & Rust build artifacts

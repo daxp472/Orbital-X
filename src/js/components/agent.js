@@ -242,6 +242,34 @@ export function initAgent() {
     });
   }
 
+  // Scroll to bottom button wiring
+  const scrollBottomBtn = document.getElementById('btn-chat-scroll-bottom');
+  const scrollBottomIndicator = document.getElementById('scroll-bottom-indicator');
+  const scrollBottomLabel = document.getElementById('scroll-bottom-label');
+  const chatTimeline = document.getElementById('agent-timeline');
+
+  if (scrollBottomBtn && chatTimeline) {
+    const handleScroll = () => {
+      const distFromBottom = chatTimeline.scrollHeight - chatTimeline.scrollTop - chatTimeline.clientHeight;
+      if (distFromBottom > 120) {
+        scrollBottomBtn.style.display = 'inline-flex';
+      } else if (distFromBottom <= 40) {
+        scrollBottomBtn.style.display = 'none';
+        if (scrollBottomIndicator) scrollBottomIndicator.style.display = 'none';
+        if (scrollBottomLabel) scrollBottomLabel.textContent = 'Latest';
+      }
+    };
+
+    chatTimeline.addEventListener('scroll', handleScroll, { passive: true });
+
+    scrollBottomBtn.addEventListener('click', () => {
+      chatTimeline.scrollTo({ top: chatTimeline.scrollHeight, behavior: 'smooth' });
+      scrollBottomBtn.style.display = 'none';
+      if (scrollBottomIndicator) scrollBottomIndicator.style.display = 'none';
+      if (scrollBottomLabel) scrollBottomLabel.textContent = 'Latest';
+    });
+  }
+
   // Live token estimate counter in composer actions row
   let tokenCounter = document.getElementById('composer-token-counter');
   if (!tokenCounter && inputElem) {
@@ -685,18 +713,31 @@ function clearAgentContext() {
 export function compactAgentContext(isAutomatic = false) {
   const activeMessages = state.conversation.filter(m => !m._ephemeral && !m._compactedOut);
   const before = activeMessages.length;
-  if (before < 4) {
+  // If auto-compacting, require at least 12 active messages so we don't churn on tiny chats
+  const minThreshold = isAutomatic ? 12 : 4;
+  if (before < minThreshold) {
     if (!isAutomatic) showToast('Conversation too short to compact', 'info', 2000);
     return;
   }
-  // Keep the first user message (task anchor) + the most recent 6 messages,
-  // and mark everything in between as compacted for LLM context, but PRESERVE
-  // all user & agent messages visually in the timeline.
+
+  // Keep the first user message (task anchor) + the most recent 8 messages,
+  // making sure not to orphan any tool calls.
   const firstUser = activeMessages.find(m => m.role === 'user');
-  const recent = activeMessages.slice(-6);
+  let sliceStart = activeMessages.length - 8;
+  if (sliceStart < 1) sliceStart = 1;
+  while (sliceStart > 1 && activeMessages[sliceStart]?.role === 'tool') {
+    sliceStart--;
+  }
+
+  const recent = activeMessages.slice(sliceStart);
   const keep = new Set();
   if (firstUser) keep.add(firstUser);
   for (const m of recent) keep.add(m);
+
+  // If compacting would free fewer than 3 messages, skip automatic compaction
+  if (isAutomatic && (before - keep.size < 3)) {
+    return;
+  }
 
   for (const m of activeMessages) {
     if (!keep.has(m)) {
@@ -704,26 +745,34 @@ export function compactAgentContext(isAutomatic = false) {
     }
   }
 
-  // Insert a non-destructive inline compaction divider in the timeline without wiping previous cards
+  // Insert or update non-destructive inline compaction divider in the timeline
   const timeline = document.getElementById('agent-timeline');
   if (timeline) {
-    const divider = document.createElement('div');
-    divider.className = 'timeline-compact-divider';
-    divider.innerHTML = `
-      <div class="compact-divider-line"></div>
-      <div class="compact-divider-badge">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="4 14 10 14 10 20"></polyline>
-          <polyline points="20 10 14 10 14 4"></polyline>
-          <line x1="14" y1="10" x2="21" y2="3"></line>
-          <line x1="3" y1="21" x2="10" y2="14"></line>
-        </svg>
-        <span>Context window compacted (${before} turns → ${keep.size} active) • Chat history preserved</span>
-      </div>
-      <div class="compact-divider-line"></div>
-    `;
-    timeline.appendChild(divider);
-    divider.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const lastDivider = timeline.querySelector('.timeline-compact-divider:last-child');
+    if (lastDivider && lastDivider === timeline.lastElementChild) {
+      const textSpan = lastDivider.querySelector('.compact-divider-badge span');
+      if (textSpan) {
+        textSpan.textContent = `Context window compacted (${before} turns → ${keep.size} active) • Chat history preserved`;
+      }
+    } else {
+      const divider = document.createElement('div');
+      divider.className = 'timeline-compact-divider';
+      divider.innerHTML = `
+        <div class="compact-divider-line"></div>
+        <div class="compact-divider-badge">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="4 14 10 14 10 20"></polyline>
+            <polyline points="20 10 14 10 14 4"></polyline>
+            <line x1="14" y1="10" x2="21" y2="3"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+          <span>Context window compacted (${before} turns → ${keep.size} active) • Chat history preserved</span>
+        </div>
+        <div class="compact-divider-line"></div>
+      `;
+      timeline.appendChild(divider);
+      divider.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
 
   showToast(isAutomatic ? `Auto-compacted context (${before} → ${keep.size} turns)` : `Context compacted: ${before} → ${keep.size} turns`, 'success', 2500);
@@ -1257,36 +1306,60 @@ function setAgentBusy(busy) {
   updateSendButtonState();
 }
 
+export function renderQueuedMessagesTray() {
+  const tray = document.getElementById('queued-messages-tray');
+  if (!tray) return;
+
+  if (agentMessageQueue.length === 0) {
+    tray.style.display = 'none';
+    tray.innerHTML = '';
+    return;
+  }
+
+  tray.style.display = 'flex';
+  tray.innerHTML = agentMessageQueue.map((item, idx) => `
+    <div class="queued-message-item" data-queue-idx="${idx}">
+      <div class="queued-item-badge">
+        <span>⏳</span>
+        <span>Queued #${idx + 1}</span>
+      </div>
+      <div class="queued-item-snippet" title="${escapeHtml(item.promptText)}">${escapeHtml(item.promptText)}</div>
+      <div class="queued-item-actions">
+        <button class="queued-item-btn queued-item-send-now" title="Interrupt current turn and execute now" data-action="send-now">Send Now</button>
+        <button class="queued-item-btn queued-item-cancel" title="Remove from queue" data-action="cancel">✕ Cancel</button>
+      </div>
+    </div>
+  `).join('');
+
+  tray.querySelectorAll('.queued-item-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const itemEl = btn.closest('.queued-message-item');
+      if (!itemEl) return;
+      const idx = parseInt(itemEl.dataset.queueIdx, 10);
+      const action = btn.dataset.action;
+      if (isNaN(idx) || idx < 0 || idx >= agentMessageQueue.length) return;
+
+      if (action === 'send-now') {
+        const [target] = agentMessageQueue.splice(idx, 1);
+        renderQueuedMessagesTray();
+        if (target) {
+          interruptAndSendImmediate(target.promptText);
+        }
+      } else if (action === 'cancel') {
+        agentMessageQueue.splice(idx, 1);
+        renderQueuedMessagesTray();
+        showToast('Queued message cancelled', 'info', 1800);
+      }
+    });
+  });
+}
+
 function queueAgentMessage(promptText) {
   const images = pendingImages.map(img => img.dataUrl || img.base64);
   clearImages();
   agentMessageQueue.push({ promptText, images, timestamp: Date.now() });
-
-  const timeline = document.getElementById('agent-timeline');
-  if (timeline) {
-    const chip = document.createElement('div');
-    chip.className = 'agent-queued-message-banner';
-    chip.id = `queued-msg-${Date.now()}`;
-    chip.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-        <span style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--accent-cyan); font-size: 11.5px;">
-          <span>⏳</span>
-          <span>Queued Message #${agentMessageQueue.length}</span>
-        </span>
-        <button class="icon-btn btn-cancel-queued" style="font-size: 10px; padding: 2px 6px; color: var(--text-muted); cursor: pointer;">✕ Cancel</button>
-      </div>
-      <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-family: var(--font-mono, monospace); white-space: pre-wrap;">${escapeHtml(promptText)}</div>
-    `;
-    chip.querySelector('.btn-cancel-queued')?.addEventListener('click', () => {
-      const idx = agentMessageQueue.findIndex(q => q.promptText === promptText);
-      if (idx !== -1) agentMessageQueue.splice(idx, 1);
-      chip.remove();
-      showToast('Queued message removed', 'info', 1800);
-    });
-    timeline.appendChild(chip);
-    chip.scrollIntoView({ behavior: 'smooth' });
-  }
-
+  renderQueuedMessagesTray();
   showToast(`⏳ Message queued (#${agentMessageQueue.length}) — will run automatically after current turn`, 'info', 2500);
 }
 
@@ -1351,9 +1424,12 @@ async function interruptAndSendImmediate(promptText) {
 }
 
 function processNextQueuedMessage() {
-  if (agentMessageQueue.length === 0) return;
+  if (agentMessageQueue.length === 0) {
+    renderQueuedMessagesTray();
+    return;
+  }
   const next = agentMessageQueue.shift();
-  document.querySelector('.agent-queued-message-banner')?.remove();
+  renderQueuedMessagesTray();
 
   setTimeout(async () => {
     appendTimelineCard('user', next.promptText, next.timestamp, { images: next.images });
@@ -2383,15 +2459,21 @@ STRATEGY:
   activeTurnCard = beginStreamingCard();
   let accumulatedNarrative = '';
   let turnHasFinalized = false;
+  let turnHasAutoCompacted = false;
 
   while (isLoopRunning && iteration < maxIterations) {
     iteration++;
     updateStatusBarAgentStatus(`Agent running… step ${iteration}/${maxIterations}`);
 
-    // Auto-compact if approaching context limit (especially for 8k/16k models)
-    const currentTokens = estimateTokens(state.conversation.map(m => m.content || '').join(''));
-    if (currentTokens > numCtx * 0.70 && state.conversation.length >= 6) {
-      compactAgentContext(true);
+    // Auto-compact only if approaching genuine context exhaustion (>90%),
+    // only if at least 12 active messages exist, and at most ONCE per user turn.
+    if (!turnHasAutoCompacted) {
+      const activeMsgs = state.conversation.filter(m => !m._ephemeral && !m._compactedOut);
+      const activeTokens = estimateTokens(activeMsgs.map(m => m.content || '').join(''));
+      if (activeTokens > numCtx * 0.90 && activeMsgs.length >= 12) {
+        compactAgentContext(true);
+        turnHasAutoCompacted = true;
+      }
     }
 
     // Token-budgeted window; ephemeral nudges excluded, tool pairs kept intact
@@ -4544,6 +4626,13 @@ function beginStreamingCard() {
           const isNearBottom = timeline.scrollHeight - timeline.scrollTop - timeline.clientHeight < 160;
           if (isNearBottom) {
             timeline.scrollTop = timeline.scrollHeight;
+          } else {
+            const scrollBtn = document.getElementById('btn-chat-scroll-bottom');
+            const indicator = document.getElementById('scroll-bottom-indicator');
+            const label = document.getElementById('scroll-bottom-label');
+            if (scrollBtn) scrollBtn.style.display = 'inline-flex';
+            if (indicator) indicator.style.display = 'inline-block';
+            if (label) label.textContent = 'New messages ↓';
           }
         }
       });

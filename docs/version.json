@@ -1,11 +1,11 @@
 {
-  "version": "2.4.2",
-  "tag": "v2.4.2",
-  "release_date": "2026-11-17",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.2/Orbital.X_2.4.2_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.2/Orbital.X_2.4.2_portable_win64.zip",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.2/Orbital.X_2.4.2_aarch64.dmg",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.2/Orbital.X_2.4.2_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.2/Orbital.X_2.4.2_amd64.deb",
-  "changelog": "v2.4.2: Dedicated Multi-Slot Agent Terminals (1, 2, 3), Crash-Safe Session & Draft Recovery, First-Launch 60-Second Guided Tour & Sample Project, Zero-Freeze Large Repo AST Guardrails, and Conversational Continuity Grounding."
+  "version": "2.4.4",
+  "tag": "v2.4.4",
+  "release_date": "2026-11-19",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital-X-Portable.zip",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_aarch64.dmg",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.deb",
+  "changelog": "v2.4.4: Universal 3-in-1 USB Portable Suite (Windows .exe, macOS .app, and Linux .AppImage sharing one ./Data/ directory), VS Code & Antigravity Terminal Redesign with real-time command syntax highlighting and gutter decoration markers (● executed, ○ active prompt), and context auto-compaction loop resolution."
 }

@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -47,6 +47,15 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Orbital X ${{ github.ref_name }}'
-          releaseBody: 'Orbital X ${{ github.ref_name }} — Four Enterprise Architectural Pillars Hardened & Wired'
+          releaseBody: 'Orbital X ${{ github.ref_name }} — Universal 3-in-1 USB Portable Edition & Professional Integrated Terminal'
           releaseDraft: false
           prerelease: false
+
+      - name: Package Universal Portable Suite (Windows Runner)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          node scripts/build-portable-zip.js
+          gh release upload ${{ github.ref_name }} release/Orbital-X-Portable.zip --clobber || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

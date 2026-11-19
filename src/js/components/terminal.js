@@ -27,8 +27,8 @@ let cmdHistoryIndex = -1;
 // --- E2: terminal profiles ------------------------------------------------
 
 const SHELL_PROFILES = [
-  { id: 'cmd', label: 'Command Prompt', shell: 'cmd.exe', dot: 'var(--accent-orange)', os: 'windows' },
   { id: 'powershell', label: 'PowerShell', shell: 'powershell.exe', dot: 'var(--accent-blue)', os: 'windows' },
+  { id: 'cmd', label: 'Command Prompt', shell: 'cmd.exe', dot: 'var(--accent-orange)', os: 'windows' },
   { id: 'gitbash', label: 'Git Bash', shell: 'C:\\Program Files\\Git\\bin\\bash.exe', dot: 'var(--accent-green)', os: 'windows' },
   { id: 'wsl', label: 'WSL', shell: 'wsl.exe', dot: 'var(--accent-green)', os: 'windows' },
   { id: 'sh', label: 'sh (Unix)', shell: 'sh', dot: 'var(--accent-green)', os: 'unix' },
@@ -55,7 +55,7 @@ function loadTerminalSettings() {
   state.terminal = state.terminal || {
     profiles: [],
     splitMode: false,
-    defaultShell: isWindows() ? 'cmd' : 'sh',
+    defaultShell: isWindows() ? 'powershell' : 'sh',
   };
   if (!Array.isArray(state.terminal.profiles) || state.terminal.profiles.length === 0) {
     state.terminal.profiles = defaultProfiles();
@@ -70,10 +70,6 @@ function loadTerminalSettings() {
     const savedMeta = JSON.parse(localStorage.getItem('orbital_terminal_meta') || 'null');
     if (savedMeta) {
       state.terminal = { ...state.terminal, ...savedMeta };
-    }
-    // Windows default shell migration: ensure default is 'cmd' unless explicitly customized
-    if (isWindows() && (!state.terminal.defaultShell || state.terminal.defaultShell === 'powershell')) {
-      state.terminal.defaultShell = 'cmd';
     }
   } catch (e) { /* defaults */ }
 }
@@ -260,16 +256,65 @@ export function parseAnsiToHtml(text) {
 // ===========================================================================
 
 const URL_RE = /(https?:\/\/[^\s"'<>]+)/g;
-// Windows absolute path (optionally with :line) — tolerate escaped HTML chars
-const WIN_PATH_RE = /([A-Za-z]:\\[^\s:<>"]+(?::(\d+))?)/g;
+// Matches absolute (C:\..., /...) and relative (src/..., ./...) paths with :line(:col)?
+const FILE_PATH_RE = /(?:^|[\s"'`<(\[])((?:(?:[a-zA-Z]:[\\/])|(?:\.\.?[\\/])|(?:\/[\w.-]+[\\/])|(?:[\w.-]+[\\/]))[^\s:<>"'`()\[\]]+?\.[a-zA-Z0-9]+)(?::(\d+))?(?::(\d+))?/g;
 
 function linkifySafeHtml(safeHtml) {
   // safeHtml is already HTML-escaped. URLs survive escaping untouched.
   return safeHtml
     .replace(URL_RE, (url) =>
       `<a href="#" class="term-link" data-term-link="url" data-url="${url}" title="Open in browser">${url}</a>`)
-    .replace(WIN_PATH_RE, (p, path, line) =>
-      `<a href="#" class="term-link" data-term-link="file" data-path="${path}" data-line="${line || ''}" title="Open in editor">${path}</a>`);
+    .replace(FILE_PATH_RE, (full, path, line, col) => {
+      const lineAttr = line ? ` data-line="${line}"` : '';
+      const colAttr = col ? ` data-col="${col}"` : '';
+      const location = line ? (col ? `:${line}:${col}` : `:${line}`) : '';
+      return `<a href="#" class="term-link" data-term-link="file" data-path="${path}"${lineAttr}${colAttr} title="Open in editor (${path}${location})">${path}${location}</a>`;
+    });
+}
+
+/**
+ * Real-time command line syntax highlighter matching VS Code & Windows Terminal.
+ * Highlights command verbs (gold/yellow), flags (purple), strings/paths (cyan),
+ * operators (blue), numbers (green), and subcommands.
+ */
+export function highlightCommandLine(cmd) {
+  if (!cmd) return '';
+  const tokenRe = /(".*?"|'.*?'|--?[a-zA-Z0-9_\-]+|&&|\|\||[|;><]+|\d+(?:\.\d+)?|[^\s"';|><&]+|\s+)/g;
+  let match;
+  let isFirstWord = true;
+  let html = '';
+
+  while ((match = tokenRe.exec(cmd)) !== null) {
+    const text = match[0];
+    if (/^\s+$/.test(text)) {
+      html += text;
+      continue;
+    }
+    const escaped = escapeHtmlText(text);
+    if (isFirstWord) {
+      html += `<span class="term-syntax-cmd">${escaped}</span>`;
+      isFirstWord = false;
+    } else if (/^--?[a-zA-Z0-9_\-]/.test(text)) {
+      html += `<span class="term-syntax-flag">${escaped}</span>`;
+    } else if (/^["']/.test(text)) {
+      html += `<span class="term-syntax-str">${escaped}</span>`;
+    } else if (/^(&&|\|\||[|;><]+)$/.test(text)) {
+      html += `<span class="term-syntax-op">${escaped}</span>`;
+      isFirstWord = true;
+    } else if (/^\d+$/.test(text)) {
+      html += `<span class="term-syntax-num">${escaped}</span>`;
+    } else if (/^[\\\/]|\.\.|\.[\/\\]/.test(text)) {
+      html += `<span class="term-syntax-path">${escaped}</span>`;
+    } else {
+      const subcmds = ['commit', 'push', 'pull', 'status', 'add', 'checkout', 'run', 'build', 'test', 'install', 'dev', 'start'];
+      if (subcmds.includes(text.toLowerCase())) {
+        html += `<span class="term-syntax-subcmd">${escaped}</span>`;
+      } else {
+        html += `<span class="term-syntax-arg">${escaped}</span>`;
+      }
+    }
+  }
+  return html;
 }
 
 // ===========================================================================
@@ -397,7 +442,7 @@ export function initTerminal() {
     first.startBackendShell();
   }
 
-  // Bottom panel tab switching (terminal / validation / logs)
+  // Bottom panel tab switching (terminal / problems / output / ai-agents / validation)
   const tabs = document.querySelectorAll('.panel-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -407,10 +452,18 @@ export function initTerminal() {
       const target = tab.dataset.tab;
       const termContent = document.getElementById('tab-content-terminal');
       const valContent = document.getElementById('tab-content-validation');
-      const logContent = document.getElementById('tab-content-logs');
+      const probContent = document.getElementById('tab-content-problems');
+      const outContent = document.getElementById('tab-content-output');
+      const agentsContent = document.getElementById('tab-content-ai-agents');
+
       if (termContent) termContent.style.display = target === 'terminal' ? 'flex' : 'none';
       if (valContent) valContent.style.display = target === 'validation' ? 'block' : 'none';
-      if (logContent) logContent.style.display = target === 'logs' ? 'block' : 'none';
+      if (probContent) probContent.style.display = target === 'problems' ? 'block' : 'none';
+      if (outContent) outContent.style.display = target === 'output' ? 'block' : 'none';
+      if (agentsContent) {
+        agentsContent.style.display = target === 'ai-agents' ? 'block' : 'none';
+        if (target === 'ai-agents') renderAiAgentsPanel();
+      }
       if (target === 'terminal') {
         focusActiveTerminalInput();
         pollActiveTerminalOutput();
@@ -437,23 +490,58 @@ export function initTerminal() {
 
   clearBtn?.addEventListener('click', clearActiveTerminal);
 
+  const shellBadge = document.getElementById('terminal-shell-badge');
+  shellBadge?.addEventListener('click', (e) => {
+    bottomPanel?.classList.remove('collapsed');
+    openProfileMenu(e, 'A');
+  });
+
+  const moreBtn = document.getElementById('btn-terminal-more');
+  moreBtn?.addEventListener('click', (e) => {
+    openTerminalMoreMenu(e);
+  });
+
+  const tabsMoreBtn = document.getElementById('btn-panel-tabs-more');
+  tabsMoreBtn?.addEventListener('click', (e) => {
+    openTerminalMoreMenu(e);
+  });
+
+  const killActiveBtn = document.getElementById('btn-kill-terminal');
+  killActiveBtn?.addEventListener('click', () => {
+    const active = getActiveSession();
+    if (active) {
+      closeTerminalInstance(active.id);
+    }
+  });
+
+  const maximizePanelBtn = document.getElementById('btn-maximize-panel');
+  maximizePanelBtn?.addEventListener('click', () => {
+    if (!bottomPanel) return;
+    const isMax = bottomPanel.classList.toggle('maximized');
+    maximizePanelBtn.title = isMax ? 'Restore Panel Size' : 'Maximize Panel (^)';
+    maximizePanelBtn.innerHTML = isMax
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+  });
+
   collapseBtn?.addEventListener('click', () => {
     bottomPanel?.classList.toggle('collapsed');
   });
 
-  // N3: terminal log semantics
-  const outA = document.getElementById('terminal-stdout-A');
-  if (outA) outA.setAttribute('role', 'log');
-  const stdoutHost = document.getElementById('terminal-stdout-host') || document.getElementById('terminal-stdout');
-  stdoutHost?.addEventListener('click', (e) => {
-    const link = e.target.closest('.term-link');
-    if (link) {
-      e.preventDefault();
-      handleTerminalLink(link);
-      return;
-    }
-    focusActiveTerminalInput();
-  });
+  // Focus stealth input when clicking on stdout panes
+  for (const pane of ['A', 'B']) {
+    const stdout = document.getElementById(`terminal-stdout-${pane}`);
+    stdout?.addEventListener('click', (e) => {
+      const link = e.target.closest('.term-link');
+      if (link) {
+        e.preventDefault();
+        handleTerminalLink(link);
+        return;
+      }
+      const inp = document.getElementById(`terminal-command-input-${pane}`);
+      if (inp) inp.focus();
+    });
+  }
 
   // Terminal context menu is handled globally by unified context-menu service
 
@@ -474,6 +562,17 @@ function wireInlinePrompt(pane) {
   const runBtn = document.getElementById(`btn-run-terminal-command-${pane}`);
   if (!input) return;
 
+  const updateSyntaxMirror = () => {
+    const syntaxSpan = document.getElementById(`terminal-input-syntax-${pane}`);
+    if (syntaxSpan) {
+      syntaxSpan.innerHTML = highlightCommandLine(input.value);
+    }
+    const stdout = document.getElementById(`terminal-stdout-${pane}`);
+    if (stdout) stdout.scrollTop = stdout.scrollHeight;
+  };
+
+  input.addEventListener('input', updateSyntaxMirror);
+
   input.addEventListener('keydown', async (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -481,15 +580,18 @@ function wireInlinePrompt(pane) {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       navigateHistory(-1, input);
+      updateSyntaxMirror();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       navigateHistory(1, input);
+      updateSyntaxMirror();
     } else if (e.key === 'c' && e.ctrlKey && e.shiftKey) {
       e.preventDefault();
       copySelection();
     } else if (e.key === 'v' && e.ctrlKey && e.shiftKey) {
       e.preventDefault();
       pasteToInput(input);
+      updateSyntaxMirror();
     } else if (e.key === 'a' && e.ctrlKey && !e.shiftKey) {
       e.preventDefault();
       selectAllTerminal();
@@ -502,9 +604,11 @@ function wireInlinePrompt(pane) {
     } else if (e.key === 'Tab') {
       e.preventDefault();
       await handleTabCompletion(input);
+      updateSyntaxMirror();
     } else if (e.key === 'c' && e.ctrlKey && !e.shiftKey) {
       sendInterruptSignal();
       input.value = '';
+      updateSyntaxMirror();
     } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
       e.preventDefault();
       clearActiveTerminal();
@@ -544,30 +648,34 @@ function buildTerminalDom() {
       <div class="terminal-pane" id="terminal-pane-A" style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
         <div class="terminal-tabbar-row" id="terminal-tabbar-A"></div>
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-A"></div>
-        <div class="terminal-output-scroll" id="terminal-stdout-A"></div>
-        <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-A">
-          <span id="terminal-prompt-label-A" class="terminal-prompt-label">cmd&gt;</span>
-          <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-A" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
-          <button class="terminal-inline-run" id="btn-run-terminal-command-A" title="Run (Enter)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-          </button>
+        <div class="terminal-output-scroll" id="terminal-stdout-A" role="log" tabindex="0">
+          <div class="terminal-history-lines" id="terminal-history-A"></div>
+          <div class="term-command-row term-active-prompt-row" id="terminal-active-row-A">
+            <span class="term-gutter-circle term-gutter-active">○</span>
+            <span class="term-prompt-txt" id="terminal-prompt-label-A">PS&gt; </span>
+            <div class="term-input-editor-wrapper">
+              <span class="term-input-syntax" id="terminal-input-syntax-A"></span>
+              <span class="term-cursor" id="terminal-cursor-A">█</span>
+              <input type="text" class="terminal-stealth-input" id="terminal-command-input-A" aria-label="Terminal command input" autocomplete="off" spellcheck="false" />
+            </div>
+          </div>
         </div>
       </div>
       <div class="terminal-split-resizer" id="terminal-split-resizer" style="display: none;"></div>
       <div class="terminal-pane" id="terminal-pane-B" style="display: none; flex: 1; min-width: 0; flex-direction: column;">
         <div class="terminal-tabbar-row" id="terminal-tabbar-B"></div>
         <div class="terminal-cwd-breadcrumb" id="terminal-cwd-B"></div>
-        <div class="terminal-output-scroll" id="terminal-stdout-B"></div>
-        <div class="terminal-prompt-bar terminal-inline-prompt" id="terminal-inline-prompt-B">
-          <span id="terminal-prompt-label-B" class="terminal-prompt-label">cmd&gt;</span>
-          <input type="text" class="terminal-input terminal-inline-input" id="terminal-command-input-B" aria-label="Terminal command input" placeholder="Type command and press Enter…" />
-          <button class="terminal-inline-run" id="btn-run-terminal-command-B" title="Run (Enter)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="5 3 19 12 5 21 5 3"></polygon>
-            </svg>
-          </button>
+        <div class="terminal-output-scroll" id="terminal-stdout-B" role="log" tabindex="0">
+          <div class="terminal-history-lines" id="terminal-history-B"></div>
+          <div class="term-command-row term-active-prompt-row" id="terminal-active-row-B">
+            <span class="term-gutter-circle term-gutter-active">○</span>
+            <span class="term-prompt-txt" id="terminal-prompt-label-B">PS&gt; </span>
+            <div class="term-input-editor-wrapper">
+              <span class="term-input-syntax" id="terminal-input-syntax-B"></span>
+              <span class="term-cursor" id="terminal-cursor-B">█</span>
+              <input type="text" class="terminal-stealth-input" id="terminal-command-input-B" aria-label="Terminal command input" autocomplete="off" spellcheck="false" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -707,6 +815,45 @@ function dismissProfileMenu() {
   document.getElementById('terminal-profile-menu')?.remove();
 }
 
+function openTerminalMoreMenu(e) {
+  dismissProfileMenu();
+  const menu = document.createElement('div');
+  menu.className = 'tree-context-menu';
+  menu.id = 'terminal-profile-menu';
+  menu.style.left = `${Math.min(e.clientX, window.innerWidth - 220)}px`;
+  menu.style.top = `${Math.min(e.clientY, window.innerHeight - 200)}px`;
+
+  const items = [
+    { label: 'Clear Terminal', shortcut: 'Ctrl+K', action: () => clearActiveTerminal() },
+    { label: 'Split Terminal', shortcut: '', action: () => toggleTerminalSplit() },
+    { label: 'Select All Output', shortcut: 'Ctrl+A', action: () => selectAllTerminal() },
+    { label: 'Find in Terminal', shortcut: 'Ctrl+F', action: () => openTerminalSearch() },
+    { label: 'Copy All Output', shortcut: '', action: () => copySelection() },
+    { label: 'Configure Terminal…', shortcut: '', action: () => {
+      document.querySelector('.rail-btn[data-view="settings"]')?.click();
+    }},
+  ];
+
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'tree-context-item';
+    row.innerHTML = `<span class="ctx-label">${it.label}</span>${it.shortcut ? `<span class="ctx-shortcut" style="margin-left: auto; font-size: 10px; color: var(--text-muted);">${it.shortcut}</span>` : ''}`;
+    row.addEventListener('click', () => {
+      dismissProfileMenu();
+      it.action();
+    });
+    menu.appendChild(row);
+  }
+
+  document.body.appendChild(menu);
+  setTimeout(() => {
+    const onDown = (ev) => {
+      if (!menu.contains(ev.target)) { dismissProfileMenu(); document.removeEventListener('mousedown', onDown); }
+    };
+    document.addEventListener('mousedown', onDown);
+  }, 0);
+}
+
 export function getActiveSession() {
   const active = terminalInstances.find(t => t.id === activeTerminalId);
   return active || terminalInstances.find(t => t.pane === 'A') || terminalInstances[0];
@@ -767,6 +914,19 @@ export function renderPanes() {
   renderCwdBreadcrumb('A');
   renderCwdBreadcrumb('B');
   updatePromptDisplay();
+
+  const active = getActiveSession();
+  const badgeName = document.getElementById('terminal-active-name');
+  if (badgeName && active) {
+    const isPwsh = /powershell/i.test(active.shell || '');
+    const isCmd = /cmd\.exe|cmd$/i.test(active.shell || '');
+    const isBash = /bash/i.test(active.shell || '');
+    const baseType = isPwsh ? 'powershell' : (isCmd ? 'cmd' : (isBash ? 'bash' : active.name));
+    const cwd = (active.cwd || state.workspace.rootPath || '').replace(/[\\/]+$/, '');
+    const parts = cwd.split(/[\\/]/).filter(Boolean);
+    const folder = parts[parts.length - 1] || '';
+    badgeName.textContent = folder ? `${baseType} - ${folder}` : baseType;
+  }
 }
 
 function activeInPane(pane) {
@@ -884,20 +1044,60 @@ function renderPaneTabs(pane) {
 }
 
 function renderBufferFor(session, pane) {
-  const el = document.getElementById(`terminal-stdout-${pane}`);
-  if (!el) return;
-  if (!session) { el.innerHTML = ''; return; }
+  const historyEl = document.getElementById(`terminal-history-${pane}`);
+  const stdoutEl = document.getElementById(`terminal-stdout-${pane}`);
+  if (!historyEl) return;
+  if (!session) { historyEl.innerHTML = ''; return; }
   const t = state.settings.terminal || {};
-  el.style.fontFamily = t.fontFamily;
-  el.style.fontSize = `${t.fontSize || 13}px`;
-  el.style.lineHeight = `${t.lineHeight || 1.5}`;
+  if (stdoutEl) {
+    stdoutEl.style.fontFamily = t.fontFamily || "'JetBrains Mono', 'Cascadia Code', monospace";
+    stdoutEl.style.fontSize = `${t.fontSize || 13}px`;
+    stdoutEl.style.lineHeight = `${t.lineHeight || 1.5}`;
+  }
 
-  const greeting = !session.buffer
-    ? `Orbital X ${session.name} terminal [${session.sessionId}]\nActive workspace shell ready. Right-click for Copy/Paste; Ctrl+R searches history.\n\n`
-    : '';
-  const raw = session.buffer || greeting;
-  el.innerHTML = linkifySafeHtml(parseAnsiToHtml(raw));
-  el.scrollTop = el.scrollHeight;
+  const raw = session.buffer || '';
+  if (!raw.trim()) {
+    historyEl.innerHTML = '';
+    updatePromptDisplay();
+    return;
+  }
+
+  // Parse lines: distinguish executed command rows from stdout rows
+  const lines = raw.split(/\r?\n/);
+  const rows = [];
+  // Regex to detect command lines: e.g. "PS D:\...> cd .." or "D:\...> cd .." or "> cd .."
+  const cmdLineRe = /^(?:([A-Za-z]:\\[^>]*?>|PS\s+[A-Za-z]:\\[^>]*?>|\/[^$#]*?[$#]|PS>[> ]?|>)\s*)(.*)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (i === lines.length - 1 && !line) continue;
+    const match = line.match(cmdLineRe);
+    if (match && match[2] && match[2].trim()) {
+      const promptPart = match[1].trim();
+      const cmdPart = match[2];
+      rows.push(`
+        <div class="term-command-row">
+          <span class="term-gutter-circle term-gutter-done" title="Executed command">●</span>
+          <span class="term-prompt-txt">${escapeHtmlText(promptPart)} </span>
+          <span class="term-command-syntax">${highlightCommandLine(cmdPart)}</span>
+        </div>
+      `);
+    } else {
+      const safe = linkifySafeHtml(parseAnsiToHtml(line));
+      rows.push(`
+        <div class="term-output-row">
+          <span class="term-gutter-circle term-gutter-blank"></span>
+          <span class="term-output-txt">${safe || '&nbsp;'}</span>
+        </div>
+      `);
+    }
+  }
+
+  historyEl.innerHTML = rows.join('');
+  updatePromptDisplay();
+  if (stdoutEl) {
+    stdoutEl.scrollTop = stdoutEl.scrollHeight;
+  }
 }
 
 // --- E8: working directory breadcrumb ---------------------------------------
@@ -950,17 +1150,16 @@ function updatePromptDisplay() {
     const promptLabel = document.getElementById(`terminal-prompt-label-${pane}`);
     if (!promptLabel) continue;
     const active = activeInPane(pane);
-    if (!active) { promptLabel.textContent = '>'; continue; }
+    if (!active) { promptLabel.textContent = '> '; continue; }
     const cwd = (active.cwd || state.workspace.rootPath || '').replace(/[\\/]+$/, '');
     const isCmd = /cmd\.exe|cmd$/i.test(active.shell || '');
     const isBash = /bash|sh/i.test(active.shell || '');
-    // Full working-directory path in the prompt — exactly like VS Code / Antigravity
     if (isCmd) {
-      promptLabel.textContent = cwd ? `${cwd}>` : 'cmd>';
+      promptLabel.textContent = cwd ? `${cwd}> ` : 'cmd> ';
     } else if (isBash) {
-      promptLabel.textContent = cwd ? `${cwd}$` : '$';
+      promptLabel.textContent = cwd ? `${cwd}$ ` : '$ ';
     } else {
-      promptLabel.textContent = cwd ? `${cwd}>` : 'PS>';
+      promptLabel.textContent = cwd ? `PS ${cwd}> ` : 'PS> ';
     }
   }
 }
@@ -1041,6 +1240,9 @@ export async function executeTerminalCommand(cmdString) {
   if (!command) return;
 
   if (inputElem) inputElem.value = '';
+  const syntaxSpan = document.getElementById(`terminal-input-syntax-${active.pane}`);
+  if (syntaxSpan) syntaxSpan.innerHTML = '';
+
   cmdHistoryIndex = -1;
   saveCommandToHistory(command);
   active.historyIndex = -1;
@@ -1056,7 +1258,12 @@ export async function executeTerminalCommand(cmdString) {
     return;
   }
 
-  appendTerminalText(`\n${active.cwd || state.workspace.rootPath || ''}> ${command}\n`);
+  const isPwsh = /powershell/i.test(active.shell || '');
+  const isBash = /bash|sh/i.test(active.shell || '');
+  const cwd = active.cwd || state.workspace.rootPath || '';
+  const promptPrefix = isPwsh ? `PS ${cwd}>` : (isBash ? `${cwd}$` : `${cwd}>`);
+
+  appendTerminalText(`\n${promptPrefix} ${command}\n`);
   active.isRunning = true;
 
   try {
@@ -1143,11 +1350,7 @@ export async function pollActiveTerminalOutput() {
       if (newOutput && newOutput.length > 0) {
         session.buffer += newOutput;
         capBuffer(session);
-        const el = document.getElementById(`terminal-stdout-${pane}`);
-        if (el) {
-          el.innerHTML = linkifySafeHtml(parseAnsiToHtml(session.buffer));
-          el.scrollTop = el.scrollHeight;
-        }
+        renderBufferFor(session, pane);
         renderCwdBreadcrumb(pane);
       }
     } catch (e) { /* session may have died */ }
@@ -1290,8 +1493,7 @@ function closeTerminalSearch() {
   // Re-render buffer without highlights
   const active = getActiveSession();
   if (active) {
-    const el = document.getElementById(`terminal-stdout-${active.pane}`);
-    if (el) el.innerHTML = linkifySafeHtml(parseAnsiToHtml(active.buffer));
+    renderBufferFor(active, active.pane);
   }
   focusActiveTerminalInput()?.focus();
 }
@@ -1306,7 +1508,7 @@ function runTerminalSearch(term) {
     if (countEl) countEl.textContent = '0/0';
     return;
   }
-  const el = document.getElementById(`terminal-stdout-${active.pane}`);
+  const el = document.getElementById(`terminal-history-${active.pane}`) || document.getElementById(`terminal-stdout-${active.pane}`);
   if (!el) return;
 
   // Highlight matches by re-rendering the buffer with <mark> wrappers.
@@ -1408,8 +1610,14 @@ async function handleTerminalLink(link) {
     return;
   }
   if (type === 'file') {
-    const path = link.dataset.path;
+    let path = link.dataset.path;
     const line = parseInt(link.dataset.line, 10);
+    const col = parseInt(link.dataset.col, 10) || 1;
+    if (state.workspace?.rootPath && !/^[a-zA-Z]:[/\\]|^\//.test(path)) {
+      const sep = state.workspace.rootPath.includes('\\') ? '\\' : '/';
+      const cleanPath = path.replace(/^(\.\/|\.\\)/, '');
+      path = `${state.workspace.rootPath}${sep}${cleanPath}`;
+    }
     try {
       const fileData = await invoke('read_file', { path });
       if (fileData.is_binary) {
@@ -1423,7 +1631,7 @@ async function handleTerminalLink(link) {
       const ed = m.getActiveEditor();
       if (ed && Number.isFinite(line)) {
         ed.revealLineInCenter(line);
-        ed.setPosition({ lineNumber: line, column: 1 });
+        ed.setPosition({ lineNumber: line, column: col });
         ed.focus();
       }
     } catch (e) {
@@ -1652,5 +1860,60 @@ export async function executeAgentTerminalCommand(command, cwd = null, slot = 1,
     term.runningCmd = null;
     renderPanes();
     throw err;
+  }
+}
+
+export function renderAiAgentsPanel() {
+  const container = document.getElementById('ai-agents-panel-list');
+  if (!container) return;
+  const agentSlots = [1, 2, 3];
+  container.innerHTML = agentSlots.map(slot => {
+    const term = terminalInstances.find(t => t.isAgent && t.agentSlot === slot);
+    const isRunning = term?.isRunning || false;
+    const lastOutput = term?.buffer ? term.buffer.trim().split('\n').slice(-4).join('\n') : '(agent terminal ready for tasks)';
+    return `
+      <div class="agent-terminal-card" style="background: var(--bg-surface, #1e222d); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: var(--radius-md, 8px); padding: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 600; font-size: 12px; color: var(--accent-cyan, #39c5bb);">🤖 Agent ${slot} Terminal</span>
+            <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: ${isRunning ? 'rgba(57,197,187,0.15)' : 'rgba(255,255,255,0.08)'}; color: ${isRunning ? 'var(--accent-cyan)' : 'var(--text-muted)'};">${isRunning ? '● Running' : 'Idle'}</span>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-secondary btn-sm btn-open-agent-term" data-slot="${slot}" style="font-size: 10px; padding: 2px 8px;">Switch View</button>
+            ${isRunning ? `<button class="btn btn-danger btn-sm btn-kill-agent-term" data-slot="${slot}" style="font-size: 10px; padding: 2px 8px;">Kill</button>` : ''}
+          </div>
+        </div>
+        <div style="font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--text-muted); background: var(--bg-app, #12141a); padding: 6px 8px; border-radius: 4px; white-space: pre-wrap; max-height: 80px; overflow-y: auto;">${escapeHtml(lastOutput)}</div>
+      </div>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.btn-open-agent-term').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slot = parseInt(btn.dataset.slot, 10);
+      const term = getOrCreateAgentTerminal(slot);
+      document.querySelector('.panel-tab[data-tab="terminal"]')?.click();
+      switchTerminalInstance(term.id);
+    });
+  });
+
+  container.querySelectorAll('.btn-kill-agent-term').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const slot = parseInt(btn.dataset.slot, 10);
+      const term = terminalInstances.find(t => t.isAgent && t.agentSlot === slot);
+      if (term) term.killRunningProcess();
+      renderAiAgentsPanel();
+    });
+  });
+}
+
+export function updatePanelBadges(problemsCount = 0) {
+  const probBadge = document.getElementById('panel-badge-problems');
+  if (probBadge) probBadge.textContent = String(problemsCount);
+
+  const agentsBadge = document.getElementById('panel-badge-agents');
+  if (agentsBadge) {
+    const runningCount = terminalInstances.filter(t => t.isAgent && t.isRunning).length;
+    agentsBadge.textContent = runningCount > 0 ? `${runningCount} running` : '3';
   }
 }
