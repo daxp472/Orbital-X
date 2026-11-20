@@ -37,7 +37,7 @@
     <!-- Top Titlebar -->
     <header class="titlebar" id="app-titlebar" data-tauri-drag-region>
       <div class="titlebar-left" data-tauri-drag-region="false">
-        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.3 (Click for About)" data-tauri-drag-region="false">
+        <div class="titlebar-logo" id="btn-about-orbital" title="Orbital X — v2.4.5 (Click for About)" data-tauri-drag-region="false">
           <img src="/logo.png" alt="Orbital X" class="titlebar-logo-img" />
           <span class="titlebar-brand-name">Orbital X</span>
         </div>
@@ -179,6 +179,21 @@
 
     <!-- Main Workspace Container -->
     <div class="main-container">
+      <!-- Responsive Quarter-Screen Focus View Switcher (<640px) -->
+      <div class="quarter-screen-pane-switcher" id="quarter-screen-pane-switcher">
+        <button class="qs-tab-btn" data-pane="explorer" id="qs-btn-explorer" title="Show Explorer">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+          Explorer
+        </button>
+        <button class="qs-tab-btn active" data-pane="editor" id="qs-btn-editor" title="Show Editor">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          Editor
+        </button>
+        <button class="qs-tab-btn" data-pane="agent" id="qs-btn-agent" title="Show AI Chat">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          AI Chat
+        </button>
+      </div>
       <!-- Activity Rail (Matches exact left bar from screenshot) -->
       <aside class="activity-rail">
         <div class="rail-group">
@@ -415,19 +430,37 @@
           </div>
         </div>
 
-        <!-- Skills View -->
+        <!-- Skills View & Community Hub -->
         <div id="view-skills" class="sidebar-subview" style="display: none; flex-direction: column; height: 100%;">
-          <div class="sidebar-header">
-            <span>Agent Skills</span>
-            <div class="sidebar-actions">
-              <button class="btn btn-secondary btn-sm" id="btn-import-skill" style="padding: 1px 8px; font-size: 10px;">📁 Import…</button>
+          <div class="sidebar-header" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px;">
+            <span style="font-weight: 600;">Agent Skills</span>
+            <div class="sidebar-actions" style="display: flex; gap: 4px;">
+              <button class="btn btn-primary btn-sm" id="btn-create-skill" style="padding: 2px 7px; font-size: 10px;" title="Create custom skill">+ New</button>
+              <button class="btn btn-secondary btn-sm" id="btn-import-skill" style="padding: 2px 7px; font-size: 10px;" title="Import folder containing SKILL.md">📁 Import…</button>
             </div>
           </div>
-          <div style="padding: 8px 10px; font-size: 10px; color: var(--text-muted); line-height: 1.5; border-bottom: 1px solid var(--border-subtle);">
-            Skills are reusable instruction packs (a folder with SKILL.md). Enabled skills appear in the
-            agent's context; it reads the full skill when a task matches.
+          <!-- Segmented Tab Switcher (Installed vs Community Hub) -->
+          <div class="skills-tabbar" style="display: flex; padding: 4px 8px; gap: 4px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface);">
+            <button class="skills-tab-btn active" id="tab-skills-installed" style="flex: 1; padding: 3px 6px; font-size: 10px; font-weight: 600; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-hover); color: var(--text-primary-bright); cursor: pointer;">Installed</button>
+            <button class="skills-tab-btn" id="tab-skills-community" style="flex: 1; padding: 3px 6px; font-size: 10px; font-weight: 600; border-radius: 4px; border: 1px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer;">Community Hub</button>
           </div>
-          <div class="sidebar-content" id="skills-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
+          <!-- Filter search & URL import box -->
+          <div style="padding: 6px 8px; border-bottom: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 6px;">
+            <input type="text" class="input-text" id="skills-search-input" placeholder="Search skills, tags, triggers…" style="width: 100%; font-size: 11px; padding: 4px 8px;" />
+            <div id="skills-url-import-bar" style="display: none; gap: 4px;">
+              <input type="text" class="input-text" id="input-skill-url" placeholder="GitHub raw URL (e.g. raw.githubusercontent.com/.../SKILL.md)" style="flex: 1; font-size: 10.5px; padding: 3px 6px;" />
+              <button class="btn btn-primary btn-sm" id="btn-import-skill-url" style="font-size: 10px; padding: 2px 7px; white-space: nowrap;">Import URL</button>
+            </div>
+            <div id="skills-tag-filter-bar" style="display: none; gap: 4px; flex-wrap: wrap;">
+              <span class="skill-filter-chip active" data-tag="" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: var(--bg-hover); color: var(--text-primary-bright); border: 1px solid var(--border-subtle);">All</span>
+              <span class="skill-filter-chip" data-tag="rust" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Rust</span>
+              <span class="skill-filter-chip" data-tag="react" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid transparent;">React</span>
+              <span class="skill-filter-chip" data-tag="python" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Python</span>
+              <span class="skill-filter-chip" data-tag="security" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Security</span>
+              <span class="skill-filter-chip" data-tag="testing" style="font-size: 9.5px; padding: 1px 6px; border-radius: 3px; cursor: pointer; background: transparent; color: var(--text-muted); border: 1px solid transparent;">Testing</span>
+            </div>
+          </div>
+          <div class="sidebar-content" id="skills-list-container" style="padding: 8px; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex: 1;">
             <div class="pack-empty">Loading skills…</div>
           </div>
         </div>
@@ -2127,7 +2160,7 @@
           <img src="/logo.png" alt="Orbital X" style="width: 44px; height: 44px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 18px rgba(57, 197, 187, 0.5);" />
           <div>
             <div style="font-size: 17px; font-weight: 700;">Orbital X</div>
-            <div style="font-size: 11px; color: var(--text-muted);">v2.4.3 · The AI-native IDE for everyone</div>
+            <div style="font-size: 11px; color: var(--text-muted);">v2.4.5 · The AI-native IDE for everyone</div>
           </div>
         </div>
 
@@ -2448,6 +2481,54 @@
     </div>
   </div>
 
+  <!-- Modal: Create Custom Agent Skill Pack -->
+  <div class="modal-backdrop" id="modal-create-skill" style="display: none; align-items: center; justify-content: center; z-index: 10000;">
+    <div class="modal-card" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; width: 560px; max-width: 92vw; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,0.5); overflow: hidden;">
+      <div class="modal-header" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">✨</span>
+          <span style="font-weight: 600; font-size: 14px; color: var(--text-primary-bright);">Create Custom Skill Pack</span>
+        </div>
+        <button class="icon-btn" id="btn-close-create-skill" title="Close">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; gap: 10px;">
+          <div style="flex: 1;">
+            <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Skill Identifier (slug)</label>
+            <input type="text" class="input-text" id="skill-create-id" placeholder="e.g. rust-optimizer" style="width: 100%; font-size: 12px;" />
+          </div>
+          <div style="flex: 1.5;">
+            <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Skill Display Name</label>
+            <input type="text" class="input-text" id="skill-create-name" placeholder="e.g. Rust Optimizer & Profiler" style="width: 100%; font-size: 12px;" />
+          </div>
+        </div>
+        <div>
+          <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Trigger ("When to Use")</label>
+          <input type="text" class="input-text" id="skill-create-trigger" placeholder="e.g. Benchmarking, profiling, or writing hot loops in Rust" style="width: 100%; font-size: 12px;" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Short Description</label>
+          <input type="text" class="input-text" id="skill-create-desc" placeholder="e.g. Guidance on criterion benchmarks, memory alignment, and SIMD" style="width: 100%; font-size: 12px;" />
+        </div>
+        <div>
+          <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Storage Scope</label>
+          <select class="input-select" id="skill-create-scope" style="width: 100%; font-size: 12px; padding: 4px 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px;">
+            <option value="global">Global (~/.orbital/skills/ — persists across all workspaces)</option>
+            <option value="workspace">Active Workspace (.orbital/skills/ — isolated to this project)</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size: 11px; margin-bottom: 4px; display: block; color: var(--text-secondary);">Skill Instructions (Markdown / SKILL.md body)</label>
+          <textarea class="input-textarea" id="skill-create-body" rows="8" placeholder="# Instructions for the Agent&#10;&#10;## Directives&#10;1. Step-by-step guidance...&#10;2. Tool constraints..." style="width: 100%; font-size: 12px; font-family: monospace; resize: vertical;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border-subtle); background: rgba(0,0,0,0.15);">
+        <button class="btn btn-secondary" id="btn-cancel-create-skill">Cancel</button>
+        <button class="btn btn-primary" id="btn-submit-create-skill">Save & Enable Skill</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Global Keyboard Shortcuts Help Overlay -->
   <div class="modal-backdrop" id="modal-shortcuts-help" style="display: none;">
     <div class="modal-container" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts" style="max-width: 620px; max-height: 82vh;">
@@ -2599,7 +2680,7 @@
           <div class="about-logo-halo"></div>
           <img src="/logo.png" alt="Orbital X Planet Logo" class="about-logo-img" />
           <h2 class="about-title">Orbital X</h2>
-          <div class="about-version-badge">Version 2.4.3 • Desktop Release</div>
+          <div class="about-version-badge">Version 2.4.5 • Desktop Release</div>
           <p class="about-tagline">High-Performance, Memory-Conscious AI Desktop Coding IDE</p>
         </div>
 

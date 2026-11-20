@@ -1,27 +1,48 @@
 // ==========================================================================
-// Orbital X — Skills Panel (skills.js)
+// Orbital X — Skills Panel & Community Hub (skills.js)
 //
-// Claude Code-style instruction packs. Skills never execute code: they are
-// guidance the agent discovers (system-prompt digest) and reads on demand
-// via the list_skills / read_skill tools, gated by the existing permission
-// system. This panel handles browsing, importing, enable/disable, and review.
+// Claude Code-style modular instruction packs.
+// Supports:
+//   1. Discovery of workspace rules (<workspace>/agent.md)
+//   2. Workspace skills (<workspace>/.orbital/skills/*/SKILL.md)
+//   3. Global skills (~/.orbital/skills/*/SKILL.md)
+//   4. Community Skills Hub (1-click install curated packs)
+//   5. Custom skill creator (modal + IPC)
+//   6. Modular, lightweight Skill Index Digest for local models (Qwen, Llama)
 // ==========================================================================
 
 import { invoke, pickFolder } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
 
 let skillsCache = [];
+let communityCache = [];
+let activeTab = 'installed'; // 'installed' | 'community'
+let searchQuery = '';
+let activeFilterTag = '';
 
 export async function initSkills() {
   await refreshSkills();
   wirePanel();
+  wireCreateModal();
 }
 
-async function refreshSkills() {
+export async function refreshSkills() {
   try {
     skillsCache = await invoke('list_skills');
   } catch (e) {
     skillsCache = [];
+  }
+}
+
+async function refreshCommunitySkills() {
+  try {
+    communityCache = await invoke('skills_fetch_community_registry');
+  } catch (e) {
+    try {
+      communityCache = await invoke('list_community_skills');
+    } catch (_) {
+      communityCache = [];
+    }
   }
 }
 
@@ -32,46 +53,269 @@ function esc(s) {
 }
 
 function wirePanel() {
+  const urlBar = document.getElementById('skills-url-import-bar');
+  const tagBar = document.getElementById('skills-tag-filter-bar');
+  if (urlBar) urlBar.style.display = activeTab === 'community' ? 'flex' : 'none';
+  if (tagBar) tagBar.style.display = activeTab === 'community' ? 'flex' : 'none';
+
   const importBtn = document.getElementById('btn-import-skill');
   if (importBtn && !importBtn.dataset.wired) {
     importBtn.dataset.wired = '1';
     importBtn.addEventListener('click', importSkill);
   }
+
+  const createBtn = document.getElementById('btn-create-skill');
+  if (createBtn && !createBtn.dataset.wired) {
+    createBtn.dataset.wired = '1';
+    createBtn.addEventListener('click', openCreateSkillModal);
+  }
+
+  const tabInstalled = document.getElementById('tab-skills-installed');
+  const tabCommunity = document.getElementById('tab-skills-community');
+
+  if (tabInstalled && !tabInstalled.dataset.wired) {
+    tabInstalled.dataset.wired = '1';
+    tabInstalled.addEventListener('click', () => {
+      activeTab = 'installed';
+      tabInstalled.classList.add('active');
+      tabInstalled.style.background = 'var(--bg-hover)';
+      tabInstalled.style.borderColor = 'var(--border-color)';
+      tabInstalled.style.color = 'var(--text-primary-bright)';
+      tabCommunity.classList.remove('active');
+      tabCommunity.style.background = 'transparent';
+      tabCommunity.style.borderColor = 'transparent';
+      tabCommunity.style.color = 'var(--text-muted)';
+      wirePanel();
+      renderSkillsPanel();
+    });
+  }
+
+  if (tabCommunity && !tabCommunity.dataset.wired) {
+    tabCommunity.dataset.wired = '1';
+    tabCommunity.addEventListener('click', async () => {
+      activeTab = 'community';
+      tabCommunity.classList.add('active');
+      tabCommunity.style.background = 'var(--bg-hover)';
+      tabCommunity.style.borderColor = 'var(--border-color)';
+      tabCommunity.style.color = 'var(--text-primary-bright)';
+      tabInstalled.classList.remove('active');
+      tabInstalled.style.background = 'transparent';
+      tabInstalled.style.borderColor = 'transparent';
+      tabInstalled.style.color = 'var(--text-muted)';
+      wirePanel();
+      await renderSkillsPanel();
+    });
+  }
+
+  const searchInput = document.getElementById('skills-search-input');
+  if (searchInput && !searchInput.dataset.wired) {
+    searchInput.dataset.wired = '1';
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = (e.target.value || '').trim().toLowerCase();
+      renderSkillsPanel();
+    });
+  }
+
+  // Import from GitHub URL input and button
+  const importUrlBtn = document.getElementById('btn-import-skill-url');
+  const inputUrl = document.getElementById('input-skill-url');
+  if (importUrlBtn && !importUrlBtn.dataset.wired) {
+    importUrlBtn.dataset.wired = '1';
+    const doImportUrl = async () => {
+      const url = (inputUrl?.value || '').trim();
+      if (!url) {
+        showToast('Please enter a GitHub raw URL to a SKILL.md file.', 'warning');
+        return;
+      }
+      importUrlBtn.disabled = true;
+      importUrlBtn.textContent = 'Importing…';
+      try {
+        const res = await invoke('skills_install_from_url', { url });
+        if (res && res.success !== false) {
+          showToast(`✓ Skill "${res.name || res.id}" installed successfully!`, 'success', 3000);
+          if (inputUrl) inputUrl.value = '';
+          await refreshSkills();
+          await renderSkillsPanel();
+          import('../editor/monaco.js').then(m => m.openSkillDocTab(res));
+        } else {
+          showToast(`Import failed: ${res?.error || 'Unknown error'}`, 'error', 4000);
+        }
+      } catch (e) {
+        showToast(`Import error: ${e}`, 'error', 4000);
+      } finally {
+        importUrlBtn.disabled = false;
+        importUrlBtn.textContent = 'Import URL';
+      }
+    };
+    importUrlBtn.addEventListener('click', doImportUrl);
+    inputUrl?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') doImportUrl();
+    });
+  }
+
+  // Tag filter chips
+  document.querySelectorAll('.skill-filter-chip').forEach(chip => {
+    if (!chip.dataset.wired) {
+      chip.dataset.wired = '1';
+      chip.addEventListener('click', () => {
+        activeFilterTag = chip.dataset.tag || '';
+        document.querySelectorAll('.skill-filter-chip').forEach(c => {
+          const isActive = (c.dataset.tag || '') === activeFilterTag;
+          c.classList.toggle('active', isActive);
+          c.style.background = isActive ? 'var(--bg-hover)' : 'transparent';
+          c.style.borderColor = isActive ? 'var(--border-subtle)' : 'transparent';
+          c.style.color = isActive ? 'var(--text-primary-bright)' : 'var(--text-muted)';
+        });
+        renderSkillsPanel();
+      });
+    }
+  });
+}
+
+function wireCreateModal() {
+  const modal = document.getElementById('modal-create-skill');
+  const closeBtn = document.getElementById('btn-close-create-skill');
+  const cancelBtn = document.getElementById('btn-cancel-create-skill');
+  const submitBtn = document.getElementById('btn-submit-create-skill');
+
+  const closeModal = () => {
+    if (modal) modal.style.display = 'none';
+  };
+
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  if (submitBtn && !submitBtn.dataset.wired) {
+    submitBtn.dataset.wired = '1';
+    submitBtn.addEventListener('click', async () => {
+      const id = document.getElementById('skill-create-id')?.value?.trim();
+      const name = document.getElementById('skill-create-name')?.value?.trim();
+      const trigger = document.getElementById('skill-create-trigger')?.value?.trim();
+      const desc = document.getElementById('skill-create-desc')?.value?.trim();
+      const scope = document.getElementById('skill-create-scope')?.value || 'global';
+      const body = document.getElementById('skill-create-body')?.value?.trim();
+
+      if (!id || !name || !body) {
+        showToast('Please provide a Skill Identifier, Name, and Instructions body.', 'warning', 3000);
+        return;
+      }
+
+      try {
+        const res = await invoke('create_custom_skill', {
+          id,
+          name,
+          description: desc || name,
+          whenToUse: trigger || 'General engineering tasks',
+          body,
+          isWorkspace: scope === 'workspace'
+        });
+
+        if (res && res.success !== false) {
+          showToast(`✓ Skill "${name}" created successfully (${scope})!`, 'success', 2500);
+          closeModal();
+          await refreshSkills();
+          renderSkillsPanel();
+        } else {
+          showToast(`Failed: ${res?.error || 'Unknown error'}`, 'error', 3500);
+        }
+      } catch (e) {
+        showToast(`Creation error: ${e}`, 'error', 4000);
+      }
+    });
+  }
+}
+
+export function openCreateSkillModal() {
+  const modal = document.getElementById('modal-create-skill');
+  if (!modal) return;
+  // Reset form
+  const idEl = document.getElementById('skill-create-id');
+  const nameEl = document.getElementById('skill-create-name');
+  const trigEl = document.getElementById('skill-create-trigger');
+  const descEl = document.getElementById('skill-create-desc');
+  const bodyEl = document.getElementById('skill-create-body');
+  if (idEl) idEl.value = '';
+  if (nameEl) nameEl.value = '';
+  if (trigEl) trigEl.value = '';
+  if (descEl) descEl.value = '';
+  if (bodyEl) bodyEl.value = '';
+  modal.style.display = 'flex';
 }
 
 export async function renderSkillsPanel() {
-  await refreshSkills();
   wirePanel();
 
   const container = document.getElementById('skills-list-container');
   if (!container) return;
   container.innerHTML = '';
 
-  if (!skillsCache || skillsCache.length === 0) {
+  if (activeTab === 'community') {
+    await refreshCommunitySkills();
+    renderCommunityTab(container);
+  } else {
+    await refreshSkills();
+    renderInstalledTab(container);
+  }
+}
+
+function renderInstalledTab(container) {
+  let list = skillsCache || [];
+  if (searchQuery) {
+    list = list.filter(s => {
+      const q = searchQuery;
+      return (
+        (s.name && s.name.toLowerCase().includes(q)) ||
+        (s.description && s.description.toLowerCase().includes(q)) ||
+        (s.whenToUse && s.whenToUse.toLowerCase().includes(q)) ||
+        (s.id && s.id.toLowerCase().includes(q)) ||
+        (Array.isArray(s.tags) && s.tags.some(t => t.toLowerCase().includes(q)))
+      );
+    });
+  }
+
+  if (list.length === 0) {
     container.innerHTML = `<div class="pack-empty">
-      No skills installed yet.<br>
-      Skills are reusable instruction packs (a folder with a <strong>SKILL.md</strong>) the agent
-      discovers and reads when a task matches.<br>
-      Import one from a folder to get started.
+      ${searchQuery ? `No installed skills match "${esc(searchQuery)}".` : `No skills discovered in active workspace or global store.<br><br>
+      • Add an <strong>agent.md</strong> in your workspace root<br>
+      • Click <strong>+ New</strong> to author a custom skill<br>
+      • Or switch to <strong>Community Hub</strong> to install curated packs.`}
     </div>`;
     return;
   }
 
-  for (const skill of skillsCache) {
+  for (const skill of list) {
     const card = document.createElement('div');
     card.className = 'pack-card';
 
     const titleRow = document.createElement('div');
     titleRow.className = 'pack-title-row';
 
+    const nameWrap = document.createElement('div');
+    nameWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;';
+
     const name = document.createElement('span');
     name.className = 'pack-name';
     name.textContent = skill.name || skill.id;
+
+    // Scope Badge: [Workspace] or [Global]
+    const scopeBadge = document.createElement('span');
+    scopeBadge.className = `pack-scope-badge ${skill.scope || 'global'}`;
+    const isWs = skill.scope === 'workspace';
+    scopeBadge.style.cssText = isWs
+      ? 'background: rgba(57, 197, 187, 0.15); border: 1px solid rgba(57, 197, 187, 0.35); color: var(--accent-cyan); font-weight: 600; font-size: 9px; border-radius: 4px; padding: 1px 5px; flex-shrink: 0;'
+      : 'background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc; font-weight: 600; font-size: 9px; border-radius: 4px; padding: 1px 5px; flex-shrink: 0;';
+    scopeBadge.textContent = isWs ? 'Workspace' : 'Global';
+
+    nameWrap.append(name, scopeBadge);
 
     const actions = document.createElement('div');
     actions.className = 'pack-actions';
     actions.style.marginLeft = 'auto';
 
+    // Toggle button
     const toggle = document.createElement('button');
     toggle.className = `pack-toggle ${skill.enabled ? 'on' : ''}`;
     toggle.title = skill.enabled ? 'Disable skill' : 'Enable skill';
@@ -91,23 +335,40 @@ export async function renderSkillsPanel() {
     viewBtn.style.cssText = 'padding: 1px 8px; font-size: 10px;';
     viewBtn.textContent = 'View';
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'btn btn-danger btn-sm';
-    deleteBtn.style.cssText = 'padding: 1px 8px; font-size: 10px;';
-    deleteBtn.textContent = 'Delete';
-    deleteBtn.addEventListener('click', async () => {
-      if (!confirm(`Delete skill "${skill.name}"? The agent will no longer see it.`)) return;
-      try {
-        await invoke('delete_skill', { id: skill.id });
-        await renderSkillsPanel();
-        showToast(`Deleted skill "${skill.name}"`, 'success', 2500);
-      } catch (e) {
-        showToast(`Delete failed: ${e}`, 'error');
-      }
+    const openDoc = (e) => {
+      e?.stopPropagation?.();
+      import('../editor/monaco.js').then(m => m.openSkillDocTab(skill));
+    };
+    viewBtn.addEventListener('click', openDoc);
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      openDoc(e);
     });
 
-    actions.append(toggle, viewBtn, deleteBtn);
-    titleRow.append(name, actions);
+    actions.append(toggle, viewBtn);
+
+    // Delete button (allowed for custom skills, not the permanent agent.md descriptor)
+    if (skill.id !== 'workspace-agent-instructions') {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'btn btn-danger btn-sm';
+      deleteBtn.style.cssText = 'padding: 1px 8px; font-size: 10px;';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Delete skill "${skill.name}"? The agent will no longer see it.`)) return;
+        try {
+          await invoke('delete_skill', { id: skill.id });
+          await renderSkillsPanel();
+          showToast(`Deleted skill "${skill.name}"`, 'success', 2500);
+        } catch (e) {
+          showToast(`Delete failed: ${e}`, 'error');
+        }
+      });
+      actions.appendChild(deleteBtn);
+    }
+
+    titleRow.append(nameWrap, actions);
     card.appendChild(titleRow);
 
     const desc = document.createElement('div');
@@ -118,36 +379,155 @@ export async function renderSkillsPanel() {
     if (skill.whenToUse) {
       const when = document.createElement('div');
       when.className = 'pack-meta';
-      when.textContent = `When to use: ${skill.whenToUse}`;
+      when.style.color = 'var(--accent-cyan)';
+      when.textContent = `🎯 Trigger: ${skill.whenToUse}`;
       card.appendChild(when);
+    }
+
+    if (Array.isArray(skill.tags) && skill.tags.length > 0) {
+      const tagRow = document.createElement('div');
+      tagRow.style.cssText = 'display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;';
+      skill.tags.forEach(t => {
+        const tag = document.createElement('span');
+        tag.style.cssText = 'font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.06); color: var(--text-muted);';
+        tag.textContent = `#${t}`;
+        tagRow.appendChild(tag);
+      });
+      card.appendChild(tagRow);
     }
 
     const metaLine = document.createElement('div');
     metaLine.className = 'pack-meta';
-    metaLine.textContent = `${skill.enabled ? 'enabled' : 'disabled'} · ${((skill.bodyChars || 0) / 1000).toFixed(1)} KB of instructions`;
+    metaLine.textContent = `${skill.enabled ? 'active' : 'disabled'} · ${((skill.bodyChars || 0) / 1000).toFixed(1)} KB instructions`;
     card.appendChild(metaLine);
 
-    // Expandable full body review
-    const body = document.createElement('div');
-    body.className = 'pack-detail';
-    body.style.display = 'none';
-    body.textContent = 'Loading…';
-    viewBtn.addEventListener('click', async () => {
-      if (body.style.display !== 'none') {
-        body.style.display = 'none';
-        viewBtn.textContent = 'View';
-        return;
-      }
-      body.style.display = 'block';
-      viewBtn.textContent = 'Hide';
-      try {
-        const res = await invoke('read_skill', { id: skill.id });
-        body.textContent = res.content || '(empty)';
-      } catch (e) {
-        body.textContent = `Could not read skill: ${e}`;
-      }
+    container.appendChild(card);
+  }
+}
+
+function renderCommunityTab(container) {
+  let list = communityCache || [];
+  if (activeFilterTag) {
+    list = list.filter(p => Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase().includes(activeFilterTag.toLowerCase())));
+  }
+  if (searchQuery) {
+    list = list.filter(p => {
+      const q = searchQuery;
+      return (
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.description && p.description.toLowerCase().includes(q)) ||
+        (p.whenToUse && p.whenToUse.toLowerCase().includes(q)) ||
+        (Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase().includes(q)))
+      );
     });
-    card.appendChild(body);
+  }
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="pack-empty">No community skill packs found matching "${esc(searchQuery || activeFilterTag)}".</div>`;
+    return;
+  }
+
+  for (const pack of list) {
+    const card = document.createElement('div');
+    card.className = 'pack-card';
+
+    const titleRow = document.createElement('div');
+    titleRow.className = 'pack-title-row';
+
+    const nameWrap = document.createElement('div');
+    nameWrap.style.cssText = 'display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;';
+
+    const name = document.createElement('span');
+    name.className = 'pack-name';
+    name.textContent = pack.name || pack.id;
+
+    const author = document.createElement('span');
+    author.style.cssText = 'font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); color: #60a5fa;';
+    author.textContent = pack.author || 'Community';
+
+    nameWrap.append(name, author);
+
+    const actions = document.createElement('div');
+    actions.className = 'pack-actions';
+    actions.style.marginLeft = 'auto';
+
+    const isInstalled = Boolean(pack.installed);
+
+    const installBtn = document.createElement('button');
+    installBtn.className = isInstalled ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm';
+    installBtn.style.cssText = 'padding: 2px 9px; font-size: 10px; font-weight: 600;';
+    installBtn.textContent = isInstalled ? 'Installed ✓' : 'Install';
+    if (isInstalled) {
+      installBtn.disabled = true;
+      installBtn.style.opacity = '0.7';
+    } else {
+      installBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        installBtn.disabled = true;
+        installBtn.textContent = 'Installing…';
+        try {
+          const res = await invoke('install_community_skill', { packId: pack.id });
+          if (res && res.success !== false) {
+            showToast(`✓ Skill "${pack.name}" installed globally!`, 'success', 2500);
+            await refreshSkills();
+            await renderSkillsPanel();
+          } else {
+            showToast(`Installation failed: ${res?.error || 'Unknown error'}`, 'error', 3500);
+            installBtn.disabled = false;
+            installBtn.textContent = 'Install';
+          }
+        } catch (e) {
+          showToast(`Install error: ${e}`, 'error', 4000);
+          installBtn.disabled = false;
+          installBtn.textContent = 'Install';
+        }
+      });
+    }
+
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-secondary btn-sm';
+    viewBtn.style.cssText = 'padding: 2px 7px; font-size: 10px;';
+    viewBtn.textContent = 'Preview';
+
+    const openDoc = (e) => {
+      e?.stopPropagation?.();
+      import('../editor/monaco.js').then(m => m.openSkillDocTab(pack));
+    };
+    viewBtn.addEventListener('click', openDoc);
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      openDoc(e);
+    });
+
+    actions.append(installBtn, viewBtn);
+    titleRow.append(nameWrap, actions);
+    card.appendChild(titleRow);
+
+    const desc = document.createElement('div');
+    desc.className = 'pack-desc';
+    desc.textContent = pack.description || '';
+    card.appendChild(desc);
+
+    if (pack.whenToUse) {
+      const when = document.createElement('div');
+      when.className = 'pack-meta';
+      when.style.color = 'var(--accent-cyan)';
+      when.textContent = `🎯 Trigger: ${pack.whenToUse}`;
+      card.appendChild(when);
+    }
+
+    if (Array.isArray(pack.tags) && pack.tags.length > 0) {
+      const tagRow = document.createElement('div');
+      tagRow.style.cssText = 'display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px;';
+      pack.tags.forEach(t => {
+        const tag = document.createElement('span');
+        tag.style.cssText = 'font-size: 9px; padding: 1px 5px; border-radius: 3px; background: rgba(255,255,255,0.06); color: var(--text-muted);';
+        tag.textContent = `#${t}`;
+        tagRow.appendChild(tag);
+      });
+      card.appendChild(tagRow);
+    }
 
     container.appendChild(card);
   }
@@ -157,10 +537,17 @@ async function importSkill() {
   const path = await pickFolder();
   if (!path) return;
   try {
-    const res = await invoke('install_skill_from_folder', { path });
+    let res;
+    try {
+      res = await invoke('skills_import_local_folder', { path });
+    } catch (_) {
+      res = await invoke('install_skill_from_folder', { path });
+    }
     if (res && res.success !== false) {
+      await refreshSkills();
       await renderSkillsPanel();
-      showToast('Skill imported — the agent can discover it now', 'success', 3000);
+      showToast('✓ Skill imported — opened in documentation view', 'success', 3000);
+      import('../editor/monaco.js').then(m => m.openSkillDocTab(res));
     } else {
       showToast(`Import failed: ${res?.error || 'unknown error'}`, 'error', 4000);
     }
@@ -169,12 +556,25 @@ async function importSkill() {
   }
 }
 
-/** Enabled-skill digest for the agent system prompt (called by agent.js). */
+/**
+ * Enabled-skill digest for local-model system prompts (called by agent.js).
+ * Formats a lightweight index digest (< 300 tokens) so models like Qwen or Llama
+ * know which skills exist without context bloat or compaction thrashing.
+ */
 export function getSkillsDigest() {
-  const enabled = (skillsCache || []).filter(s => s.enabled).slice(0, 10);
+  const enabled = (skillsCache || []).filter(s => s.enabled);
   if (enabled.length === 0) return '';
-  const lines = enabled.map(s =>
-    `• ${s.name}${s.whenToUse ? ` — use when: ${s.whenToUse}` : ''}: ${String(s.description || '').slice(0, 140)}`
-  );
-  return `\n\n## Installed skills (instruction packs):\n${lines.join('\n')}\nWhen a task matches a skill, call read_skill(name) first and follow its guidance.`;
+
+  const lines = enabled.map(s => {
+    const scopeTag = s.scope === 'workspace' ? '[workspace]' : '[global]';
+    const trig = s.whenToUse ? ` — trigger: ${s.whenToUse}` : '';
+    const desc = String(s.description || '').slice(0, 120);
+    return `• ${scopeTag} ${s.name}${trig}: ${desc}`;
+  });
+
+  return `\n\n## MODULAR SKILLS & AGENT RULES INDEX:
+${lines.join('\n')}
+DEEP MODULAR EXECUTION DIRECTIVE:
+When the user's task matches any skill domain above, YOU MUST CALL \`read_skill(name="<skill-name>")\` first to fetch its exact instructions, tool constraints, and output format before making mutations.`;
 }
+

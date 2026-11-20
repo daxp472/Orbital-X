@@ -206,6 +206,19 @@ impl InteractiveTerminalManager {
         Ok(())
     }
 
+    /// Terminates all interactive terminal sessions for strict workspace isolation.
+    pub async fn close_all_sessions(&self) -> Result<(), String> {
+        let mut lock = self.sessions.lock().await;
+        for (_, session) in lock.drain() {
+            session.is_alive.store(false, Ordering::SeqCst);
+            let mut child_lock = session.child.lock().await;
+            if let Some(mut child) = child_lock.take() {
+                let _ = child.kill().await;
+            }
+        }
+        Ok(())
+    }
+
     pub async fn list_sessions(&self) -> Vec<InteractiveSessionInfo> {
         let lock = self.sessions.lock().await;
         lock.values()
@@ -366,5 +379,18 @@ impl TerminalService {
         cmd.current_dir(cwd);
         let display = format!("git {}", args.join(" "));
         Self::execute_prepared(cmd, &display, timeout_secs).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_terminal_close_all_sessions_clears_state() {
+        let mgr = InteractiveTerminalManager::new();
+        // Should succeed even when no sessions exist
+        assert!(mgr.close_all_sessions().await.is_ok());
+        assert!(mgr.list_sessions().await.is_empty());
     }
 }

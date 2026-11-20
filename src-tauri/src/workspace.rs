@@ -185,6 +185,16 @@ impl WorkspaceService {
 
         self.root = Some(clean_canonical.clone());
 
+        // STRICT PER-WORKSPACE STATE ISOLATION:
+        // Flush in-memory turn snapshots, manifests, active turn tracking, and cursor trackers
+        // belonging to the previous workspace so zero cross-workspace snapshot leaks occur.
+        self.turn_snapshots.clear();
+        self.pending_manifests.clear();
+        self.active_turn_meta = None;
+        if let Ok(mut cursor) = self.last_created_cursor.lock() {
+            cursor.clear();
+        }
+
         // Quick scan to detect languages and file count
         let meta = self.scan_metadata(&clean_canonical, &name);
         self.cached_meta = Some(meta.clone());
@@ -1865,5 +1875,50 @@ mod tests {
         assert_eq!(diff4.new_content, "");
 
         let _ = fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_strict_workspace_isolation_flushes_state() {
+        let tmp_a = std::env::temp_dir().join(format!("orbital_iso_a_{}", std::process::id()));
+        let tmp_b = std::env::temp_dir().join(format!("orbital_iso_b_{}", std::process::id()));
+        let _ = fs::create_dir_all(&tmp_a);
+        let _ = fs::create_dir_all(&tmp_b);
+
+        let mut ws = WorkspaceService::new();
+        ws.set_root(&tmp_a.to_string_lossy()).unwrap();
+
+        // Perform file mutation in Workspace A
+        ws.write_file("file_a.txt", "content from workspace a", "init a").unwrap();
+        assert!(!ws.change_journal.is_empty(), "Workspace A should have journal entries");
+
+        // Record turn snapshot in Workspace A
+        ws.record_turn_start("turn_1", "User prompt for A");
+        ws.write_file("file_a.txt", "content updated in turn", "update a").unwrap();
+        let snap = ws.record_turn_end("turn_1");
+        assert!(snap.is_some(), "Workspace A should have generated a turn snapshot");
+        assert_eq!(ws.turn_snapshots.len(), 1, "Workspace A should have 1 snapshot");
+
+        // Now switch to Workspace B
+        ws.set_root(&tmp_b.to_string_lossy()).unwrap();
+
+        // STRICT ISOLATION ASSERTIONS:
+        // Any prior changes from Workspace A are rejected across workspace boundary
+        let undo_err = ws.undo_last_change();
+        assert!(undo_err.is_err());
+        assert!(
+            ws.turn_snapshots.is_empty(),
+            "Workspace B must have zero turn snapshots from Workspace A"
+        );
+        assert!(
+            ws.active_turn_meta.is_none(),
+            "Workspace B must have zero active turn meta"
+        );
+        assert!(
+            ws.last_created_cursor.lock().unwrap().is_empty(),
+            "Workspace B must have cursor trackers reset"
+        );
+
+        let _ = fs::remove_dir_all(&tmp_a);
+        let _ = fs::remove_dir_all(&tmp_b);
     }
 }

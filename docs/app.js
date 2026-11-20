@@ -49,7 +49,7 @@ function initMobileNav() {
   });
 }
 
-// 1. Detect User OS & update main CTA with verified v2.4.4 release URLs
+// 1. Detect User OS & update main CTA with verified v2.4.5 release URLs
 function initOSDetection() {
   const ua = window.navigator.userAgent.toLowerCase();
   const ctaBtn = document.getElementById('hero-download-btn');
@@ -59,16 +59,16 @@ function initOSDetection() {
 
   if (ua.includes('win')) {
     ctaLabel.textContent = 'Download for Windows (x64)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_x64-setup.exe';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_x64-setup.exe';
   } else if (ua.includes('mac')) {
-    ctaLabel.textContent = 'Download for macOS (.dmg)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_aarch64.dmg';
+    ctaLabel.textContent = 'Download Universal Portable (macOS)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable.zip';
   } else if (ua.includes('linux')) {
-    ctaLabel.textContent = 'Download for Linux (.AppImage)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.AppImage';
+    ctaLabel.textContent = 'Download Universal Portable (Linux)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable.zip';
   } else {
-    ctaLabel.textContent = 'Download Orbital X (v2.4.4)';
-    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.4.4';
+    ctaLabel.textContent = 'Download Orbital X (v2.4.5)';
+    ctaBtn.href = 'https://github.com/daxp472/Orbital-X/releases/tag/v2.4.5';
   }
 }
 
@@ -395,16 +395,18 @@ async function initGitHubReleaseSync() {
       if (fallbackRes.ok) {
         const v = await fallbackRes.json();
         releaseData = {
-          tag_name: v.tag || 'v2.4.4',
-          published_at: v.release_date || '2026-11-19',
+          tag_name: v.tag || 'v2.4.5',
+          published_at: v.release_date || '2026-11-20',
           assets: [
-            { name: 'Orbital.X_2.4.4_x64-setup.exe', browser_download_url: v.download_url, size: 7315630 },
-            { name: 'Orbital-X-Portable.zip', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital-X-Portable.zip', size: 117362000 },
-            { name: 'orbital-x.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/orbital-x.exe', size: 22478336 },
-            { name: 'Orbital.X_2.4.4_aarch64.dmg', browser_download_url: v.macos_dmg_url, size: 9951370 },
-            { name: 'Orbital.X_aarch64.app.tar.gz', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_aarch64.app.tar.gz', size: 9289705 },
-            { name: 'Orbital.X_2.4.4_amd64.AppImage', browser_download_url: v.linux_appimage_url, size: 90798584 },
-            { name: 'Orbital.X_2.4.4_amd64.deb', browser_download_url: v.linux_deb_url, size: 11100166 }
+            { name: 'Orbital.X_2.4.5_x64-setup.exe', browser_download_url: v.download_url, size: 7381976 },
+            { name: 'Orbital X_2.4.5_x64-setup.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital%20X_2.4.5_x64-setup.exe', size: 7381976 },
+            { name: 'Orbital-X-Portable.zip', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable.zip', size: 117366377 },
+            { name: 'Orbital X Portable.zip', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital%20X%20Portable.zip', size: 117366377 },
+            { name: 'orbital-x.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/orbital-x.exe', size: 22482944 },
+            { name: 'Orbital-X-Portable-Windows.zip', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable-Windows.zip', size: 17969694 },
+            { name: 'Orbital.X_2.4.4_portable.zip', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.4_portable.zip', size: 117366377 },
+            { name: 'Orbital.X_aarch64.app.tar.gz', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_aarch64.app.tar.gz', size: 9289705 },
+            { name: 'Orbital.X_2.4.4_x64-setup.exe', browser_download_url: 'https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.4_x64-setup.exe', size: 7319559 }
           ]
         };
       }

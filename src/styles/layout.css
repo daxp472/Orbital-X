@@ -1454,3 +1454,380 @@ body.zen-mode .editor-split-container {
   width: 100% !important;
   max-width: 100vw !important;
 }
+
+/* ==========================================================================
+   Responsive Compact Titlebar (Restore / Unmaximized Mode & Narrow Widths <= 960px)
+   ========================================================================== */
+
+/* 1. Narrow Width Viewports (<= 960px) */
+@media (max-width: 960px) {
+  /* Auto-hide model label text (keep only icon or minimal pill) */
+  #header-model-text {
+    display: none !important;
+  }
+  #header-model-pill {
+    padding: 2px 6px !important;
+  }
+
+  /* Auto-hide secondary pills & git status badge */
+  .pill-git-branch,
+  #header-git-branch {
+    display: none !important;
+  }
+
+  /* Display ONLY the active open folder name inside center workspace pill */
+  .titlebar-command-pill .pill-sep,
+  .titlebar-command-pill .pill-breadcrumb {
+    display: none !important;
+  }
+  .titlebar-command-pill {
+    padding: 3px 8px !important;
+    max-width: 220px !important;
+  }
+
+  /* Compact menus on small viewports */
+  .titlebar-menus .menu-item:nth-child(n+5) {
+    display: none !important;
+  }
+}
+
+/* 2. Window Unmaximized / Restored Mode (User clicked Restore button) */
+body.window-unmaximized #header-model-text {
+  display: none !important;
+}
+body.window-unmaximized #header-model-pill {
+  padding: 2px 6px !important;
+}
+body.window-unmaximized .pill-git-branch,
+body.window-unmaximized #header-git-branch {
+  display: none !important;
+}
+body.window-unmaximized .titlebar-command-pill .pill-sep,
+body.window-unmaximized .titlebar-command-pill .pill-breadcrumb {
+  display: none !important;
+}
+body.window-unmaximized .titlebar-command-pill {
+  padding: 3px 8px !important;
+}
+
+/* 3. Not a git repository status badge: always hide if not a repository */
+.pill-git-branch.not-a-repo,
+#header-git-branch.not-a-repo {
+  display: none !important;
+}
+
+/* ==========================================================================
+   Responsive Split-Screen Architecture (Half-Screen <960px & Quarter-Screen <640px)
+   ========================================================================== */
+
+/* Top Single-Pane Switcher Bar (Quarter-Screen Mode) */
+.quarter-screen-pane-switcher {
+  display: none;
+  height: 32px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  align-items: center;
+  padding: 0 8px;
+  gap: 6px;
+  z-index: 45;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.qs-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.qs-tab-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.qs-tab-btn.active {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+  color: var(--text-primary-bright);
+  font-weight: 600;
+}
+
+/* 1. Half-Screen Mode (640px <= width < 960px) */
+@media (max-width: 960px) {
+  body.layout-half-screen .sidebar {
+    position: absolute;
+    left: 48px;
+    top: 35px;
+    bottom: 24px;
+    z-index: 50;
+    width: 260px !important;
+    max-width: 80vw !important;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.45);
+    border-right: 1px solid var(--border-color);
+    background-color: var(--bg-sidebar);
+  }
+
+  body.layout-half-screen .sidebar.hidden {
+    display: none !important;
+  }
+
+  body.layout-half-screen #resizer-sidebar {
+    display: none !important;
+  }
+
+  body.layout-half-screen #status-token-usage,
+  body.layout-half-screen #status-workspace,
+  body.layout-half-screen #status-encoding,
+  body.layout-half-screen #status-mode,
+  body.layout-half-screen #sb-indent,
+  body.layout-half-screen #sb-line-ending {
+    display: none !important;
+  }
+}
+
+/* 2. Quarter-Screen Mode (width < 640px): Single-Pane Focus View */
+@media (max-width: 640px) {
+  .quarter-screen-pane-switcher {
+    display: flex !important;
+  }
+
+  body.layout-quarter-screen .activity-rail {
+    display: none !important;
+  }
+
+  body.layout-quarter-screen #resizer-sidebar,
+  body.layout-quarter-screen #resizer-agent {
+    display: none !important;
+  }
+
+  /* Force Full View On Active Pane */
+  body.layout-quarter-screen.focus-pane-explorer #sidebar {
+    display: flex !important;
+    position: static !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+    box-shadow: none !important;
+  }
+  body.layout-quarter-screen.focus-pane-explorer .center-work-area,
+  body.layout-quarter-screen.focus-pane-explorer #agent-panel {
+    display: none !important;
+  }
+
+  body.layout-quarter-screen.focus-pane-editor .center-work-area {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+  body.layout-quarter-screen.focus-pane-editor #sidebar,
+  body.layout-quarter-screen.focus-pane-editor #agent-panel {
+    display: none !important;
+  }
+
+  body.layout-quarter-screen.focus-pane-agent #agent-panel {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+  body.layout-quarter-screen.focus-pane-agent #sidebar,
+  body.layout-quarter-screen.focus-pane-agent .center-work-area {
+    display: none !important;
+  }
+
+  /* Compact status bar in 1/4 screen */
+  body.layout-quarter-screen .status-bar-right > div:not(#status-line-col),
+  body.layout-quarter-screen .status-bar-left > div:not(#status-git-branch) {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   Read-Only Markdown Skill Viewer Tab (Theme Parity for Light and Dark)
+   ========================================================================== */
+
+.skill-doc-view-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+  background-color: var(--bg-workspace);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.skill-doc-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 14px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.skill-doc-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.skill-doc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.skill-doc-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.skill-doc-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary-bright);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.skill-doc-meta-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.skill-meta-item strong {
+  color: var(--text-secondary);
+}
+
+.skill-doc-tags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.skill-tag-pill {
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.skill-doc-body {
+  padding: 24px 28px;
+  max-width: 840px;
+  line-height: 1.65;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  user-select: text;
+}
+
+.skill-doc-body h1,
+.skill-doc-body h2,
+.skill-doc-body h3,
+.skill-doc-body h4 {
+  color: var(--text-primary-bright);
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+}
+
+.skill-doc-body h1 {
+  font-size: 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 6px;
+}
+
+.skill-doc-body h2 {
+  font-size: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+}
+
+.skill-doc-body p {
+  margin-bottom: 1em;
+}
+
+.skill-doc-body ul,
+.skill-doc-body ol {
+  padding-left: 20px;
+  margin-bottom: 1em;
+}
+
+.skill-doc-body li {
+  margin-bottom: 4px;
+}
+
+.skill-doc-body code {
+  font-family: var(--font-code, Consolas, monospace);
+  font-size: 12px;
+  padding: 2px 5px;
+  background-color: var(--bg-hover);
+  color: var(--accent-cyan);
+  border-radius: 3px;
+  border: 1px solid var(--border-subtle);
+}
+
+.skill-doc-body pre {
+  background-color: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin-bottom: 1.2em;
+}
+
+.skill-doc-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--text-primary);
+}
+
+.skill-doc-body blockquote {
+  border-left: 3px solid var(--accent-cyan);
+  padding: 6px 12px;
+  margin: 1em 0;
+  background: var(--bg-surface);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-secondary);
+}

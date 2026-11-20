@@ -228,6 +228,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDebug();
   initExtensions();
   initSkills();
+  initResponsiveSplitScreenEngine();
   initSearchPanel();
   initCommandPalette();
   initActivityCenter();
@@ -1049,6 +1050,10 @@ function initWindowControls() {
   const maxBtn = document.getElementById('win-maximize');
 
   const updateMaximizeState = (isMaximized) => {
+    if (document.body) {
+      document.body.classList.toggle('window-maximized', Boolean(isMaximized));
+      document.body.classList.toggle('window-unmaximized', !isMaximized);
+    }
     if (!maxBtn) return;
     if (isMaximized) {
       maxBtn.title = 'Restore';
@@ -1157,6 +1162,84 @@ function initWindowControls() {
       }
     }
   });
+}
+
+/**
+ * Adaptive Breakpoint & ResizeObserver Engine:
+ * - Half-Screen Mode (width < 960px): Sidebar drawer + status bar pill collapse.
+ * - Quarter-Screen Mode (width < 640px): Sleek Single-Pane Focus View (Explorer | Editor | AI Chat).
+ * - Smooth Monaco editor.layout() invocation on every resize transition.
+ */
+export function initResponsiveSplitScreenEngine() {
+  let activeFocusPane = 'editor'; // 'explorer' | 'editor' | 'agent'
+  const switcher = document.getElementById('quarter-screen-pane-switcher');
+  const btns = switcher?.querySelectorAll('.qs-tab-btn');
+
+  function setFocusPane(pane) {
+    activeFocusPane = pane;
+    document.body.classList.remove('focus-pane-explorer', 'focus-pane-editor', 'focus-pane-agent');
+    document.body.classList.add(`focus-pane-${pane}`);
+    btns?.forEach(b => {
+      b.classList.toggle('active', b.dataset.pane === pane);
+    });
+
+    if (pane === 'explorer') {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar) sidebar.classList.remove('hidden');
+    }
+
+    if (pane === 'editor') {
+      setTimeout(() => {
+        import('./editor/monaco.js').then(m => {
+          m.getActiveEditor()?.layout();
+        });
+      }, 50);
+    }
+  }
+
+  btns?.forEach(btn => {
+    btn.addEventListener('click', () => {
+      setFocusPane(btn.dataset.pane);
+    });
+  });
+
+  function applyResponsiveLayout() {
+    const w = window.innerWidth;
+    const body = document.body;
+
+    if (w < 640) {
+      body.classList.remove('layout-full-screen', 'layout-half-screen');
+      body.classList.add('layout-quarter-screen');
+      if (!body.classList.contains('focus-pane-explorer') &&
+          !body.classList.contains('focus-pane-editor') &&
+          !body.classList.contains('focus-pane-agent')) {
+        setFocusPane(activeFocusPane);
+      }
+    } else if (w < 960) {
+      body.classList.remove('layout-full-screen', 'layout-quarter-screen', 'focus-pane-explorer', 'focus-pane-editor', 'focus-pane-agent');
+      body.classList.add('layout-half-screen');
+    } else {
+      body.classList.remove('layout-half-screen', 'layout-quarter-screen', 'focus-pane-explorer', 'focus-pane-editor', 'focus-pane-agent');
+      body.classList.add('layout-full-screen');
+    }
+
+    requestAnimationFrame(() => {
+      import('./editor/monaco.js').then(m => {
+        m.getActiveEditor()?.layout();
+      });
+    });
+  }
+
+  window.addEventListener('resize', applyResponsiveLayout);
+  const mainCont = document.querySelector('.main-container');
+  if (typeof ResizeObserver !== 'undefined' && mainCont) {
+    const ro = new ResizeObserver(() => {
+      applyResponsiveLayout();
+    });
+    ro.observe(mainCont);
+  }
+
+  applyResponsiveLayout();
 }
 
 export function openShortcutsHelp() {

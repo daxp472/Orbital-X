@@ -1911,11 +1911,194 @@ function escapeHtml(str) {
 export function toggleMarkdownPreview(forceState = null) {
   const p = panelState('left');
   const tab = p.tabs.find(t => t.id === p.activeTabId);
-  if (!tab || (tab.language !== 'markdown' && !Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i)))) {
+  if (!tab) return;
+
+  if (tab.isSkillDoc) {
+    tab.rawSourceMode = forceState !== null ? !forceState : !tab.rawSourceMode;
+    renderMarkdownPreview();
+    return;
+  }
+
+  if (tab.language !== 'markdown' && !Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i))) {
     return;
   }
   isMarkdownPreviewActive = forceState !== null ? forceState : !isMarkdownPreviewActive;
   renderMarkdownPreview();
+}
+
+export function renderSkillDocView(tab, container) {
+  if (!container) container = document.getElementById('editor-markdown-preview');
+  if (!container) return;
+
+  const skill = tab.skillData || {};
+  const isWs = skill.scope === 'workspace';
+  const isInstalled = Boolean(skill.installed || skill.scope === 'workspace' || skill.scope === 'global');
+  const author = skill.author || (isWs ? 'Workspace Rules' : 'Community');
+  const tags = Array.isArray(skill.tags) ? skill.tags : [];
+  const skillName = skill.name || tab.name.replace(/^📖\s*/, '');
+
+  import('../components/agent.js').then(({ formatMarkdown }) => {
+    container.innerHTML = `
+      <div class="skill-doc-view-container">
+        <div class="skill-doc-header">
+          <div class="skill-doc-header-top">
+            <div class="skill-doc-title-row">
+              <span class="skill-doc-icon">📖</span>
+              <h2 class="skill-doc-title">${escapeHtml(skillName)}</h2>
+              <span class="pack-scope-badge ${isWs ? 'workspace' : 'global'}" style="font-size: 10px; padding: 2px 7px;">
+                ${isWs ? 'Workspace' : 'Global'}
+              </span>
+            </div>
+            <div class="skill-doc-actions">
+              ${!isInstalled ? `
+                <button class="btn btn-primary btn-sm" id="btn-doc-install" style="font-size: 11px; padding: 3px 12px; font-weight: 600;">
+                  ✓ Install Skill
+                </button>
+              ` : `
+                <button class="btn btn-secondary btn-sm" id="btn-doc-toggle-enable" style="font-size: 11px; padding: 3px 10px;">
+                  ${skill.enabled ? '✓ Enabled' : 'Disabled'}
+                </button>
+                ${skill.id !== 'workspace-agent-instructions' ? `
+                  <button class="btn btn-danger btn-sm" id="btn-doc-uninstall" style="font-size: 11px; padding: 3px 8px;">
+                    Uninstall
+                  </button>
+                ` : ''}
+              `}
+              <button class="btn btn-secondary btn-sm" id="btn-doc-toggle-raw" style="font-size: 11px; padding: 3px 10px;">
+                Open Raw Source
+              </button>
+            </div>
+          </div>
+          <div class="skill-doc-meta-bar">
+            <span class="skill-meta-item"><strong>Author:</strong> ${escapeHtml(author)}</span>
+            <span class="skill-meta-item"><strong>Version:</strong> 1.0.0</span>
+            <span class="skill-meta-item"><strong>Scope:</strong> ${isWs ? 'Workspace (~/.orbital/agent.md)' : 'Global (~/.orbital/skills)'}</span>
+            ${skill.whenToUse ? `<span class="skill-meta-item"><strong>Trigger:</strong> ${escapeHtml(skill.whenToUse)}</span>` : ''}
+            ${tags.length > 0 ? `
+              <div class="skill-doc-tags">
+                ${tags.map(t => `<span class="skill-tag-pill">#${escapeHtml(t)}</span>`).join('')}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+        <div class="skill-doc-body">
+          ${formatMarkdown(tab.content || '(Empty skill documentation)')}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('btn-doc-install')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btn-doc-install');
+      if (btn) { btn.disabled = true; btn.textContent = 'Installing…'; }
+      try {
+        const res = await invoke('install_community_skill', { packId: skill.id });
+        if (res && res.success !== false) {
+          showToast(`✓ Skill "${skillName}" installed globally!`, 'success', 2500);
+          skill.installed = true;
+          skill.enabled = true;
+          const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
+          await refreshSkills();
+          renderSkillsPanel();
+          renderSkillDocView(tab, container);
+        } else {
+          showToast(`Install failed: ${res?.error || 'Unknown error'}`, 'error');
+          if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
+        }
+      } catch (e) {
+        showToast(`Install error: ${e}`, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
+      }
+    });
+
+    document.getElementById('btn-doc-toggle-enable')?.addEventListener('click', async () => {
+      try {
+        const nextState = !skill.enabled;
+        await invoke('set_skill_enabled', { id: skill.id, enabled: nextState });
+        skill.enabled = nextState;
+        showToast(`Skill "${skillName}" ${nextState ? 'enabled' : 'disabled'}`, 'success', 2000);
+        const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
+        await refreshSkills();
+        renderSkillsPanel();
+        renderSkillDocView(tab, container);
+      } catch (e) {
+        showToast(`Toggle failed: ${e}`, 'error');
+      }
+    });
+
+    document.getElementById('btn-doc-uninstall')?.addEventListener('click', async () => {
+      if (!confirm(`Uninstall skill "${skillName}"?`)) return;
+      try {
+        await invoke('delete_skill', { id: skill.id });
+        showToast(`Uninstalled skill "${skillName}"`, 'success', 2500);
+        const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
+        await refreshSkills();
+        renderSkillsPanel();
+        closeTab(tab.id, 'left');
+      } catch (e) {
+        showToast(`Uninstall failed: ${e}`, 'error');
+      }
+    });
+
+    document.getElementById('btn-doc-toggle-raw')?.addEventListener('click', () => {
+      tab.rawSourceMode = true;
+      renderMarkdownPreview();
+    });
+  }).catch(e => {
+    console.warn("Could not render skill doc preview:", e);
+  });
+}
+
+export async function openSkillDocTab(skill) {
+  if (!skill) return;
+  const p = panelState('left');
+  const cleanId = skill.id || 'custom-skill';
+  const tabId = 'skill_' + cleanId;
+
+  let content = skill.body || '';
+  if (!content) {
+    try {
+      const res = await invoke('read_skill', { id: cleanId });
+      content = res?.content || (skill.description ? `# ${skill.name}\n\n${skill.description}` : '# Skill Documentation');
+    } catch (_) {
+      content = skill.description ? `# ${skill.name}\n\n${skill.description}` : '# Skill Documentation';
+    }
+  }
+
+  let tab = p.tabs.find(t => t.id === tabId);
+  if (!tab) {
+    tab = {
+      id: tabId,
+      path: `__skill__://${cleanId}`,
+      relativePath: `skills/${cleanId}.md`,
+      name: `📖 ${skill.name || cleanId}`,
+      content: content,
+      originalContent: content,
+      isDirty: false,
+      isPinned: true,
+      isPreview: false,
+      isSkillDoc: true,
+      readOnly: true,
+      rawSourceMode: false,
+      skillData: skill,
+      language: 'markdown'
+    };
+    p.tabs.push(tab);
+    tabDirtyMap.set(tab.id, false);
+  } else {
+    tab.content = content;
+    tab.skillData = skill;
+  }
+
+  let model = editorModels.get(tab.path);
+  if (!model) {
+    const uri = monaco.Uri.parse(`skill://${cleanId}/SKILL.md`);
+    model = monaco.editor.getModel(uri) || monaco.editor.createModel(content, 'markdown', uri);
+    editorModels.set(tab.path, model);
+  } else if (model.getValue() !== content) {
+    model.setValue(content);
+  }
+
+  switchToTab(tab.id, 'left');
 }
 
 export function renderMarkdownPreview() {
@@ -1925,7 +2108,41 @@ export function renderMarkdownPreview() {
   const p = panelState('left');
   const tab = p.tabs.find(t => t.id === p.activeTabId);
 
-  const isMd = tab && (tab.language === 'markdown' || Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i)));
+  if (!tab) {
+    if (toggleBtn) toggleBtn.style.display = 'none';
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (monacoContainer) monacoContainer.style.display = '';
+    return;
+  }
+
+  // Handle Dedicated Read-Only Skill Doc Tab
+  if (tab.isSkillDoc) {
+    if (toggleBtn) {
+      toggleBtn.style.display = 'inline-flex';
+      toggleBtn.title = tab.rawSourceMode ? 'Switch to Formatted Documentation' : 'Open Raw Source';
+      toggleBtn.classList.toggle('active', Boolean(tab.rawSourceMode));
+    }
+    if (tab.rawSourceMode) {
+      if (previewContainer) previewContainer.style.display = 'none';
+      if (monacoContainer) {
+        monacoContainer.style.display = '';
+        const ed = editorFor('left');
+        if (ed) {
+          ed.updateOptions({ readOnly: true });
+          ed.layout();
+        }
+      }
+    } else {
+      if (monacoContainer) monacoContainer.style.display = 'none';
+      if (previewContainer) {
+        previewContainer.style.display = 'block';
+        renderSkillDocView(tab, previewContainer);
+      }
+    }
+    return;
+  }
+
+  const isMd = tab.language === 'markdown' || Boolean(tab.name && tab.name.match(/\.(md|markdown)$/i));
 
   if (!isMd) {
     if (toggleBtn) toggleBtn.style.display = 'none';

@@ -32,6 +32,18 @@ let modalCategoryFilter = 'all';
 const selectedMemoryIds = new Set();
 let isInitialized = false;
 
+export async function onWorkspaceChanged() {
+  selectedMemoryIds.clear();
+  memorySearchQuery = '';
+  modalSearchQuery = '';
+  modalCategoryFilter = 'all';
+  await refreshMemories();
+  renderSidebarMemories();
+  if (document.getElementById('modal-memory-manager')?.classList.contains('active')) {
+    renderModalCoreMemories();
+  }
+}
+
 export function initMemory() {
   if (isInitialized) return;
   isInitialized = true;

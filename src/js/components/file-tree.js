@@ -188,6 +188,36 @@ export async function loadWorkspace(rootPath, cachedMeta = null) {
     }
 
     await refreshFileTree();
+
+    // STRICT WORKSPACE ISOLATION:
+    // Flush & reload all workspace-scoped state cleanly
+    try {
+      const { onWorkspaceChanged: onChatWorkspaceChanged } = await import('./chat-sessions.js');
+      await onChatWorkspaceChanged(state.workspace.rootPath);
+    } catch (e) {
+      console.warn("Failed to isolate chat sessions on workspace switch:", e);
+    }
+
+    try {
+      const { onWorkspaceChanged: onMemWorkspaceChanged } = await import('./memory.js');
+      await onMemWorkspaceChanged();
+    } catch (e) {
+      console.warn("Failed to isolate memory on workspace switch:", e);
+    }
+
+    try {
+      const { onWorkspaceOpened: onTermWorkspaceOpened } = await import('./terminal.js');
+      await onTermWorkspaceOpened(state.workspace.rootPath);
+    } catch (e) {
+      console.warn("Failed to isolate terminal on workspace switch:", e);
+    }
+
+    try {
+      const { refreshSkills } = await import('./skills.js');
+      await refreshSkills();
+    } catch (e) {
+      console.warn("Failed to refresh skills on workspace switch:", e);
+    }
   } catch (e) {
     console.error("Could not open workspace:", e);
     throw e;

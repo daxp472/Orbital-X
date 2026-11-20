@@ -163,8 +163,18 @@ function parseRawStatus(raw) {
 
 function renderPanel() {
   const headerBranch = document.getElementById('header-branch-name');
+  const headerBranchPill = document.getElementById('header-git-branch');
   if (headerBranch && panelState.branch) {
     headerBranch.textContent = panelState.branch;
+    const isNotRepo = !panelState.branch || panelState.branch.toLowerCase().includes('not a git');
+    if (headerBranchPill) {
+      headerBranchPill.classList.toggle('not-a-repo', isNotRepo);
+      if (isNotRepo) {
+        headerBranchPill.style.display = 'none';
+      } else {
+        headerBranchPill.style.display = '';
+      }
+    }
   }
   const container = document.getElementById('source-control-content');
   if (!container) return;

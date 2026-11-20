@@ -95,9 +95,15 @@ fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a
 }
 
 #[tauri::command]
-fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
-    let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
-    let meta = ws.set_root(&path)?;
+async fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
+    let meta = {
+        let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
+        ws.set_root(&path)?
+    };
+
+    // Strictly isolate terminal sessions: close all sessions belonging to previous workspace
+    let _ = state.terminal_mgr.close_all_sessions().await;
+
     if let Ok(mut iso) = state.isolation_engine.lock() {
         *iso = isolation::IsolationEngine::new(PathBuf::from(&path)).ok();
     }
@@ -1989,14 +1995,18 @@ async fn execute_tool(
             websearch::fetch_page(url, max_chars).await
         }
         // Skills are instruction packs read by the agent on demand — read-only
-        "list_skills" => Ok(serde_json::Value::Array(skills::SkillService::list())),
+        "list_skills" => {
+            let root = state.workspace.lock().ok().and_then(|ws| ws.get_root());
+            Ok(serde_json::Value::Array(skills::SkillService::list(root.as_deref())))
+        }
         "read_skill" => {
             let identifier = arguments
                 .get("name")
                 .or_else(|| arguments.get("id"))
                 .and_then(|v| v.as_str())
                 .ok_or("{\"error\":\"invalid_arguments\",\"tool\":\"read_skill\",\"message\":\"read_skill requires a 'name' string (from list_skills).\"}")?;
-            skills::SkillService::read(identifier)
+            let root = state.workspace.lock().ok().and_then(|ws| ws.get_root());
+            skills::SkillService::read(identifier, root.as_deref())
         }
         _ => Err(format!("Unrecognized tool: {}", name)),
     }
@@ -2368,16 +2378,35 @@ fn sync_project_memory_from_portable(workspace_path: String) -> Result<portable:
     portable::sync_workspace_memory_from_portable(&workspace_path)
 }
 
-#[tauri::command]
-fn chat_sessions_path() -> PathBuf {
-    let dir = portable::orbital_data_dir();
-    let _ = std::fs::create_dir_all(&dir);
-    dir.join("chat_sessions.json")
+fn chat_sessions_path_for_root(root: Option<&Path>) -> PathBuf {
+    if let Some(r) = root {
+        let dir = r.join(".orbital");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("chat_sessions.json")
+    } else {
+        let dir = portable::orbital_data_dir().join("workspaces").join("_default");
+        let _ = std::fs::create_dir_all(&dir);
+        dir.join("chat_sessions.json")
+    }
 }
 
 #[tauri::command]
-fn load_chat_sessions() -> Result<serde_json::Value, String> {
-    match std::fs::read(chat_sessions_path()) {
+fn load_chat_sessions(
+    workspace_path: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let root = if let Some(ref wp) = workspace_path {
+        if !wp.trim().is_empty() {
+            Some(PathBuf::from(wp.trim()))
+        } else {
+            state.workspace.lock().ok().and_then(|ws| ws.get_root())
+        }
+    } else {
+        state.workspace.lock().ok().and_then(|ws| ws.get_root())
+    };
+
+    let path = chat_sessions_path_for_root(root.as_deref());
+    match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|e| e.to_string()),
         // Missing file = no history yet; null tells the frontend to fall back
         // to its bootstrap default rather than treating this as an error.
@@ -2386,8 +2415,22 @@ fn load_chat_sessions() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-fn save_chat_sessions(sessions: serde_json::Value) -> Result<(), String> {
-    let path = chat_sessions_path();
+fn save_chat_sessions(
+    sessions: serde_json::Value,
+    workspace_path: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let root = if let Some(ref wp) = workspace_path {
+        if !wp.trim().is_empty() {
+            Some(PathBuf::from(wp.trim()))
+        } else {
+            state.workspace.lock().ok().and_then(|ws| ws.get_root())
+        }
+    } else {
+        state.workspace.lock().ok().and_then(|ws| ws.get_root())
+    };
+
+    let path = chat_sessions_path_for_root(root.as_deref());
     let serialized = serde_json::to_string_pretty(&sessions).map_err(|e| e.to_string())?;
     portable::safe_atomic_write(&path, serialized.as_bytes())
         .map_err(|e| format!("Failed to safely write chat sessions: {}", e))?;
@@ -3133,13 +3176,62 @@ fn set_extension_enabled(id: String, enabled: bool) -> Result<serde_json::Value,
 // ============================================================================
 
 #[tauri::command]
-fn list_skills() -> Result<serde_json::Value, String> {
-    Ok(serde_json::Value::Array(skills::SkillService::list()))
+fn list_skills(state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let root = state.workspace.lock().ok().and_then(|ws| ws.get_root());
+    Ok(serde_json::Value::Array(skills::SkillService::list(root.as_deref())))
 }
 
 #[tauri::command]
-fn read_skill(id: String) -> Result<serde_json::Value, String> {
-    skills::SkillService::read(&id)
+fn read_skill(id: String, state: State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let root = state.workspace.lock().ok().and_then(|ws| ws.get_root());
+    skills::SkillService::read(&id, root.as_deref())
+}
+
+#[tauri::command]
+fn list_community_skills() -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(skills::SkillService::community_catalog()))
+}
+
+#[tauri::command]
+async fn skills_fetch_community_registry(url: Option<String>) -> Result<serde_json::Value, String> {
+    Ok(serde_json::Value::Array(skills::SkillService::fetch_community_registry(url.as_deref()).await))
+}
+
+#[tauri::command]
+async fn skills_install_from_url(url: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::install_from_url(&url).await
+}
+
+#[tauri::command]
+fn skills_import_local_folder(path: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::import_local_folder(&path)
+}
+
+#[tauri::command]
+fn install_community_skill(pack_id: String) -> Result<serde_json::Value, String> {
+    skills::SkillService::install_community_pack(&pack_id)
+}
+
+#[tauri::command]
+fn create_custom_skill(
+    id: String,
+    name: String,
+    description: String,
+    when_to_use: String,
+    body: String,
+    is_workspace: Option<bool>,
+    state: State<'_, AppState>,
+) -> Result<serde_json::Value, String> {
+    let root = state.workspace.lock().ok().and_then(|ws| ws.get_root());
+    skills::SkillService::create_custom_skill(
+        &id,
+        &name,
+        &description,
+        &when_to_use,
+        &body,
+        is_workspace.unwrap_or(false),
+        root.as_deref(),
+    )
 }
 
 #[tauri::command]
@@ -3302,6 +3394,12 @@ pub fn run() {
             set_extension_enabled,
             list_skills,
             read_skill,
+            list_community_skills,
+            skills_fetch_community_registry,
+            skills_install_from_url,
+            skills_import_local_folder,
+            install_community_skill,
+            create_custom_skill,
             install_skill_from_folder,
             delete_skill,
             set_skill_enabled,

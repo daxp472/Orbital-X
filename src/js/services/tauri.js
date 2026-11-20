@@ -313,7 +313,7 @@ async function getInvoke() {
       case 'get_hardware_info':
         return { totalRamBytes: null, gpus: [] };
       case 'get_app_version':
-        return '2.3.8';
+        return '2.4.5';
       case 'get_portable_status':
         return {
           is_portable: false,
@@ -372,6 +372,36 @@ async function getInvoke() {
         return 'browser-preview-download-fallback';
       case 'install_update':
         return { success: true };
+      case 'list_skills':
+        return [
+          { id: 'workspace-agent-instructions', name: 'Workspace Rules (agent.md)', description: 'Active workspace custom developer instructions from agent.md', whenToUse: 'Always active', scope: 'workspace', enabled: true },
+          { id: 'tdd-workflow', name: 'Test-Driven Development (TDD)', description: 'Strict test-first engineering workflow', whenToUse: 'Writing features or tests', scope: 'global', enabled: true }
+        ];
+      case 'read_skill':
+        return { skill: args?.id || 'Skill', content: '# Skill Instructions\nFollow strict guidelines.', chars: 50 };
+      case 'list_community_skills':
+      case 'skills_fetch_community_registry':
+        return [
+          { id: 'tdd-workflow', name: 'Test-Driven Development (TDD)', description: 'Strict test-first engineering workflow ensuring zero untested mutations.', whenToUse: 'Writing new features, fixing bugs, or refactoring business logic', tags: ['testing', 'quality', 'tdd'], author: 'Orbital X Core', installed: true },
+          { id: 'rust-strict-architect', name: 'Rust Strict Architect', description: 'Senior Rust systems architect enforcing idiomatic ownership, zero-allocation data paths, concurrency invariants, and strict type safety.', whenToUse: 'Designing, reviewing, or refactoring Rust crates, async runtimes, or low-level systems', tags: ['rust', 'systems', 'architecture', 'performance'], author: 'Community', installed: false },
+          { id: 'react-nextjs-craft', name: 'React & Next.js Craft', description: 'Modern production React 19 and Next.js App Router patterns, Server Actions, suspense boundaries, and accessible state management.', whenToUse: 'Building, refactoring, or optimizing React and Next.js applications', tags: ['react', 'nextjs', 'frontend', 'typescript'], author: 'Community', installed: false },
+          { id: 'fastapi-pro', name: 'Python FastAPI Pro', description: 'High-performance async Python with FastAPI, Pydantic v2 schemas, SQLAlchemy 2.0 ORM, and dependency injection.', whenToUse: 'Building Python APIs, microservices, or backend services', tags: ['python', 'fastapi', 'backend', 'pydantic'], author: 'Community', installed: false },
+          { id: 'security-auditor', name: 'Security & Penetration Auditor', description: 'Rigorous static and dynamic security auditing, OWASP Top 10 prevention, path traversal defense, and safe cryptographic defaults.', whenToUse: 'Auditing codebases for vulnerabilities, inspecting IPC boundaries, or sanitizing inputs', tags: ['security', 'audit', 'owasp', 'hardening'], author: 'Community', installed: false },
+          { id: 'unit-test-generator', name: 'Unit Test Generator', description: 'Automated generation of deterministic, edge-case-focused unit tests with high boundary coverage and zero flaky mocks.', whenToUse: 'Generating unit tests, improving test coverage, or testing edge cases', tags: ['testing', 'unit-tests', 'coverage', 'quality'], author: 'Community', installed: false },
+          { id: 'rust-expert', name: 'Rust Systems Expert', description: 'Modern idiomatic Rust, zero-cost abstractions, lifetime management, and cargo best practices.', whenToUse: 'Writing, auditing, or optimizing Rust code', tags: ['rust', 'systems', 'cargo'], author: 'Orbital X Core', installed: false },
+          { id: 'typescript-react', name: 'React & TypeScript Architect', description: 'Strict TypeScript types, modern React 19 functional hooks, and UI performance patterns.', whenToUse: 'Developing React or TypeScript frontends', tags: ['react', 'typescript', 'frontend'], author: 'Orbital X Core', installed: false },
+          { id: 'apple-design', name: 'Apple HIG & Clean UI Design', description: 'Human Interface Guidelines compliance, refined spacing, and clean typography hierarchies.', whenToUse: 'Reviewing UI layouts or designing responsive components', tags: ['design', 'apple-hig', 'css'], author: 'Orbital X Core', installed: false },
+          { id: 'conventional-commits', name: 'Git & Conventional Commits', description: 'Clean atomic git commits following Conventional Commits specification.', whenToUse: 'Staging commits, preparing PRs, or managing branches', tags: ['git', 'workflow', 'commits'], author: 'Orbital X Core', installed: false },
+          { id: 'systematic-debugging', name: 'Systematic Debugger', description: 'Hypothesis-driven root cause analysis, minimal reproducible cases, and surgical fixes.', whenToUse: 'Investigating runtime errors, test failures, or subtle logic regressions', tags: ['debugging', 'reliability'], author: 'Orbital X Core', installed: false }
+        ];
+      case 'install_community_skill':
+        return { success: true, id: args?.pack_id, installed: true };
+      case 'skills_install_from_url':
+        return { success: true, id: 'imported-url-skill', name: 'External Skill', installed: true };
+      case 'skills_import_local_folder':
+        return { success: true, id: 'imported-folder-skill', name: 'Imported Skill', installed: true };
+      case 'create_custom_skill':
+        return { success: true, id: args?.id, name: args?.name, scope: args?.is_workspace ? 'workspace' : 'global' };
       case 'open_url':
         if (args?.url && typeof window !== 'undefined') {
           window.open(args.url, '_blank');

@@ -1,0 +1,83 @@
+[
+  {
+    "id": "tdd-workflow",
+    "name": "Test-Driven Development (TDD)",
+    "description": "Enforces strict test-first development cycles, red-green-refactor steps, and automated verification before completion.",
+    "whenToUse": "Writing new features, fixing bugs, or refactoring business logic",
+    "tags": ["testing", "quality", "tdd", "verification"],
+    "author": "Orbital X Core",
+    "body": "# Test-Driven Development (TDD) Workflow\n\n## Core Invariants\n1. Write failing tests before any implementation code.\n2. Confirm the test fails for the expected reason.\n3. Write the minimal code necessary to make the test pass.\n4. Run the full test suite and confirm 100% green.\n5. Refactor with tests as your safety net.\n\n## Verification Commands\n- Rust: `cargo test`\n- Node: `npm test`\n- Python: `pytest`\nNever mark a task complete without passing test evidence."
+  },
+  {
+    "id": "rust-strict-architect",
+    "name": "Rust Strict Architect",
+    "description": "Senior Rust systems architect enforcing idiomatic ownership, zero-allocation data paths, concurrency invariants, and strict type safety.",
+    "whenToUse": "Designing, reviewing, or refactoring Rust crates, async runtimes, or low-level systems",
+    "tags": ["rust", "systems", "architecture", "performance"],
+    "author": "Community",
+    "body": "# Rust Strict Systems Architecture\n\n## Directives\n1. Enforce zero-allocation idioms in hot loops (borrow slices `&[T]` / `&str`).\n2. Avoid unwraps; propagate errors using `Result<T, E>` with context.\n3. Check clippy lints and test thread-safety with Send + Sync invariants.\n4. Minimize external crate dependencies to avoid bloat."
+  },
+  {
+    "id": "react-nextjs-craft",
+    "name": "React & Next.js Craft",
+    "description": "Modern production React 19 and Next.js App Router patterns, Server Actions, suspense boundaries, and accessible state management.",
+    "whenToUse": "Building, refactoring, or optimizing React and Next.js applications",
+    "tags": ["react", "nextjs", "frontend", "typescript"],
+    "author": "Community",
+    "body": "# React & Next.js Craft Guide\n\n## Key Architectural Rules\n1. Prefer React Server Components for data fetching; use `'use client'` only where interactivity is required.\n2. Co-locate state with consuming components; avoid premature global stores.\n3. Design responsive interfaces with zero layout shift.\n4. Verify build with `npm run build`."
+  },
+  {
+    "id": "fastapi-pro",
+    "name": "Python FastAPI Pro",
+    "description": "High-performance async Python with FastAPI, Pydantic v2 schemas, SQLAlchemy 2.0 ORM, and dependency injection.",
+    "whenToUse": "Building Python APIs, microservices, or backend services",
+    "tags": ["python", "fastapi", "backend", "pydantic"],
+    "author": "Community",
+    "body": "# Python FastAPI Pro Architecture\n\n## Principles\n1. Use async handlers for I/O-bound database or HTTP calls.\n2. Define strict Pydantic v2 schemas for all requests and responses.\n3. Leverage FastAPI dependencies for authentication and database sessions.\n4. Test endpoints with `pytest` and `httpx.AsyncClient`."
+  },
+  {
+    "id": "security-auditor",
+    "name": "Security & Penetration Auditor",
+    "description": "Rigorous static and dynamic security auditing, OWASP Top 10 prevention, path traversal defense, and safe cryptographic defaults.",
+    "whenToUse": "Auditing codebases for vulnerabilities, inspecting IPC boundaries, or sanitizing inputs",
+    "tags": ["security", "audit", "owasp", "hardening"],
+    "author": "Community",
+    "body": "# Security & Penetration Audit Guide\n\n## Invariants\n1. Never allow path traversal: sanitize slugs and validate filesystem boundaries.\n2. Reject shell injection: execute processes with direct argument vectors, never `sh -c` / `eval`.\n3. Verify all IPC boundaries require explicit permission checks."
+  },
+  {
+    "id": "unit-test-generator",
+    "name": "Unit Test Generator",
+    "description": "Automated generation of deterministic, edge-case-focused unit tests with high boundary coverage and zero flaky mocks.",
+    "whenToUse": "Generating unit tests, improving test coverage, or testing edge cases",
+    "tags": ["testing", "unit-tests", "coverage", "quality"],
+    "author": "Community",
+    "body": "# Unit Test Generation Rules\n\n## Directives\n1. Cover normal paths, error cases, and edge boundary conditions.\n2. Keep tests deterministic, fast, and isolated.\n3. Assert on specific values and invariants rather than vague truths."
+  },
+  {
+    "id": "apple-design",
+    "name": "Apple HIG & Clean UI Design",
+    "description": "Human Interface Guidelines compliance, refined spacing, typography hierarchies, and fluid non-generic aesthetics.",
+    "whenToUse": "Reviewing UI layouts, designing panels, styling components, or improving visual hierarchy",
+    "tags": ["design", "apple-hig", "css", "ui"],
+    "author": "Orbital X Core",
+    "body": "# Apple HIG & Clean UI Design Rules\n\n## Design Craft Lens\n1. Generous padding, crisp micro-borders (`1px solid rgba(255,255,255,0.08)`), and subtle blur effects.\n2. Typography: SF Pro / Inter fonts with deliberate hierarchy (title, headline, subhead, caption).\n3. Avoid clutter: hide secondary pills on narrow widths and keep primary actions prominent.\n4. High contrast interactive states with smooth hover and active transitions.\n5. Dark and light theme parity across all cards and controls."
+  },
+  {
+    "id": "conventional-commits",
+    "name": "Git & Conventional Commits",
+    "description": "Clean atomic git commits following the Conventional Commits specification (feat, fix, refactor, chore).",
+    "whenToUse": "Staging commits, preparing PRs, or managing git branches",
+    "tags": ["git", "workflow", "productivity", "commits"],
+    "author": "Orbital X Core",
+    "body": "# Git & Conventional Commits Guide\n\n## Format\n`<type>(<scope>): <short description in present tense>`\n\n## Types\n- `feat`: A new feature\n- `fix`: A bug fix\n- `refactor`: Code change that neither fixes a bug nor adds a feature\n- `test`: Adding or modifying tests\n- `docs`: Documentation changes\n- `chore`: Build system or dependency updates\n\nKeep commits atomic: one logical change per commit."
+  },
+  {
+    "id": "systematic-debugging",
+    "name": "Systematic Debugger",
+    "description": "Hypothesis-driven root-cause analysis, minimal reproducible cases, and surgical non-breaking fixes.",
+    "whenToUse": "Investigating runtime errors, test failures, or subtle logic regressions",
+    "tags": ["debugging", "analysis", "reliability", "troubleshooting"],
+    "author": "Orbital X Core",
+    "body": "# Systematic Debugging Methodology\n\n## 4-Step Root Cause Investigation\n1. **Reproduce**: Capture exact error output, stack trace, and reproduction steps.\n2. **Isolate**: Formulate a falsifiable hypothesis and verify the minimal failing condition.\n3. **Surgically Fix**: Address the underlying fault directly without superficial workarounds.\n4. **Verify**: Re-run the reproduction test and the entire test suite to guarantee zero regression."
+  }
+]

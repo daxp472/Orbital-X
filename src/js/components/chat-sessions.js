@@ -194,25 +194,65 @@ export function importSessionFromMarkdown() {
   input.click();
 }
 
-export async function loadSessions() {
-  // Prefer disk persistence through the backend
+function getWorkspaceKey(baseKey, wsPath) {
+  const p = wsPath || state.workspace.rootPath || '';
+  if (!p) return baseKey;
+  let hash = 0;
+  for (let i = 0; i < p.length; i++) {
+    hash = ((hash << 5) - hash) + p.charCodeAt(i);
+    hash |= 0;
+  }
+  return `${baseKey}_${Math.abs(hash)}`;
+}
+
+export async function onWorkspaceChanged(workspacePath) {
+  // Persist current session before switching
   try {
-    const fromDisk = await invoke('load_chat_sessions');
+    saveSessionsToStorage();
+  } catch (_) {}
+
+  // STRICT ISOLATION: flush in-memory conversation and sessions
+  sessions = [];
+  activeSessionId = null;
+  state.conversation = [];
+
+  // Clear timeline container
+  const timeline = document.getElementById('agent-chat-timeline');
+  if (timeline) {
+    timeline.innerHTML = '';
+  }
+
+  // Load new isolated sessions for the target workspace
+  await loadSessions(workspacePath);
+
+  // Re-render
+  updateTitleDisplay();
+  if (state.conversation && state.conversation.length > 0) {
+    renderFullTimeline(state.conversation);
+  }
+}
+
+export async function loadSessions(workspacePath = null) {
+  const targetPath = workspacePath || state.workspace.rootPath || '';
+  // Prefer disk persistence through the backend scoped to active workspace
+  try {
+    const fromDisk = await invoke('load_chat_sessions', { workspacePath: targetPath });
     if (Array.isArray(fromDisk)) {
       sessions = fromDisk;
       persistenceMode = 'disk';
     } else {
-      // First run on this machine — seed from localStorage if present
-      sessions = readLocalStorageSessions();
+      // First run on this machine/workspace — seed from localStorage if present
+      sessions = readLocalStorageSessions(targetPath);
       persistenceMode = 'disk';
     }
   } catch (e) {
     console.warn('Disk chat persistence unavailable, using localStorage:', e);
-    sessions = readLocalStorageSessions();
+    sessions = readLocalStorageSessions(targetPath);
     persistenceMode = 'local';
   }
 
-  activeSessionId = localStorage.getItem(STORAGE_KEY_ACTIVE);
+  const activeKey = getWorkspaceKey(STORAGE_KEY_ACTIVE, targetPath);
+  activeSessionId = localStorage.getItem(activeKey);
 
   if (!sessions || sessions.length === 0) {
     const defaultSession = {
@@ -241,9 +281,10 @@ export async function loadSessions() {
   }
 }
 
-function readLocalStorageSessions() {
+function readLocalStorageSessions(targetPath = null) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_SESSIONS);
+    const key = getWorkspaceKey(STORAGE_KEY_SESSIONS, targetPath);
+    const raw = localStorage.getItem(key);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
@@ -601,28 +642,32 @@ function saveSessionsToStorage() {
   }
 
   // Disk persistence (primary) — fire-and-forget with local fallback
-  invoke('save_chat_sessions', { sessions })
+  const wsPath = state.workspace.rootPath || '';
+  invoke('save_chat_sessions', { sessions, workspacePath: wsPath })
     .catch((e) => {
       if (persistenceMode !== 'local') {
         console.warn('Disk chat save failed, falling back to localStorage:', e);
         persistenceMode = 'local';
       }
-      writeLocalStorage();
+      writeLocalStorage(wsPath);
     });
 
   // Keep a lightweight local copy for instant boot before disk round-trip
   if (persistenceMode === 'local') {
-    writeLocalStorage();
+    writeLocalStorage(wsPath);
   }
 
   if (activeSessionId) {
-    localStorage.setItem(STORAGE_KEY_ACTIVE, activeSessionId);
+    const activeKey = getWorkspaceKey(STORAGE_KEY_ACTIVE, wsPath);
+    localStorage.setItem(activeKey, activeSessionId);
   }
 }
 
-function writeLocalStorage() {
+function writeLocalStorage(wsPath = null) {
+  const targetPath = wsPath || state.workspace.rootPath || '';
+  const key = getWorkspaceKey(STORAGE_KEY_SESSIONS, targetPath);
   try {
-    localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
+    localStorage.setItem(key, JSON.stringify(sessions));
   } catch (e) {
     // Quota exceeded even after pruning — drop the oldest sessions until it fits
     while (sessions.length > 1) {
@@ -630,7 +675,7 @@ function writeLocalStorage() {
       const dropIdx = activeIdx === 0 ? sessions.length - 1 : 0;
       sessions.splice(dropIdx, 1);
       try {
-        localStorage.setItem(STORAGE_KEY_SESSIONS, JSON.stringify(sessions));
+        localStorage.setItem(key, JSON.stringify(sessions));
         return;
       } catch (e2) { /* keep trimming */ }
     }

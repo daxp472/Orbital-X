@@ -1,11 +1,11 @@
 {
-  "version": "2.4.4",
-  "tag": "v2.4.4",
-  "release_date": "2026-11-19",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_x64-setup.exe",
+  "version": "2.4.5",
+  "tag": "v2.4.5",
+  "release_date": "2026-11-20",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_x64-setup.exe",
   "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital-X-Portable.zip",
   "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_aarch64.dmg",
   "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.AppImage",
   "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.deb",
-  "changelog": "v2.4.4: Universal 3-in-1 USB Portable Suite (Windows .exe, macOS .app, and Linux .AppImage sharing one ./Data/ directory), VS Code & Antigravity Terminal Redesign with real-time command syntax highlighting and gutter decoration markers (● executed, ○ active prompt), and context auto-compaction loop resolution."
+  "changelog": "v2.4.5: Modular Agent Working Skills System (agent.md, .orbital/skills, Community Skills Hub), Strict Per-Workspace State Isolation (zero cross-workspace chat, memory, and PTY leakage), and Responsive Compact Titlebar for restored window modes."
 }
