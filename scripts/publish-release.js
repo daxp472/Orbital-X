@@ -60,14 +60,12 @@ async function publish() {
 
   const assetsToUpload = [
     'release/Orbital.X_2.4.5_x64-setup.exe',
-    'release/Orbital X_2.4.5_x64-setup.exe',
+    'release/Orbital.X_2.4.5_amd64.AppImage',
+    'release/Orbital.X_2.4.5_amd64.deb',
+    'release/Orbital.X_2.4.5_aarch64.dmg',
+    'release/Orbital.X_aarch64.app.tar.gz',
     'release/Orbital-X-Portable.zip',
-    'release/Orbital X Portable.zip',
-    'release/Orbital-X-Portable-Windows.zip',
-    'release/orbital-x.exe',
-    'release/Orbital.X_2.4.4_portable.zip',
-    'release/Orbital.X_2.4.4_x64-setup.exe',
-    'release/Orbital.X_aarch64.app.tar.gz'
+    'release/orbital-x.exe'
   ];
 
   // List existing assets to avoid duplicates or replace
