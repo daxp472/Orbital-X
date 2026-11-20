@@ -3,9 +3,11 @@
   "tag": "v2.4.5",
   "release_date": "2026-11-20",
   "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital-X-Portable.zip",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_aarch64.dmg",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.4/Orbital.X_2.4.4_amd64.deb",
-  "changelog": "v2.4.5: Modular Agent Working Skills System (agent.md, .orbital/skills, Community Skills Hub), Strict Per-Workspace State Isolation (zero cross-workspace chat, memory, and PTY leakage), and Responsive Compact Titlebar for restored window modes."
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable.zip",
+  "standalone_exe_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/orbital-x.exe",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_aarch64.dmg",
+  "macos_tar_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_aarch64.app.tar.gz",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_amd64.deb",
+  "changelog": "v2.4.5: Responsive Split-Screen Window Architecture, Read-Only Markdown Skill Viewer Tab, Community Skills Hub & Importer, Modular Agent Working Skills System, and Strict Per-Workspace State Isolation."
 }
