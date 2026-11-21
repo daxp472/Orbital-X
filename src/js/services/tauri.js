@@ -409,10 +409,11 @@ async function getInvoke() {
       case 'persona_submit_survey':
       case 'persona_synthesize_deep_profile':
       case 'persona_reset_auto':
+        const targetId = args?.personaId || args?.persona_id || 'auto';
         return {
-          active_persona: args?.persona_id || 'auto',
+          active_persona: targetId,
           auto_profile: {
-            active_persona: args?.persona_id || 'auto',
+            active_persona: targetId,
             behavioral_constitution: '## PERSONALITY: AUTO (ADAPTIVE INTELLIGENCE)\nBalanced execution with proactive edge-case awareness and zero conversational fluff.',
             liked_traits: ['actionable_code_first', 'proactive_edge_cases', 'concise_explanations'],
             disliked_traits: ['conversational_filler', 'unverified_assumptions'],

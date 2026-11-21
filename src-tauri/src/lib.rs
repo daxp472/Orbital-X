@@ -3256,18 +3256,30 @@ fn persona_get_state() -> Result<persona::PersonaEngineState, String> {
 }
 
 #[tauri::command]
-fn persona_set_active(persona_id: String) -> Result<persona::PersonaEngineState, String> {
-    persona::persona_set_active(persona_id)
+#[allow(non_snake_case)]
+fn persona_set_active(
+    persona_id: Option<String>,
+    personaId: Option<String>,
+) -> Result<persona::PersonaEngineState, String> {
+    let id = persona_id.or(personaId).ok_or_else(|| "Missing required key personaId".to_string())?;
+    persona::persona_set_active(id)
 }
 
 #[tauri::command]
+#[allow(non_snake_case)]
 fn persona_record_feedback(
-    message_id: String,
-    is_positive: bool,
+    message_id: Option<String>,
+    messageId: Option<String>,
+    is_positive: Option<bool>,
+    isPositive: Option<bool>,
     feedback_tag: Option<String>,
+    feedbackTag: Option<String>,
     note: Option<String>,
 ) -> Result<persona::PersonaEngineState, String> {
-    persona::persona_record_feedback(message_id, is_positive, feedback_tag, note)
+    let mid = message_id.or(messageId).unwrap_or_default();
+    let pos = is_positive.or(isPositive).unwrap_or(true);
+    let tag = feedback_tag.or(feedbackTag);
+    persona::persona_record_feedback(mid, pos, tag, note)
 }
 
 #[tauri::command]
@@ -3276,19 +3288,27 @@ fn persona_toggle_surveys(enabled: Option<bool>) -> Result<persona::PersonaEngin
 }
 
 #[tauri::command]
+#[allow(non_snake_case)]
 fn persona_submit_survey(
     answers: Vec<String>,
     descriptive_note: Option<String>,
+    descriptiveNote: Option<String>,
 ) -> Result<persona::PersonaEngineState, String> {
-    persona::persona_submit_survey(answers, descriptive_note)
+    let note = descriptive_note.or(descriptiveNote);
+    persona::persona_submit_survey(answers, note)
 }
 
 #[tauri::command]
+#[allow(non_snake_case)]
 fn persona_synthesize_deep_profile(
-    interview_log: Vec<persona::InterviewTurn>,
+    interview_log: Option<Vec<persona::InterviewTurn>>,
+    interviewLog: Option<Vec<persona::InterviewTurn>>,
     user_notes: Option<String>,
+    userNotes: Option<String>,
 ) -> Result<persona::PersonaEngineState, String> {
-    persona::persona_synthesize_deep_profile(interview_log, user_notes)
+    let log = interview_log.or(interviewLog).unwrap_or_default();
+    let notes = user_notes.or(userNotes);
+    persona::persona_synthesize_deep_profile(log, notes)
 }
 
 #[tauri::command]

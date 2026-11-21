@@ -82,8 +82,11 @@ export function handleLikeResponse(messageId, cardEl) {
 
   // Record into Rust Persona Engine
   invoke('persona_record_feedback', {
+    messageId: messageId,
     message_id: messageId,
+    isPositive: true,
     is_positive: true,
+    feedbackTag: 'accurate_helpful',
     feedback_tag: 'accurate_helpful'
   }).catch(() => {});
 
@@ -228,8 +231,11 @@ export function handleDislikeResponse(messageId, cardEl, messageText) {
 
     // Record into Rust Persona Engine
     invoke('persona_record_feedback', {
+      messageId: messageId,
       message_id: messageId,
+      isPositive: false,
       is_positive: false,
+      feedbackTag: checked[0] || 'needs_improvement',
       feedback_tag: checked[0] || 'needs_improvement',
       note: comment || null
     }).catch(() => {});

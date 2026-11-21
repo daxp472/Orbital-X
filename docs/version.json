@@ -1,13 +1,13 @@
 {
-  "version": "2.4.5",
-  "tag": "v2.4.5",
-  "release_date": "2026-11-20",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital-X-Portable.zip",
-  "standalone_exe_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/orbital-x.exe",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_aarch64.dmg",
-  "macos_tar_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_aarch64.app.tar.gz",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.5/Orbital.X_2.4.5_amd64.deb",
-  "changelog": "v2.4.5: Responsive Split-Screen Window Architecture, Read-Only Markdown Skill Viewer Tab, Community Skills Hub & Importer, Modular Agent Working Skills System, and Strict Per-Workspace State Isolation."
+  "version": "2.4.6",
+  "tag": "v2.4.6",
+  "release_date": "2026-11-21",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital-X-Portable.zip",
+  "standalone_exe_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/orbital-x.exe",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_aarch64.dmg",
+  "macos_tar_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_aarch64.app.tar.gz",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_amd64.deb",
+  "changelog": "v2.4.6: Adaptive Persona Engine, Apple HIG AI Personalities Studio, Compact Personality Selector, and Strict IPC Parameter Stabilization."
 }
