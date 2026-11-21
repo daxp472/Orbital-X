@@ -12,11 +12,11 @@ async function publish() {
   }
   const token = match[1].trim();
 
-  const changelog = fs.readFileSync(path.resolve('changelogs/019.md'), 'utf8');
+  const changelog = fs.readFileSync(path.resolve('changelogs/020.md'), 'utf8');
 
-  console.log('Checking if release v2.4.5 exists...');
+  console.log('Checking if release v2.4.6 exists...');
   let release = null;
-  const getRes = await fetch('https://api.github.com/repos/daxp472/Orbital-X/releases/tags/v2.4.5', {
+  const getRes = await fetch('https://api.github.com/repos/daxp472/Orbital-X/releases/tags/v2.4.6', {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/vnd.github+json',
@@ -28,7 +28,7 @@ async function publish() {
     release = await getRes.json();
     console.log(`Found existing release ID: ${release.id}`);
   } else {
-    console.log('Creating release v2.4.5 on GitHub...');
+    console.log('Creating release v2.4.6 on GitHub...');
     const createRes = await fetch('https://api.github.com/repos/daxp472/Orbital-X/releases', {
       method: 'POST',
       headers: {
@@ -38,9 +38,9 @@ async function publish() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        tag_name: 'v2.4.5',
+        tag_name: 'v2.4.6',
         target_commitish: 'main',
-        name: 'Orbital X v2.4.5 — Responsive Split-Screen & Community Skills Markdown Hub',
+        name: 'Orbital X v2.4.6 — Adaptive Persona Engine & Apple HIG AI Studio',
         body: changelog,
         draft: false,
         prerelease: false
@@ -59,10 +59,10 @@ async function publish() {
   const uploadBase = release.upload_url.replace(/\{.*\}/, '');
 
   const assetsToUpload = [
-    'release/Orbital.X_2.4.5_x64-setup.exe',
-    'release/Orbital.X_2.4.5_amd64.AppImage',
-    'release/Orbital.X_2.4.5_amd64.deb',
-    'release/Orbital.X_2.4.5_aarch64.dmg',
+    'release/Orbital.X_2.4.6_x64-setup.exe',
+    'release/Orbital.X_2.4.6_amd64.AppImage',
+    'release/Orbital.X_2.4.6_amd64.deb',
+    'release/Orbital.X_2.4.6_aarch64.dmg',
     'release/Orbital.X_aarch64.app.tar.gz',
     'release/Orbital-X-Portable.zip',
     'release/orbital-x.exe'
@@ -114,7 +114,7 @@ async function publish() {
     }
   }
 
-  console.log('\n🎉 ALL ASSETS UPLOADED AND RELEASE PUBLISHED SUCCESSFULLY!');
+  console.log('\n🎉 ALL 7 ASSETS UPLOADED AND v2.4.6 RELEASE PUBLISHED SUCCESSFULLY!');
   console.log(`View live release at: ${release.html_url}`);
 }
 
