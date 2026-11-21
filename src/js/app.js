@@ -12,6 +12,7 @@ import { initExtensions } from './components/extensions.js';
 import { initSearchPanel } from './components/search.js';
 import { initCommandPalette } from './components/command-palette.js';
 import { initSkills, renderSkillsPanel } from './components/skills.js';
+import { initPersonaEngine } from './components/persona-calibration.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
@@ -228,6 +229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initDebug();
   initExtensions();
   initSkills();
+  initPersonaEngine();
   initResponsiveSplitScreenEngine();
   initSearchPanel();
   initCommandPalette();

@@ -509,6 +509,8 @@ export function switchSettingsTab(paneId) {
     buildEditableShortcutsTable();
   } else if (paneId === 'spane-updates') {
     import('./updater.js').then(m => m.renderUpdatesPane());
+  } else if (paneId === 'spane-persona') {
+    import('./persona-calibration.js').then(m => m.setupPersonaSettingsUI());
   }
 }
 

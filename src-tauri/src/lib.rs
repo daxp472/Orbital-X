@@ -3,6 +3,7 @@
 pub mod boilerplate;
 pub mod diagnostics;
 pub mod isolation;
+pub mod persona;
 pub mod portable;
 pub mod semantic_graph;
 pub mod vfs;
@@ -3249,6 +3250,57 @@ fn set_skill_enabled(id: String, enabled: bool) -> Result<serde_json::Value, Str
     skills::SkillService::set_enabled(&id, enabled)
 }
 
+#[tauri::command]
+fn persona_get_state() -> Result<persona::PersonaEngineState, String> {
+    persona::persona_get_state()
+}
+
+#[tauri::command]
+fn persona_set_active(persona_id: String) -> Result<persona::PersonaEngineState, String> {
+    persona::persona_set_active(persona_id)
+}
+
+#[tauri::command]
+fn persona_record_feedback(
+    message_id: String,
+    is_positive: bool,
+    feedback_tag: Option<String>,
+    note: Option<String>,
+) -> Result<persona::PersonaEngineState, String> {
+    persona::persona_record_feedback(message_id, is_positive, feedback_tag, note)
+}
+
+#[tauri::command]
+fn persona_toggle_surveys(enabled: Option<bool>) -> Result<persona::PersonaEngineState, String> {
+    persona::persona_toggle_surveys(enabled)
+}
+
+#[tauri::command]
+fn persona_submit_survey(
+    answers: Vec<String>,
+    descriptive_note: Option<String>,
+) -> Result<persona::PersonaEngineState, String> {
+    persona::persona_submit_survey(answers, descriptive_note)
+}
+
+#[tauri::command]
+fn persona_synthesize_deep_profile(
+    interview_log: Vec<persona::InterviewTurn>,
+    user_notes: Option<String>,
+) -> Result<persona::PersonaEngineState, String> {
+    persona::persona_synthesize_deep_profile(interview_log, user_notes)
+}
+
+#[tauri::command]
+fn persona_reset_auto() -> Result<persona::PersonaEngineState, String> {
+    persona::persona_reset_auto()
+}
+
+#[tauri::command]
+fn persona_record_turn_completed() -> Result<persona::TurnSurveyTriggerCheck, String> {
+    persona::persona_record_turn_completed()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // True Portable Mode: detect sibling Data/ directory, PORTABLE marker, or --portable flag
@@ -3418,7 +3470,15 @@ pub fn run() {
             time_travel_rollback,
             save_editor_drafts,
             load_editor_drafts,
-            clear_editor_drafts
+            clear_editor_drafts,
+            persona_get_state,
+            persona_set_active,
+            persona_record_feedback,
+            persona_toggle_surveys,
+            persona_submit_survey,
+            persona_synthesize_deep_profile,
+            persona_reset_auto,
+            persona_record_turn_completed
         ])
         .run(tauri::generate_context!())
         .expect("error while building tauri application");

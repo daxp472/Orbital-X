@@ -4339,3 +4339,578 @@ body.density-compact .agent-composer {
 }
 
 
+/* ==========================================================================
+   Orbital X — Adaptive Persona Engine & Calibration Studio UI
+   100% Theme Parity (Light / Dark)
+   ========================================================================== */
+
+/* 1. Composer Personality Pill */
+.composer-persona-dropdown-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.composer-persona-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-surface, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.composer-persona-pill:hover {
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.1));
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+}
+
+.persona-pill-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.persona-pill-name {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
+.persona-pill-arrow {
+  font-size: 9px;
+  opacity: 0.65;
+  transition: transform 0.18s ease;
+}
+
+.composer-persona-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 250px;
+  background: var(--bg-card, #161b22);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+  border-radius: 12px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 6px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: modalSlideUp 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.composer-persona-menu.hidden {
+  display: none;
+}
+
+.persona-menu-header {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  padding: 6px 8px 4px 8px;
+}
+
+.persona-menu-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.persona-menu-item:hover {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.06));
+}
+
+.persona-menu-item.active {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+.persona-item-icon {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.persona-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.persona-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.persona-item-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 229, 255, 0.18);
+  color: var(--accent-cyan);
+}
+
+.persona-item-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+/* 2. Calibration Modal & Isolated Interview Studio */
+.persona-calibration-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  animation: fadeIn 0.18s ease-out;
+}
+
+.persona-calibration-container {
+  width: 620px;
+  max-width: 95vw;
+  max-height: 90vh;
+  background: var(--bg-card, #161b22);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text-primary);
+  animation: modalSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.persona-calib-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+}
+
+.calib-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calib-header-icon {
+  font-size: 22px;
+}
+
+.calib-header-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calib-header-subtitle {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.calib-streak-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  background: rgba(0, 229, 255, 0.14);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.calib-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calib-toggle-surveys-btn {
+  font-size: 11px;
+  padding: 4px 8px;
+}
+
+.persona-calib-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.calib-progress-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.calib-progress-bar {
+  height: 100%;
+  background: var(--accent-cyan, #00e5ff);
+  transition: width 0.3s ease;
+}
+
+.calib-step-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.calib-question-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.calib-question-subtitle {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+.calib-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.calib-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.calib-option-card:hover {
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.calib-option-card.selected {
+  background: rgba(0, 229, 255, 0.1);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
+}
+
+.calib-option-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-color, rgba(255, 255, 255, 0.3));
+  margin-top: 2px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.calib-option-card.selected .calib-option-radio {
+  border-color: var(--accent-cyan);
+  background: var(--accent-cyan);
+}
+
+.calib-option-text {
+  flex: 1;
+}
+
+.calib-option-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.calib-option-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.calib-descriptive-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 110px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: vertical;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.calib-descriptive-textarea:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+}
+
+.calib-footer-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Deep Studio Chat */
+.calib-deep-chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 480px;
+}
+
+.calib-deep-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.calib-deep-msg {
+  padding: 12px 14px;
+  border-radius: 12px;
+  max-width: 90%;
+  animation: fadeIn 0.15s ease;
+}
+
+.calib-deep-msg.architect {
+  align-self: flex-start;
+  background: var(--bg-surface, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+}
+
+.calib-deep-msg.user {
+  align-self: flex-end;
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.calib-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+}
+
+.calib-bubble-author {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calib-bubble-count {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.calib-bubble-content {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+.calib-deep-chat-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+}
+
+.calib-deep-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: inherit;
+  resize: none;
+}
+
+.calib-deep-input:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+/* 3. Settings Persona Inspector */
+.persona-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.persona-card {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.persona-card:hover {
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.persona-card.active-card {
+  background: rgba(0, 229, 255, 0.08);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.15);
+}
+
+.persona-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.persona-card-icon {
+  font-size: 20px;
+}
+
+.persona-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.persona-tag {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+}
+
+.persona-tag.active {
+  background: rgba(0, 229, 255, 0.2);
+  color: var(--accent-cyan);
+}
+
+.persona-tag.locked {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+}
+
+.persona-card-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+
+.persona-card-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.traits-summary-box {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.traits-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trait-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: rgba(0, 229, 255, 0.12);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+}
+
+.trait-chip.disliked {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.constitution-viewer {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 160px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  color: var(--text-primary);
+  line-height: 1.5;
+  resize: vertical;
+  margin-top: 10px;
+}

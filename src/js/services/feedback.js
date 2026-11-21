@@ -15,6 +15,7 @@ function escapeHtml(str) {
 // ==========================================================================
 
 import { showToast } from './notifications.js';
+import { invoke } from './tauri.js';
 
 const STORAGE_KEY = 'orbital_feedback_stats';
 
@@ -78,6 +79,13 @@ export function handleLikeResponse(messageId, cardEl) {
     downBtn.style.color = '';
     downBtn.style.filter = '';
   }
+
+  // Record into Rust Persona Engine
+  invoke('persona_record_feedback', {
+    message_id: messageId,
+    is_positive: true,
+    feedback_tag: 'accurate_helpful'
+  }).catch(() => {});
 
   showToast(`✨ Response liked! Total happy responses: ${data.totalLiked}`, 'success', 2200);
 }
@@ -217,6 +225,14 @@ export function handleDislikeResponse(messageId, cardEl, messageText) {
     // Keep only last 50 dislikes
     if (d.dislikes.length > 50) d.dislikes = d.dislikes.slice(-50);
     saveFeedbackData(d);
+
+    // Record into Rust Persona Engine
+    invoke('persona_record_feedback', {
+      message_id: messageId,
+      is_positive: false,
+      feedback_tag: checked[0] || 'needs_improvement',
+      note: comment || null
+    }).catch(() => {});
 
     // Update UI button classes
     const upBtn = cardEl?.querySelector('.msg-action[data-act="up"]');

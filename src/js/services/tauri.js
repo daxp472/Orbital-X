@@ -402,6 +402,43 @@ async function getInvoke() {
         return { success: true, id: 'imported-folder-skill', name: 'Imported Skill', installed: true };
       case 'create_custom_skill':
         return { success: true, id: args?.id, name: args?.name, scope: args?.is_workspace ? 'workspace' : 'global' };
+      case 'persona_get_state':
+      case 'persona_set_active':
+      case 'persona_record_feedback':
+      case 'persona_toggle_surveys':
+      case 'persona_submit_survey':
+      case 'persona_synthesize_deep_profile':
+      case 'persona_reset_auto':
+        return {
+          active_persona: args?.persona_id || 'auto',
+          auto_profile: {
+            active_persona: args?.persona_id || 'auto',
+            behavioral_constitution: '## PERSONALITY: AUTO (ADAPTIVE INTELLIGENCE)\nBalanced execution with proactive edge-case awareness and zero conversational fluff.',
+            liked_traits: ['actionable_code_first', 'proactive_edge_cases', 'concise_explanations'],
+            disliked_traits: ['conversational_filler', 'unverified_assumptions'],
+            turns_since_last_survey: 0,
+            next_survey_threshold: 5,
+            surveys_disabled: false,
+            consecutive_descriptive_count: 0,
+            total_turns_in_auto: 3,
+            total_calibrations_completed: 0,
+            last_calibrated_at: null
+          },
+          static_personas: [
+            { id: 'atlas', name: 'Atlas', role: 'Strategic Co-Pilot', badge: '🛡️ Strategic', description: 'Calm, anticipatory chief-of-staff energy. Opens with a sharp 1-sentence executive summary and proactively flags downstream edge cases.', behavioral_constitution: '## PERSONALITY: ATLAS (STRATEGIC CO-PILOT)' },
+            { id: 'pulse', name: 'Pulse', role: 'Minimalist / Zero-Fluff', badge: '⚡ Minimal', description: 'Pure terminal precision. Strictly forbids conversational filler; delivers exact code, unified diffs, and concise root causes.', behavioral_constitution: '## PERSONALITY: PULSE (MINIMALIST)' },
+            { id: 'nova', name: 'Nova', role: 'Friendly Pair-Programmer', badge: '🌟 Pair Dev', description: 'Warm, encouraging, and collaborative. Uses everyday analogies and explains why architectural choices work.', behavioral_constitution: '## PERSONALITY: NOVA (FRIENDLY PAIR-PROGRAMMER)' },
+            { id: 'vanguard', name: 'Vanguard', role: 'Strict Kernel Auditor', badge: '🔒 Auditor', description: 'Hyper-logical, skeptical, and uncompromising. Audits security, memory leaks, race conditions, and edge cases first.', behavioral_constitution: '## PERSONALITY: VANGUARD (STRICT KERNEL AUDITOR)' }
+          ],
+          active_constitution: '## PERSONALITY: AUTO\nBalanced adaptive execution.'
+        };
+      case 'persona_record_turn_completed':
+        return {
+          should_trigger_survey: false,
+          is_deep_interview: false,
+          turns_since_last: 1,
+          threshold: 5
+        };
       case 'open_url':
         if (args?.url && typeof window !== 'undefined') {
           window.open(args.url, '_blank');

@@ -961,6 +961,58 @@
 
               <!-- Model selector & Auto Speculative Toggle on Top Right -->
               <div class="composer-top-controls">
+                <!-- 1-Click Personality Pill -->
+                <div class="composer-persona-dropdown-container" id="composer-persona-container">
+                  <button class="composer-persona-pill" id="btn-composer-persona" type="button" title="Switch AI Personality (Auto ✨ | Atlas 🛡️ | Pulse ⚡ | Nova 🌟 | Vanguard 🔒)">
+                    <span class="persona-pill-icon" id="persona-pill-icon">✨</span>
+                    <span class="persona-pill-name" id="persona-pill-name">Auto</span>
+                    <span class="persona-pill-arrow">▾</span>
+                  </button>
+                  <div class="composer-persona-menu hidden" id="composer-persona-menu">
+                    <div class="persona-menu-header">AI Personality</div>
+                    <div class="persona-menu-item active" data-persona="auto">
+                      <span class="persona-item-icon">✨</span>
+                      <div class="persona-item-info">
+                        <div class="persona-item-title">Auto <span class="persona-item-badge">Adaptive</span></div>
+                        <div class="persona-item-desc">Learns your preferences over time through feedback</div>
+                      </div>
+                      <span class="persona-item-check">✓</span>
+                    </div>
+                    <div class="persona-menu-item" data-persona="atlas">
+                      <span class="persona-item-icon">🛡️</span>
+                      <div class="persona-item-info">
+                        <div class="persona-item-title">Atlas <span class="persona-item-badge">Strategic</span></div>
+                        <div class="persona-item-desc">Calm chief-of-staff; executive summaries &amp; edge cases</div>
+                      </div>
+                      <span class="persona-item-check">✓</span>
+                    </div>
+                    <div class="persona-menu-item" data-persona="pulse">
+                      <span class="persona-item-icon">⚡</span>
+                      <div class="persona-item-info">
+                        <div class="persona-item-title">Pulse <span class="persona-item-badge">Minimal</span></div>
+                        <div class="persona-item-desc">Zero conversational fluff; exact code, diffs &amp; root causes</div>
+                      </div>
+                      <span class="persona-item-check">✓</span>
+                    </div>
+                    <div class="persona-menu-item" data-persona="nova">
+                      <span class="persona-item-icon">🌟</span>
+                      <div class="persona-item-info">
+                        <div class="persona-item-title">Nova <span class="persona-item-badge">Pair Dev</span></div>
+                        <div class="persona-item-desc">Warm, collaborative mentor with clear mental models</div>
+                      </div>
+                      <span class="persona-item-check">✓</span>
+                    </div>
+                    <div class="persona-menu-item" data-persona="vanguard">
+                      <span class="persona-item-icon">🔒</span>
+                      <div class="persona-item-info">
+                        <div class="persona-item-title">Vanguard <span class="persona-item-badge">Auditor</span></div>
+                        <div class="persona-item-desc">Strict kernel auditor; security, races &amp; memory first</div>
+                      </div>
+                      <span class="persona-item-check">✓</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div class="composer-model-pill" id="composer-model-selector" title="Click to change model">
                   <span style="color: var(--accent-cyan); font-weight: bold;">+</span>
                   <span id="composer-model-name">Ollama (llama3)</span>
@@ -1247,6 +1299,13 @@
             <path d="M12 18c-1.1 0-2-.9-2-2v-2c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2c0 1.1-.9 2-2 2"></path>
           </svg>
           <span>Developer Options</span>
+        </div>
+        <div class="settings-nav-item" id="stab-persona" data-pane="spane-persona">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          <span>AI Personality &amp; Calibration</span>
         </div>
         <div class="settings-nav-item" id="stab-updates" data-pane="spane-updates">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2063,6 +2122,11 @@
           <div id="updates-pane-card-container">
             <!-- Dynamically populated by updater.js renderUpdatesPane() -->
           </div>
+        </div>
+
+        <!-- 9. AI PERSONALITY & CALIBRATION PANE -->
+        <div id="spane-persona" class="settings-pane" style="display: none; flex-direction: column; gap: 16px;">
+          <!-- Dynamically populated by persona-calibration.js setupPersonaSettingsUI() -->
         </div>
 
         <!-- Settings Bottom Bar with Save & Close -->

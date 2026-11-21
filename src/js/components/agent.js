@@ -7,6 +7,7 @@ import { invoke, makeEventChannel } from '../services/tauri.js';
 import { openDiffModal, openFileInTab, showVfsFileReview } from '../editor/monaco.js';
 import { showToast } from '../services/notifications.js';
 import { handleLikeResponse, handleDislikeResponse, getFeedbackDirectivesForPrompt, getFeedbackData } from '../services/feedback.js';
+import { getActivePersonaConstitution, getActivePersonaId, onAgentTurnCompleted } from './persona-calibration.js';
 import { openTaskListModal } from './task-list.js';
 import { getActiveEvidenceLedger, resetActiveEvidenceLedger, renderEvidenceBadge } from '../services/evidence-engine.js';
 import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
@@ -1576,6 +1577,7 @@ async function handleSend() {
     invoke('record_agent_turn_end', { turnId: userMid }).catch(() => {});
     import('./chat-sessions.js').then(m => m.saveActiveSession());
     import('./usage.js').then(m => m.loadAndRenderUsage(false));
+    onAgentTurnCompleted();
     processNextQueuedMessage();
   }
 }
@@ -2425,6 +2427,11 @@ CRITICAL GROUNDING DIRECTIVE: When the user asks a follow-up ("add sum function 
   * Explain your capabilities and guide them on what they can do with Orbital X (coding, exploring files, running terminals, testing, or having offline conversations).
 
 ${getFeedbackDirectivesForPrompt()}
+${(() => {
+  const pConst = getActivePersonaConstitution();
+  const pId = getActivePersonaId() || 'auto';
+  return pConst ? `\n## ACTIVE PERSONALITY CONSTITUTION & BEHAVIORAL PROTOCOL (${pId.toUpperCase()}):\n${pConst}\n` : '';
+})()}
 
 ## MANDATORY RULE: NEVER WRITE CODE INTO CHAT RESPONSES — ALWAYS CALL FILE TOOLS
 - When instructed to write, create, generate, modify, or update code or files (e.g. "write code into test.md", "create file", "write 400 lines into file"):
