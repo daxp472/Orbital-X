@@ -289,6 +289,9 @@ function renderInstalledTab(container) {
   for (const skill of list) {
     const card = document.createElement('div');
     card.className = 'pack-card';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `Open skill ${skill.name || skill.id} documentation`);
 
     const titleRow = document.createElement('div');
     titleRow.className = 'pack-title-row';
@@ -344,6 +347,13 @@ function renderInstalledTab(container) {
     card.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
       openDoc(e);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.target.closest('button') && e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDoc(e);
+      }
     });
 
     actions.append(toggle, viewBtn);
@@ -430,6 +440,10 @@ function renderCommunityTab(container) {
   for (const pack of list) {
     const card = document.createElement('div');
     card.className = 'pack-card';
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', `View community pack ${pack.name || pack.id}`);
+    card.style.cursor = 'pointer';
 
     const titleRow = document.createElement('div');
     titleRow.className = 'pack-title-row';
@@ -498,6 +512,13 @@ function renderCommunityTab(container) {
     card.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
       openDoc(e);
+    });
+    card.addEventListener('keydown', (e) => {
+      if (e.target.closest('button') && e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDoc(e);
+      }
     });
 
     actions.append(installBtn, viewBtn);

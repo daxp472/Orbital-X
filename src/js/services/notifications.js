@@ -221,8 +221,21 @@ export function getFilteredActivities(filterType = 'all', persona = null) {
 
   // 1. Apply Persona Constraints
   if (currentPersona === 'milestones') {
-    // Only show milestones, high-level task summaries, and critical errors
-    filtered = all.filter(n => n.category === 'milestone' || n.category === 'task' || n.category === 'error' || n.type === 'error');
+    // Show milestones, high-level task summaries, and all critical errors/warnings (no data loss)
+    filtered = all.filter(n =>
+      n.category === 'milestone' ||
+      n.category === 'task' ||
+      n.category === 'error' ||
+      n.type === 'error' ||
+      n.type === 'warning' ||
+      (n.message && (
+        n.message.toLowerCase().includes('error') ||
+        n.message.toLowerCase().includes('sandbox') ||
+        n.message.toLowerCase().includes('vfs') ||
+        n.message.toLowerCase().includes('warning') ||
+        n.message.toLowerCase().includes('fail')
+      ))
+    );
     // Limit to curated 15–20 essential items
     filtered = filtered.slice(0, 20);
   } else if (currentPersona === 'balanced') {
@@ -277,12 +290,22 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
 
   // Persona toast suppression & silent routing for routine updates
   const lowMsg = (message || '').toLowerCase();
+  const isSafetyCritical = safeType === 'error' ||
+                           safeType === 'warning' ||
+                           lowMsg.includes('error') ||
+                           lowMsg.includes('sandbox') ||
+                           lowMsg.includes('block') ||
+                           lowMsg.includes('vfs') ||
+                           lowMsg.includes('fail') ||
+                           lowMsg.includes('denied') ||
+                           lowMsg.includes('warning');
+
   const isRoutine = lowMsg.includes('ast indexed') ||
                     lowMsg.includes('draft saved') ||
                     lowMsg.includes('auto-saved') ||
                     lowMsg.includes('semantic graph indexed') ||
                     lowMsg.includes('graph ready');
-  if (isRoutine && safeType === 'info') {
+  if (isRoutine && safeType === 'info' && !isSafetyCritical) {
     // Route silently into status bar indicator instead of popup spam
     const sb = document.getElementById('sb-graph-text') || document.getElementById('sb-pillars-text');
     if (sb) {
@@ -294,9 +317,10 @@ export function showToast(message, type = 'info', durationMs = 3000, actions = [
   }
 
   // If user prefers 'milestones', suppress repetitive micro toasts (e.g. minor file reads)
+  // DATA-LOSS PREVENTION: NEVER suppress file-read errors, sandbox blocks, or VFS write warnings!
   const persona = getNotificationPersona();
   const cat = determineCategory(message, safeType, meta);
-  if (persona === 'milestones' && cat === 'file' && !message.includes('Written directly') && safeType === 'info') {
+  if (persona === 'milestones' && cat === 'file' && !isSafetyCritical && !message.includes('Written directly') && safeType === 'info') {
     return { dismiss: () => {} };
   }
 

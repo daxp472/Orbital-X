@@ -7,8 +7,9 @@
 
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
 
-export let CURRENT_VERSION = '2.4.5';
+export let CURRENT_VERSION = '2.4.7';
 
 // Dynamically resolve application version from Tauri backend
 export async function resolveCurrentVersion() {
@@ -476,13 +477,13 @@ export function showUpdateModal(latest, downloadUrl, changelog, isAlreadyUpToDat
   const actionBtnText = isAlreadyUpToDate ? 'Reinstall Latest Version' : '1-Click Update & Restart';
 
   modal.innerHTML = `
-    <div class="modal-container" style="max-width: 540px; padding: 24px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sheet); background: var(--bg-card); border-radius: var(--radius-md);">
+    <div class="modal-container" role="dialog" aria-modal="true" aria-labelledby="update-modal-title" style="max-width: 540px; padding: 24px; border: 1px solid var(--border-color); box-shadow: var(--shadow-sheet); background: var(--bg-card); border-radius: var(--radius-md);">
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px;">
         <div style="width: 36px; height: 36px; border-radius: var(--radius-sm); background: rgba(57, 197, 187, 0.12); color: var(--accent-cyan); display: flex; align-items: center; justify-content: center;">
           ${isAlreadyUpToDate ? UPDATER_ICONS.check : UPDATER_ICONS.rocket}
         </div>
         <div>
-          <h2 style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">${modalTitle}</h2>
+          <h2 id="update-modal-title" style="margin: 0; font-size: 16px; font-weight: 700; color: var(--text-primary);">${modalTitle}</h2>
           <div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
             ${versionIndicator}
           </div>
@@ -516,11 +517,15 @@ export function showUpdateModal(latest, downloadUrl, changelog, isAlreadyUpToDat
   }
 
   const close = () => {
+    updateFocusTrap?.deactivate();
     modal.remove();
     try {
       localStorage.setItem('orbital_update_dismissed_at', String(Date.now()));
     } catch (e) {}
   };
+
+  const updateFocusTrap = new FocusTrap(modal, { onClose: close });
+  updateFocusTrap.activate();
 
   modal.querySelector('#update-close-btn')?.addEventListener('click', close);
   modal.querySelector('#update-remind-btn')?.addEventListener('click', close);

@@ -34,18 +34,27 @@ export function showUnifiedContextMenu(items, x, y) {
 
   const menu = document.createElement('div');
   menu.className = 'orbital-context-menu';
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-orientation', 'vertical');
   menu.addEventListener('contextmenu', (e) => e.preventDefault());
 
   for (const item of items) {
     if (item.separator) {
       const sep = document.createElement('div');
       sep.className = 'orbital-context-menu-separator';
+      sep.setAttribute('role', 'separator');
       menu.appendChild(sep);
       continue;
     }
 
     const row = document.createElement('div');
     row.className = `orbital-context-menu-item ${item.danger ? 'danger' : ''} ${item.disabled ? 'disabled' : ''}`;
+    row.setAttribute('role', item.checked !== undefined ? 'menuitemcheckbox' : 'menuitem');
+    row.setAttribute('tabindex', '-1');
+    if (item.checked !== undefined) {
+      row.setAttribute('aria-checked', item.checked ? 'true' : 'false');
+      if (item.checked) row.classList.add('checked');
+    }
     
     const left = document.createElement('div');
     left.className = 'orbital-context-menu-label';
@@ -98,14 +107,50 @@ export function showUnifiedContextMenu(items, x, y) {
 
   activeMenu = menu;
 
+  const getInteractiveItems = () => Array.from(menu.querySelectorAll('.orbital-context-menu-item:not(.disabled)'));
+  let focusedIndex = -1;
+
+  const updateKeyboardFocus = (newIndex) => {
+    const list = getInteractiveItems();
+    if (list.length === 0) return;
+    focusedIndex = (newIndex + list.length) % list.length;
+    list.forEach((el, idx) => {
+      const isFocused = idx === focusedIndex;
+      el.classList.toggle('keyboard-focused', isFocused);
+      if (isFocused) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    });
+  };
+
   outsideClickListener = (e) => {
     if (activeMenu && !activeMenu.contains(e.target)) {
       dismissContextMenu();
     }
   };
+
   keyListener = (e) => {
     if (e.key === 'Escape') {
+      e.preventDefault();
       dismissContextMenu();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      updateKeyboardFocus(focusedIndex + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      updateKeyboardFocus(focusedIndex <= 0 ? getInteractiveItems().length - 1 : focusedIndex - 1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      updateKeyboardFocus(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      updateKeyboardFocus(getInteractiveItems().length - 1);
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const list = getInteractiveItems();
+      if (focusedIndex >= 0 && focusedIndex < list.length) {
+        list[focusedIndex].click();
+      }
     }
   };
 
@@ -803,10 +848,25 @@ function handleGeneralContextMenu(x, y) {
   showUnifiedContextMenu(items, x, y);
 }
 
-// Global initialization: bind window-wide right-click interceptor
+// Global initialization: bind window-wide right-click and Shift+F10 keyboard interceptor
 export function initUnifiedContextMenu() {
   window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     handleGlobalContextMenu(e);
+  }, true);
+
+  window.addEventListener('keydown', (e) => {
+    if ((e.shiftKey && e.key === 'F10') || e.key === 'ContextMenu') {
+      const el = document.activeElement;
+      if (!el || el === document.body) return;
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      handleGlobalContextMenu({
+        target: el,
+        clientX: Math.round(rect.left + Math.min(24, rect.width / 2)),
+        clientY: Math.round(rect.top + Math.min(24, rect.height / 2)),
+        preventDefault: () => {}
+      });
+    }
   }, true);
 }

@@ -7,6 +7,9 @@ import { applyTheme } from '../components/settings.js';
 import { switchMode } from '../components/agent.js';
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
+
+let onboardingFocusTrap = null;
 
 let currentStep = 1;
 const totalSteps = 5;
@@ -54,11 +57,16 @@ export function startOnboarding() {
   const modal = document.getElementById('modal-onboarding');
   if (modal) {
     modal.style.display = 'flex';
+    if (!onboardingFocusTrap) {
+      onboardingFocusTrap = new FocusTrap(modal, { onClose: closeOnboarding });
+    }
+    onboardingFocusTrap.activate();
     renderStep();
   }
 }
 
 export function closeOnboarding() {
+  onboardingFocusTrap?.deactivate();
   const modal = document.getElementById('modal-onboarding');
   if (modal) modal.style.display = 'none';
   localStorage.setItem('orbital_onboarded', 'true');

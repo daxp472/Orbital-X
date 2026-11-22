@@ -167,6 +167,7 @@ function escapeHtmlText(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+const escapeHtml = escapeHtmlText;
 
 /**
  * Converts ANSI escape sequences to HTML with inline styles.
@@ -442,7 +443,7 @@ export function initTerminal() {
     first.startBackendShell();
   }
 
-  // Bottom panel tab switching (terminal / problems / output / ai-agents / validation)
+  // Bottom panel tab switching (terminal / ai-agents / validation)
   const tabs = document.querySelectorAll('.panel-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -452,14 +453,10 @@ export function initTerminal() {
       const target = tab.dataset.tab;
       const termContent = document.getElementById('tab-content-terminal');
       const valContent = document.getElementById('tab-content-validation');
-      const probContent = document.getElementById('tab-content-problems');
-      const outContent = document.getElementById('tab-content-output');
       const agentsContent = document.getElementById('tab-content-ai-agents');
 
       if (termContent) termContent.style.display = target === 'terminal' ? 'flex' : 'none';
       if (valContent) valContent.style.display = target === 'validation' ? 'block' : 'none';
-      if (probContent) probContent.style.display = target === 'problems' ? 'block' : 'none';
-      if (outContent) outContent.style.display = target === 'output' ? 'block' : 'none';
       if (agentsContent) {
         agentsContent.style.display = target === 'ai-agents' ? 'block' : 'none';
         if (target === 'ai-agents') renderAiAgentsPanel();
@@ -1870,20 +1867,23 @@ export function renderAiAgentsPanel() {
   container.innerHTML = agentSlots.map(slot => {
     const term = terminalInstances.find(t => t.isAgent && t.agentSlot === slot);
     const isRunning = term?.isRunning || false;
-    const lastOutput = term?.buffer ? term.buffer.trim().split('\n').slice(-4).join('\n') : '(agent terminal ready for tasks)';
+    const buffer = term?.buffer || '';
+    const lastOutput = buffer.trim()
+      ? buffer.trim().split('\n').slice(-4).join('\n')
+      : '(agent terminal standby — ready to run subagent routines)';
     return `
-      <div class="agent-terminal-card" style="background: var(--bg-surface, #1e222d); border: 1px solid var(--border-color, rgba(255,255,255,0.1)); border-radius: var(--radius-md, 8px); padding: 10px;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+      <div class="agent-terminal-card" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: border-color var(--trans-fast);">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <span style="font-weight: 600; font-size: 12px; color: var(--accent-cyan, #39c5bb);">🤖 Agent ${slot} Terminal</span>
-            <span style="font-size: 10px; padding: 1px 6px; border-radius: 9999px; background: ${isRunning ? 'rgba(57,197,187,0.15)' : 'rgba(255,255,255,0.08)'}; color: ${isRunning ? 'var(--accent-cyan)' : 'var(--text-muted)'};">${isRunning ? '● Running' : 'Idle'}</span>
+            <span style="font-size: 10px; padding: 2px 8px; border-radius: 9999px; background: ${isRunning ? 'rgba(57,197,187,0.15)' : 'var(--bg-hover)'}; color: ${isRunning ? 'var(--accent-cyan)' : 'var(--text-muted)'}; font-weight: 500;">${isRunning ? '● Running' : 'Idle'}</span>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button class="btn btn-secondary btn-sm btn-open-agent-term" data-slot="${slot}" style="font-size: 10px; padding: 2px 8px;">Switch View</button>
-            ${isRunning ? `<button class="btn btn-danger btn-sm btn-kill-agent-term" data-slot="${slot}" style="font-size: 10px; padding: 2px 8px;">Kill</button>` : ''}
+            <button class="btn btn-secondary btn-sm btn-open-agent-term" data-slot="${slot}" style="font-size: 11px; padding: 3px 10px; border-radius: 6px;">Switch View</button>
+            ${isRunning ? `<button class="btn btn-danger btn-sm btn-kill-agent-term" data-slot="${slot}" style="font-size: 11px; padding: 3px 10px; border-radius: 6px;">Kill</button>` : ''}
           </div>
         </div>
-        <div style="font-family: var(--font-mono, monospace); font-size: 10.5px; color: var(--text-muted); background: var(--bg-app, #12141a); padding: 6px 8px; border-radius: 4px; white-space: pre-wrap; max-height: 80px; overflow-y: auto;">${escapeHtml(lastOutput)}</div>
+        <div style="font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace; font-size: 11px; line-height: 1.45; color: var(--text-secondary); background: var(--bg-app); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; max-height: 90px; overflow-y: auto;">${escapeHtmlText(lastOutput)}</div>
       </div>
     `;
   }).join('');
@@ -1907,10 +1907,7 @@ export function renderAiAgentsPanel() {
   });
 }
 
-export function updatePanelBadges(problemsCount = 0) {
-  const probBadge = document.getElementById('panel-badge-problems');
-  if (probBadge) probBadge.textContent = String(problemsCount);
-
+export function updatePanelBadges() {
   const agentsBadge = document.getElementById('panel-badge-agents');
   if (agentsBadge) {
     const runningCount = terminalInstances.filter(t => t.isAgent && t.isRunning).length;

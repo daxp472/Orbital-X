@@ -15,6 +15,9 @@ import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { showConfirmDialog } from '../services/dialogs.js';
 import { showToast } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
+
+let memoryFocusTrap = null;
 
 const CATEGORY_META = {
   architecture: { icon: '🏛️', label: 'Architecture', color: '#c084fc', bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.28)' },
@@ -291,11 +294,16 @@ export function openMemoryManagerModal() {
   const modal = document.getElementById('modal-memory-manager');
   if (!modal) return;
   modal.style.display = 'flex';
+  if (!memoryFocusTrap) {
+    memoryFocusTrap = new FocusTrap(modal, { onClose: closeMemoryManagerModal });
+  }
+  memoryFocusTrap.activate();
   refreshMemories();
   switchModalTab('core');
 }
 
 export function closeMemoryManagerModal() {
+  memoryFocusTrap?.deactivate();
   const modal = document.getElementById('modal-memory-manager');
   if (modal) modal.style.display = 'none';
   closeMemoryDrawer();

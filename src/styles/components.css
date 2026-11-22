@@ -124,7 +124,7 @@
   display: flex;
   flex-direction: column-reverse;
   gap: 8px;
-  z-index: 100000;
+  z-index: 100001;
   pointer-events: none;
 }
 
@@ -461,7 +461,7 @@
   letter-spacing: -0.01em;
   color: var(--text-primary);
   cursor: pointer;
-  border-radius: var(--radius-xs, 4px);
+  border-radius: var(--radius-xs);
   position: relative;
   user-select: none;
   transition: background 0.08s ease, color 0.08s ease;
@@ -1787,8 +1787,8 @@ kbd {
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
   border: 1px solid rgba(57, 197, 187, 0.4);
-  border-radius: var(--radius-pill);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.6), 0 0 16px rgba(57, 197, 187, 0.15);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-lg);
   margin: 8px 0;
   animation: slideInActivity 0.25s var(--ease-spring);
 }
@@ -2055,7 +2055,7 @@ kbd {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-bottom-width: 2px;
-  border-radius: 5px;
+  border-radius: var(--radius-xsm);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
@@ -2111,7 +2111,7 @@ kbd {
 .kb-scope-pill {
   font-size: 9.5px;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-muted);
   font-weight: 600;
@@ -2263,13 +2263,13 @@ input:checked + .settings-toggle-slider {
 .orbital-context-menu,
 .tree-context-menu {
   position: fixed;
-  z-index: 100000;
+  z-index: 100002;
   background: rgba(20, 22, 28, 0.94);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
-  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
   padding: 5px;
   min-width: 195px;
   color: #f1f5f9;
@@ -2292,16 +2292,18 @@ input:checked + .settings-toggle-slider {
   align-items: center;
   justify-content: space-between;
   padding: 5px 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-xsm);
   cursor: pointer;
   transition: background 0.08s ease, color 0.08s ease;
   color: #e2e8f0;
 }
 
 .orbital-context-menu-item:hover,
+.orbital-context-menu-item.keyboard-focused,
 .tree-context-menu-item:hover {
   background: rgba(56, 189, 248, 0.18);
   color: #ffffff;
+  outline: none;
 }
 
 .orbital-context-menu-item.danger:hover,
@@ -2369,7 +2371,7 @@ input:checked + .settings-toggle-slider:before {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.45);
-  z-index: 10000;
+  z-index: 1000;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -2381,8 +2383,8 @@ input:checked + .settings-toggle-slider:before {
   max-width: 90vw;
   background-color: var(--bg-surface, #252526);
   border: 1px solid var(--border-color, #454545);
-  border-radius: var(--radius-md, 6px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -2762,12 +2764,12 @@ input:checked + .settings-toggle-slider:before {
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
   padding: 4px 0;
   min-width: 240px;
   max-width: 290px;
-  z-index: 100000;
+  z-index: 2000;
   display: none;
   flex-direction: column;
   user-select: none;
@@ -2856,8 +2858,8 @@ input:checked + .settings-toggle-slider:before {
   backdrop-filter: var(--glass-blur-md);
   -webkit-backdrop-filter: var(--glass-blur-md);
   border: 1px solid rgba(0, 212, 255, 0.35);
-  border-radius: var(--radius-sm, 8px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 12px rgba(0, 212, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
   animation: slideInTaskSticky 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   min-height: 36px;
   gap: 10px;
@@ -3351,7 +3353,7 @@ body.density-compact .agent-composer {
   padding: 10px;
   background: var(--bg-surface, #1e2029);
   border: 1px solid var(--border-color, #2d3142);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   text-align: left;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -3396,7 +3398,7 @@ body.density-compact .agent-composer {
   background: linear-gradient(135deg, rgba(0, 229, 255, 0.07), rgba(41, 151, 255, 0.04));
   border: 1px solid rgba(0, 229, 255, 0.24);
   border-left: 3px solid var(--accent-cyan);
-  border-radius: 12px 12px 2px 12px;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-2xs) var(--radius-lg);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(8px);
 }
@@ -3405,7 +3407,7 @@ body.density-compact .agent-composer {
   background: var(--bg-surface, #1e2029);
   border: 1px solid var(--border-color, #2d3142);
   border-left: 3px solid var(--accent-purple, #bc8cff);
-  border-radius: 12px 12px 12px 2px;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-2xs);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
 }
 
@@ -3441,9 +3443,9 @@ body.density-compact .agent-composer {
    Review Changed Files Modal & File List (Feature 8)
    ========================================================================== */
 .review-changes-modal {
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 28px 72px -16px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border-color);
+  box-shadow: var(--shadow-sheet);
   background: var(--bg-card);
 }
 
@@ -3563,7 +3565,7 @@ body.density-compact .agent-composer {
   z-index: 3200;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255, 255, 255, 0.1);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   animation: notifSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
@@ -3761,16 +3763,6 @@ body.density-compact .agent-composer {
   display: flex;
   flex-direction: column;
   gap: 9px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-}
-
-.notif-content-list::-webkit-scrollbar {
-  width: 5px;
-}
-.notif-content-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 10px;
 }
 
 /* Apple HIG Refined Notification Card */
@@ -3782,17 +3774,17 @@ body.density-compact .agent-composer {
   padding: 11px 13px;
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-sm);
 }
 
 .notif-card:hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.12);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-md);
 }
 
 .notif-card.unread {
@@ -3986,7 +3978,7 @@ body.density-compact .agent-composer {
   gap: 8px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-md);
 }
 
 .ox-error-header {
@@ -4119,6 +4111,7 @@ body.density-compact .agent-composer {
   border-bottom: 1px solid var(--border-color);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-md);
   z-index: 100;
   animation: vfsBarSlide 0.18s ease-out;
 }
@@ -4396,18 +4389,18 @@ body.density-compact .agent-composer {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 236px;
+  width: 220px;
   background: var(--bg-card, #161b22);
   border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
-  border-radius: 10px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), 0 0 1px rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  padding: 5px;
+  padding: 4px;
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   animation: modalSlideUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -4416,19 +4409,19 @@ body.density-compact .agent-composer {
 }
 
 .persona-menu-header {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-muted);
-  padding: 4px 8px 3px 8px;
+  padding: 3px 6px 2px 6px;
 }
 
 .persona-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 7px;
+  padding: 5px 7px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.12s ease;
@@ -4469,7 +4462,7 @@ body.density-compact .agent-composer {
 }
 
 .persona-item-badge {
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 600;
   padding: 0 4px;
   border-radius: 3px;
@@ -4485,316 +4478,192 @@ body.density-compact .agent-composer {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 175px;
+  max-width: 145px;
 }
 
 /* Checkmark: strictly visible ONLY for active item */
 .persona-item-check {
-  display: none;
+  display: none !important;
   font-size: 11px;
   font-weight: 700;
   color: var(--accent-cyan);
-  margin-left: 4px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
 .persona-menu-item.active .persona-item-check {
-  display: inline-flex;
+  display: inline-flex !important;
 }
 
 /* 2. Apple Design Settings — AI Personalities & Behavioral Alignment */
-.persona-settings-container {
-  padding: 4px 0 32px 0;
+.persona-selection-group {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-top: 12px;
 }
 
-.apple-settings-header {
-  margin-bottom: 20px;
-}
-
-.apple-header-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--accent-cyan);
-  background: rgba(0, 229, 255, 0.12);
-  padding: 2px 8px;
-  border-radius: 9999px;
-  margin-bottom: 8px;
-}
-
-.apple-settings-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 6px 0;
-  letter-spacing: -0.2px;
-}
-
-.apple-settings-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin: 0;
-  max-width: 680px;
-}
-
-/* Featured Auto Mode Hero Card */
-.apple-hero-card {
-  background: linear-gradient(135deg, rgba(0, 229, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%), var(--bg-surface, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: 14px;
-  padding: 16px 20px;
-  margin-bottom: 22px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.15);
-}
-
-.apple-hero-card:hover {
-  border-color: rgba(0, 229, 255, 0.35);
-  background: linear-gradient(135deg, rgba(0, 229, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%), var(--bg-elevated);
-}
-
-.apple-hero-card.is-active {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 20px rgba(0, 229, 255, 0.15), 0 4px 18px rgba(0, 0, 0, 0.2);
-}
-
-.apple-hero-main {
+.persona-option-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
 }
 
-.apple-hero-left {
-  flex: 1;
+.persona-option-row:last-child {
+  border-bottom: none;
 }
 
-.apple-hero-badge-wrap {
+.persona-option-row:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+}
+
+.persona-option-row:focus-visible {
+  outline: 2px solid var(--accent-primary, #39c5bb);
+  outline-offset: -2px;
+}
+
+.persona-option-row.is-active {
+  background: rgba(0, 229, 255, 0.05);
+}
+
+.persona-option-left {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
-.apple-hero-icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: rgba(0, 229, 255, 0.12);
-  border: 1px solid rgba(0, 229, 255, 0.25);
+.persona-option-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
+  font-size: 18px;
   flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
 }
 
-.apple-hero-info {
+.persona-option-avatar.auto {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.25);
+}
+
+.persona-option-avatar.atlas {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.persona-option-avatar.pulse {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.persona-option-avatar.nova {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.persona-option-avatar.vanguard {
+  background: rgba(168, 85, 247, 0.12);
+  border-color: rgba(168, 85, 247, 0.25);
+}
+
+.persona-option-text {
   flex: 1;
+  min-width: 0;
 }
 
-.apple-hero-title-row {
+.persona-option-heading {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
-.apple-hero-name {
-  font-size: 15px;
-  font-weight: 700;
+.persona-option-name {
+  font-size: 13.5px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
-.apple-badge {
-  font-size: 9.5px;
+.persona-tagline-badge {
+  font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  padding: 2px 7px;
+  padding: 1.5px 6px;
   border-radius: 9999px;
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
 }
 
-.apple-badge.adaptive {
-  background: rgba(0, 229, 255, 0.15);
+.persona-tagline-badge.adaptive {
+  background: rgba(0, 229, 255, 0.14);
   color: var(--accent-cyan);
-  border: 1px solid rgba(0, 229, 255, 0.25);
 }
 
-.apple-status-pill.active {
+.persona-tagline-badge.strategic {
+  background: rgba(59, 130, 246, 0.14);
+  color: #60a5fa;
+}
+
+.persona-tagline-badge.minimal {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+.persona-tagline-badge.pair {
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+}
+
+.persona-tagline-badge.auditor {
+  background: rgba(168, 85, 247, 0.14);
+  color: #c084fc;
+}
+
+.persona-active-indicator {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
-  padding: 1px 7px;
+  padding: 1px 6px;
   border-radius: 9999px;
-  background: rgba(34, 197, 94, 0.15);
+  background: rgba(34, 197, 94, 0.14);
   color: #22c55e;
   border: 1px solid rgba(34, 197, 94, 0.3);
 }
 
-.pill-dot {
+.persona-active-indicator .dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: #22c55e;
-  display: inline-block;
 }
 
-.apple-hero-tagline {
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.4;
-}
-
-.apple-select-btn {
-  padding: 5px 14px;
-  border-radius: 7px;
+.persona-option-desc {
   font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
-  background: var(--bg-surface, rgba(255, 255, 255, 0.05));
-  color: var(--text-primary);
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-}
-
-.apple-select-btn:hover {
-  background: var(--bg-elevated);
-  border-color: var(--accent-cyan);
-}
-
-.apple-select-btn.selected {
-  background: var(--accent-cyan);
-  color: #0b0f19;
-  border-color: var(--accent-cyan);
-  font-weight: 700;
-}
-
-.apple-hero-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  font-size: 11px;
-  color: var(--text-secondary);
-  flex-wrap: wrap;
-}
-
-.apple-stat-item strong {
-  color: var(--text-primary);
-}
-
-.apple-stat-divider {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  opacity: 0.5;
-}
-
-/* Specialized Archetypes Section */
-.apple-group-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  margin-bottom: 10px;
-}
-
-.apple-archetypes-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px;
-  margin-bottom: 24px;
-}
-
-.apple-archetype-card {
-  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: 11px;
-  padding: 12px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-  user-select: none;
-}
-
-.apple-archetype-card:hover {
-  background: var(--bg-elevated, rgba(255, 255, 255, 0.06));
-  border-color: rgba(0, 229, 255, 0.3);
-  transform: translateY(-1px);
-}
-
-.apple-archetype-card.is-active {
-  background: rgba(0, 229, 255, 0.07);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 14px rgba(0, 229, 255, 0.12);
-}
-
-.apple-card-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-}
-
-.apple-card-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 17px;
-  flex-shrink: 0;
-}
-
-.apple-card-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.apple-card-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.apple-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.apple-card-oneliner {
-  font-size: 11px;
   color: var(--text-secondary);
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 600px;
 }
 
-.apple-radio-indicator {
+.persona-option-radio {
   width: 20px;
   height: 20px;
   border-radius: 50%;
@@ -4802,79 +4671,66 @@ body.density-compact .agent-composer {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
   flex-shrink: 0;
   transition: all 0.15s ease;
   color: transparent;
+  margin-left: 12px;
 }
 
-.apple-radio-indicator.checked {
+.persona-option-radio.checked {
   background: var(--accent-cyan);
   border-color: var(--accent-cyan);
   color: #0b0f19;
 }
 
-/* Learned Behavior & Alignment Studio (Inset Box) */
-.apple-alignment-panel {
-  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: 14px;
-  padding: 18px 20px;
-}
-
-.apple-panel-header {
+/* Telemetry & Calibration Studio */
+.persona-telemetry-bar {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 10px;
   flex-wrap: wrap;
+  margin-top: 14px;
 }
 
-.apple-panel-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0 0 3px 0;
-}
-
-.apple-panel-subtitle {
-  font-size: 11.5px;
+.telemetry-pill {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  margin: 0;
-}
-
-.apple-panel-actions {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
 }
 
-.apple-signals-row {
+.telemetry-pill strong {
+  color: var(--text-primary);
+  margin-left: 4px;
+}
+
+.persona-traits-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
 }
 
-.apple-signal-group {
-  background: rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.06));
-  border-radius: 10px;
+.persona-traits-box {
+  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md);
   padding: 12px 14px;
 }
 
-.signal-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
+.traits-box-label {
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
   margin-bottom: 8px;
 }
 
-.traits-chips-row {
+.traits-chips-container {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -4902,19 +4758,31 @@ body.density-compact .agent-composer {
   font-style: italic;
 }
 
-.constitution-container {
+.persona-constitution-block {
   margin-top: 14px;
+  background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
-.constitution-header-row {
+.constitution-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.04));
 }
 
-.constitution-badge {
-  font-size: 9px;
+.constitution-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.constitution-pill-state {
+  font-size: 9.5px;
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 4px;
@@ -4922,22 +4790,18 @@ body.density-compact .agent-composer {
   color: var(--text-secondary);
 }
 
-.constitution-viewer {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 140px;
-  max-height: 240px;
-  overflow-y: auto;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 11px;
-  font-family: var(--font-mono, monospace);
-  color: var(--text-primary);
-  line-height: 1.5;
-  resize: vertical;
+.constitution-code-box {
   margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  max-height: 220px;
+  overflow-y: auto;
+  background: transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 3. Calibration Modal & Isolated Interview Studio */
@@ -4950,7 +4814,7 @@ body.density-compact .agent-composer {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 1000;
   padding: 20px;
   animation: fadeIn 0.18s ease-out;
 }
@@ -5231,7 +5095,7 @@ body.density-compact .agent-composer {
   flex: 1;
   background: rgba(0, 0, 0, 0.25);
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.15));
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   font-size: 12px;
   color: var(--text-primary);
@@ -5242,4 +5106,10 @@ body.density-compact .agent-composer {
 .calib-deep-input:focus {
   outline: none;
   border-color: var(--accent-cyan);
+}
+
+/* Accessible focus ring on Skills Pack Cards */
+.pack-card:focus-visible {
+  outline: 2px solid var(--accent-primary, #39c5bb);
+  outline-offset: 2px;
 }

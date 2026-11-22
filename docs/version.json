@@ -1,13 +1,13 @@
 {
-  "version": "2.4.6",
-  "tag": "v2.4.6",
-  "release_date": "2026-11-21",
-  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_x64-setup.exe",
-  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital-X-Portable.zip",
-  "standalone_exe_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/orbital-x.exe",
-  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_aarch64.dmg",
-  "macos_tar_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_aarch64.app.tar.gz",
-  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_amd64.AppImage",
-  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.6/Orbital.X_2.4.6_amd64.deb",
-  "changelog": "v2.4.6: Adaptive Persona Engine, Apple HIG AI Personalities Studio, Compact Personality Selector, and Strict IPC Parameter Stabilization."
+  "version": "2.4.7",
+  "tag": "v2.4.7",
+  "release_date": "2026-11-22",
+  "download_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital.X_2.4.7_x64-setup.exe",
+  "portable_zip_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital-X-Portable.zip",
+  "standalone_exe_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/orbital-x.exe",
+  "macos_dmg_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital.X_2.4.7_aarch64.dmg",
+  "macos_tar_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital.X_aarch64.app.tar.gz",
+  "linux_appimage_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital.X_2.4.7_amd64.AppImage",
+  "linux_deb_url": "https://github.com/daxp472/Orbital-X/releases/download/v2.4.7/Orbital.X_2.4.7_amd64.deb",
+  "changelog": "v2.4.7: WCAG AA contrast parity, modal FocusTrap keyboard navigation, strict z-index hierarchy, data-loss toast protection, and responsive layout polish."
 }

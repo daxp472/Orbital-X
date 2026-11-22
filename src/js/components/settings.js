@@ -7,6 +7,9 @@ import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
 import { showConfirmDialog } from '../services/dialogs.js';
 import { showToast, getNotificationPersona, setNotificationPersona } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
+
+let settingsFocusTrap = null;
 
 export function initSettings() {
   const modal = document.getElementById('modal-settings');
@@ -41,12 +44,45 @@ export function initSettings() {
   setupShortcutsTab();
 
   const sidebar = document.querySelector('.settings-sidebar');
-  sidebar?.querySelectorAll('.settings-nav-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const pane = btn.getAttribute('data-pane') || btn.dataset.pane;
-      if (pane) switchSettingsTab(pane);
+  if (sidebar) {
+    sidebar.setAttribute('role', 'tablist');
+    sidebar.setAttribute('aria-orientation', 'vertical');
+    const navItems = Array.from(sidebar.querySelectorAll('.settings-nav-item'));
+    navItems.forEach((btn, idx) => {
+      btn.setAttribute('role', 'tab');
+      const isActive = btn.classList.contains('active');
+      btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      btn.setAttribute('tabindex', isActive ? '0' : '-1');
+
+      btn.addEventListener('click', () => {
+        const pane = btn.getAttribute('data-pane') || btn.dataset.pane;
+        if (pane) switchSettingsTab(pane);
+      });
+
+      btn.addEventListener('keydown', (e) => {
+        let targetIdx = -1;
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          targetIdx = (idx + 1) % navItems.length;
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          targetIdx = (idx - 1 + navItems.length) % navItems.length;
+        } else if (e.key === 'Home') {
+          e.preventDefault();
+          targetIdx = 0;
+        } else if (e.key === 'End') {
+          e.preventDefault();
+          targetIdx = navItems.length - 1;
+        }
+        if (targetIdx >= 0) {
+          const targetBtn = navItems[targetIdx];
+          targetBtn.focus();
+          const pane = targetBtn.getAttribute('data-pane') || targetBtn.dataset.pane;
+          if (pane) switchSettingsTab(pane);
+        }
+      });
     });
-  });
+  }
 
   // Antigravity Security Mode Cards
   const modeCards = [
@@ -487,11 +523,15 @@ export function switchSettingsTab(paneId) {
   sidebar.querySelectorAll('.settings-nav-item').forEach(btn => {
     const isTarget = (btn.getAttribute('data-pane') === paneId || btn.dataset.pane === paneId);
     btn.classList.toggle('active', isTarget);
+    btn.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+    btn.setAttribute('tabindex', isTarget ? '0' : '-1');
   });
 
   // Hide all panes, show selected pane and restore all row visibility
   content.querySelectorAll('.settings-pane').forEach(pane => {
     const isMatch = pane.id === paneId;
+    pane.setAttribute('role', 'tabpanel');
+    pane.setAttribute('aria-hidden', isMatch ? 'false' : 'true');
     pane.style.display = isMatch ? 'flex' : 'none';
     if (isMatch) {
       pane.querySelectorAll('.settings-setting-row, .form-group, .settings-card, .dev-card').forEach(r => {
@@ -833,9 +873,14 @@ export function openSettings(targetPaneId) {
   import('./usage.js').then(m => m.loadAndRenderUsage(true));
 
   modal.style.display = 'flex';
+  if (!settingsFocusTrap) {
+    settingsFocusTrap = new FocusTrap(modal, { onClose: closeSettings });
+  }
+  settingsFocusTrap.activate();
 }
 
 export function closeSettings() {
+  settingsFocusTrap?.deactivate();
   const modal = document.getElementById('modal-settings');
   if (modal) modal.style.display = 'none';
 }

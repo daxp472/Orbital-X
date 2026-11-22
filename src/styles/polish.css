@@ -4,10 +4,38 @@
    of tokens/themes/layout/components. Loaded last so overrides win.
    ========================================================================== */
 
-/* ---------- Keyboard focus (visible, consistent, theme-aware) ---------- */
+/* ---------- Crisp Apple HIG .focus-ring utility & Keyboard Focus ---------- */
+.focus-ring {
+  outline: 2px solid var(--accent-primary, var(--border-focus, #39c5bb)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Global :focus-visible across all 23 interactive components */
+.settings-segmented-btn:focus-visible,
+.settings-toggle-switch:focus-visible,
+.orbital-context-menu-item:focus-visible,
+.quick-open-item:focus-visible,
+.menubar-dropdown-item:focus-visible,
+.composer-mode-btn:focus-visible,
+.action-chip:focus-visible,
+.review-change-row:focus-visible,
+.notif-tab:focus-visible,
+.notif-card:focus-visible,
+.notif-card-dismiss:focus-visible,
+.vfs-bar-actions button:focus-visible,
+.chat-scroll-bottom-btn:focus-visible,
+.queued-item-btn:focus-visible,
+.composer-persona-pill:focus-visible,
+.persona-menu-item:focus-visible,
+.apple-hero-card:focus-visible,
+.apple-archetype-card:focus-visible,
+.apple-select-btn:focus-visible,
+.calib-option-card:focus-visible,
+.calib-deep-input:focus-visible,
+.btn-primary:focus-visible,
+.icon-button:focus-visible,
 .btn:focus-visible,
 .icon-btn:focus-visible,
-.action-chip:focus-visible,
 .panel-tab:focus-visible,
 .rail-btn:focus-visible,
 .settings-nav-item:focus-visible,
@@ -19,8 +47,8 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 .terminal-session-item:focus-visible {
-  outline: 2px solid var(--border-focus, var(--accent-cyan));
-  outline-offset: 1px;
+  outline: 2px solid var(--accent-primary, var(--border-focus, #39c5bb));
+  outline-offset: 2px;
   border-radius: var(--radius-xs, 4px);
 }
 
@@ -269,28 +297,7 @@ body.theme-light .settings-sidebar,
 }
 
 /* ---------- Scrollbar consistency across themes ---------- */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
-}
-::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--radius-full);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-thumb-hover);
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-track,
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
+/* Global scrollbars unified in tokens.css and layout.css (Apple HIG 7px / 9999px pill) */
 
 /* ---------- Small-screen touch targets ---------- */
 @media (pointer: coarse) {
@@ -584,10 +591,12 @@ body.theme-light .settings-sidebar,
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 12px;
+  padding: 10px 14px;
   white-space: pre-wrap;
   word-break: break-all;
-  font-family: var(--font-mono, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace);
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.5;
   color: var(--text-primary);
   background: var(--bg-activity);
   min-height: 0;
@@ -762,8 +771,6 @@ body.theme-light .settings-sidebar,
 /* Inline terminal prompt fallback / legacy compatibility */
 .terminal-inline-prompt {
   display: none !important;
-}
-  transition: background 0.12s ease, color 0.12s ease;
 }
 .terminal-inline-run:hover {
   background: rgba(57, 197, 187, 0.14);
@@ -2587,32 +2594,7 @@ body.theme-light .settings-sidebar,
 }
 
 /* Modal Inner Scrollbars */
-.modal-body,
-.settings-content-pane,
-.memory-manager-body,
-.extensions-body,
-.notif-content-list {
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
-}
-
-.modal-body::-webkit-scrollbar,
-.settings-content-pane::-webkit-scrollbar,
-.memory-manager-body::-webkit-scrollbar,
-.extensions-body::-webkit-scrollbar,
-.notif-content-list::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.modal-body::-webkit-scrollbar-thumb,
-.settings-content-pane::-webkit-scrollbar-thumb,
-.memory-manager-body::-webkit-scrollbar-thumb,
-.extensions-body::-webkit-scrollbar-thumb,
-.notif-content-list::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: var(--radius-full);
-}
+/* Modal and drawer scrollbars delegate to Apple HIG unified scrollbar system */
 
 /* Standardized Button States Across Modals */
 .modal-container .btn,

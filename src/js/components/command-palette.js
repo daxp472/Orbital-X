@@ -8,6 +8,7 @@
 
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
 
 const MRU_KEY = 'orbital_palette_mru';
 let mru = [];
@@ -17,6 +18,7 @@ let commands = [];
 let filtered = [];
 let selectedIndex = 0;
 let backdrop = null;
+let paletteFocusTrap = null;
 
 export function initCommandPalette() {
   buildCommandRegistry();
@@ -178,6 +180,7 @@ export function togglePalette() {
 }
 
 export function closePalette() {
+  paletteFocusTrap?.deactivate();
   backdrop?.remove();
   backdrop = null;
 }
@@ -187,9 +190,9 @@ export function openPalette() {
   backdrop = document.createElement('div');
   backdrop.className = 'command-palette-backdrop';
   backdrop.innerHTML = `
-    <div class="command-palette" role="dialog" aria-label="Command palette">
-      <input type="text" id="command-palette-input" placeholder="Type a command…" autocomplete="off" spellcheck="false" />
-      <div class="command-palette-list" id="command-palette-list"></div>
+    <div class="command-palette" role="dialog" aria-modal="true" aria-label="Command palette">
+      <input type="text" id="command-palette-input" placeholder="Type a command…" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="true" aria-controls="command-palette-list" aria-autocomplete="list" />
+      <div class="command-palette-list" id="command-palette-list" role="listbox" aria-label="Commands"></div>
     </div>
   `;
   document.body.appendChild(backdrop);
@@ -197,15 +200,33 @@ export function openPalette() {
   const input = backdrop.querySelector('#command-palette-input');
   const list = backdrop.querySelector('#command-palette-list');
 
+  paletteFocusTrap = new FocusTrap(backdrop, { onClose: closePalette, initialFocus: input });
+  paletteFocusTrap.activate();
+
   input.addEventListener('input', () => {
     filterCommands(input.value);
     renderList(list);
   });
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); moveSelection(1); renderList(list); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); moveSelection(-1); renderList(list); }
-    else if (e.key === 'Enter') { e.preventDefault(); executeSelected(); }
-    else if (e.key === 'Escape') { e.preventDefault(); closePalette(); }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      moveSelection(1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      moveSelection(-1);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      setSelection(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setSelection(filtered.length - 1);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      executeSelected();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closePalette();
+    }
   });
   backdrop.addEventListener('mousedown', (e) => {
     if (e.target === backdrop) closePalette();
@@ -234,14 +255,17 @@ function fuzzyScore(text, query) {
 
 function filterCommands(query) {
   if (!query.trim()) {
-    // Empty query: MRU order first, then registry order
-    filtered = [...commands].sort((a, b) => {
-      const ai = mru.indexOf(a.id), bi = mru.indexOf(b.id);
-      if (ai !== -1 && bi !== -1) return ai - bi;
-      if (ai !== -1) return -1;
-      if (bi !== -1) return 1;
-      return 0;
-    });
+    // Empty query: MRU order first (grouped under Recently Used), then other commands by registry order
+    const mruItems = [];
+    const regularItems = [];
+    for (const mruId of mru) {
+      const found = commands.find(c => c.id === mruId);
+      if (found) mruItems.push({ ...found, group: 'Recently Used' });
+    }
+    for (const c of commands) {
+      if (!mru.includes(c.id)) regularItems.push(c);
+    }
+    filtered = [...mruItems, ...regularItems];
   } else {
     filtered = commands
       .map(c => ({ c, score: fuzzyScore(`${c.title} ${c.group}`, query.trim()) }))
@@ -252,11 +276,29 @@ function filterCommands(query) {
   selectedIndex = 0;
 }
 
+function setSelection(newIndex) {
+  if (filtered.length === 0) return;
+  selectedIndex = Math.max(0, Math.min(filtered.length - 1, newIndex));
+  updateSelectionDOM();
+}
+
 function moveSelection(delta) {
   if (filtered.length === 0) return;
   selectedIndex = (selectedIndex + delta + filtered.length) % filtered.length;
-  const el = document.getElementById(`cp-item-${selectedIndex}`);
-  el?.scrollIntoView({ block: 'nearest' });
+  updateSelectionDOM();
+}
+
+function updateSelectionDOM() {
+  const listEl = document.getElementById('command-palette-list');
+  if (!listEl) return;
+  const items = listEl.querySelectorAll('.command-palette-item');
+  items.forEach((item, i) => {
+    const isSelected = i === selectedIndex;
+    item.classList.toggle('selected', isSelected);
+    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+  });
+  const activeEl = document.getElementById(`cp-item-${selectedIndex}`);
+  activeEl?.scrollIntoView({ block: 'nearest' });
 }
 
 function executeSelected() {
@@ -282,8 +324,11 @@ function renderList(listEl) {
   }
   filtered.forEach((cmd, i) => {
     const item = document.createElement('div');
-    item.className = `command-palette-item${i === selectedIndex ? ' selected' : ''}`;
+    const isSelected = i === selectedIndex;
+    item.className = `command-palette-item${isSelected ? ' selected' : ''}`;
     item.id = `cp-item-${i}`;
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', isSelected ? 'true' : 'false');
     item.innerHTML = `
       <span class="cp-icon">${cmd.icon}</span>
       <span class="cp-title">${escapeHtml(cmd.title)}</span>
@@ -292,7 +337,10 @@ function renderList(listEl) {
     `;
     item.addEventListener('click', () => { selectedIndex = i; executeSelected(); });
     item.addEventListener('mousemove', () => {
-      if (selectedIndex !== i) { selectedIndex = i; listEl.querySelectorAll('.command-palette-item').forEach(el => el.classList.remove('selected')); item.classList.add('selected'); }
+      if (selectedIndex !== i) {
+        selectedIndex = i;
+        updateSelectionDOM();
+      }
     });
     listEl.appendChild(item);
   });

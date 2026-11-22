@@ -25,7 +25,7 @@ body.theme-dark, [data-theme="theme-dark"], [data-theme="orbit-dark"], :root {
 
   --text-primary: #e6edf3;
   --text-primary-bright: #ffffff;
-  --text-secondary: #9aa5b8;
+  --text-secondary: #a0a0a5;
   --text-muted: #64748b;
   --text-link: #58a6ff;
 
@@ -47,6 +47,13 @@ body.theme-dark, [data-theme="theme-dark"], [data-theme="orbit-dark"], :root {
 
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.28);
+
+  /* Standardized Icon Size & Stroke System */
+  --icon-size-sm: 14px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 18px;
+  --icon-size-xl: 22px;
+  --icon-stroke: 1.65px;
 
   --monaco-theme: "orbital-dark-theme";
 }
@@ -76,7 +83,7 @@ body.theme-light, [data-theme="theme-light"], [data-theme="nebula-light"] {
 
   --text-primary: #24292f;
   --text-primary-bright: #1f2328;
-  --text-secondary: #57606a;
+  --text-secondary: #424245;
   --text-muted: #8c959f;
   --text-link: #0969da;
 
@@ -99,12 +106,39 @@ body.theme-light, [data-theme="theme-light"], [data-theme="nebula-light"] {
   --scrollbar-thumb: #c1c7cd;
   --scrollbar-thumb-hover: #a0a6ac;
 
+  /* Standardized Icon Size & Stroke System */
+  --icon-size-sm: 14px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 18px;
+  --icon-size-xl: 22px;
+  --icon-stroke: 1.65px;
+
+  /* Apple HIG Crisp Ambient Shadows for Light Mode */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.10), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  --shadow-sheet: 0 16px 40px -8px rgba(0, 0, 0, 0.14), 0 0 0 1px rgba(0, 0, 0, 0.08);
+
   --monaco-theme: "orbital-light-theme";
 }
 
-/* Light Mode Specific Element Refinements */
+/* Light Mode Specific Element Refinements (WCAG AA Inactive & Hover Contrast) */
+body.theme-light .tab, [data-theme="theme-light"] .tab, [data-theme="nebula-light"] .tab {
+  color: #424245;
+}
+body.theme-light .tab:hover, [data-theme="theme-light"] .tab:hover, [data-theme="nebula-light"] .tab:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: #1f2328;
+}
 body.theme-light .rail-btn, [data-theme="theme-light"] .rail-btn, [data-theme="nebula-light"] .rail-btn {
-  color: #57606a;
+  color: #424245;
+}
+body.theme-light .btn-ghost, [data-theme="theme-light"] .btn-ghost, [data-theme="nebula-light"] .btn-ghost {
+  color: #424245;
+}
+body.theme-light .btn-ghost:hover, [data-theme="theme-light"] .btn-ghost:hover, [data-theme="nebula-light"] .btn-ghost:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+  color: #1f2328;
 }
 body.theme-light .rail-btn:hover, body.theme-light .rail-btn.active,
 [data-theme="theme-light"] .rail-btn:hover, [data-theme="theme-light"] .rail-btn.active,
@@ -314,7 +348,7 @@ body.theme-light .composer-chips-bar button, [data-theme="theme-light"] .compose
 
   --text-primary: #c9d1d9;
   --text-primary-bright: #f0f6fc;
-  --text-secondary: #8b949e;
+  --text-secondary: #a0a0a5;
   --text-muted: #6e7681;
   --text-link: #58a6ff;
 
@@ -336,6 +370,13 @@ body.theme-light .composer-chips-bar button, [data-theme="theme-light"] .compose
 
   --scrollbar-thumb: #30363d;
   --scrollbar-thumb-hover: #484f58;
+
+  /* Standardized Icon Size & Stroke System */
+  --icon-size-sm: 14px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 18px;
+  --icon-size-xl: 22px;
+  --icon-stroke: 1.65px;
 
   --monaco-theme: "vs-dark";
 }
@@ -385,6 +426,13 @@ body.theme-hc, [data-theme="theme-hc"], [data-theme="high-contrast"] {
 
   --scrollbar-thumb: #6fc3df;
   --scrollbar-thumb-hover: #ffffff;
+
+  /* Standardized Icon Size & Stroke System */
+  --icon-size-sm: 14px;
+  --icon-size-md: 16px;
+  --icon-size-lg: 18px;
+  --icon-size-xl: 22px;
+  --icon-stroke: 1.65px;
 
   --monaco-theme: "hc-black";
 }

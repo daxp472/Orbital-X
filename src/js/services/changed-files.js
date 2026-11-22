@@ -7,6 +7,9 @@
 import { state } from '../state/store.js';
 import { invoke } from './tauri.js';
 import { showToast } from './notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
+
+let reviewFocusTrap = null;
 
 // Canonical Map: lowercase relative path -> FileEntry
 // { key, name, relativePath, fullPath, count, lastModified }
@@ -209,6 +212,11 @@ export function openReviewChangesModal() {
   refreshChangedFiles();
   modal.style.display = 'flex';
 
+  if (!reviewFocusTrap) {
+    reviewFocusTrap = new FocusTrap(modal, { onClose: closeReviewChangesModal });
+  }
+  reviewFocusTrap.activate();
+
   const searchInput = document.getElementById('review-files-search');
   if (searchInput) {
     searchInput.value = '';
@@ -219,6 +227,7 @@ export function openReviewChangesModal() {
 }
 
 export function closeReviewChangesModal() {
+  reviewFocusTrap?.deactivate();
   const modal = document.getElementById('modal-review-changes');
   if (modal) modal.style.display = 'none';
 }

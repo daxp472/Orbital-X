@@ -5,6 +5,9 @@
 
 import { invoke } from '../services/tauri.js';
 import { showToast } from '../services/notifications.js';
+import { FocusTrap } from '../utils/focus-trap.js';
+
+let calibFocusTrap = null;
 
 let cachedState = null;
 let currentSurveyStep = 0;
@@ -116,6 +119,14 @@ export function getCachedPersonaState() {
 // CHAT COMPOSER PILL & DROPDOWN UI
 // ==========================================================================
 
+export const PERSONA_EMOJIS = {
+  auto: '✨',
+  atlas: '🛡️',
+  pulse: '⚡',
+  nova: '🤝',
+  vanguard: '🔬'
+};
+
 function updateComposerPillUI(personaId) {
   const iconEl = document.getElementById('persona-pill-icon');
   const nameEl = document.getElementById('persona-pill-name');
@@ -125,8 +136,8 @@ function updateComposerPillUI(personaId) {
     auto: { icon: '✨', name: 'Auto' },
     atlas: { icon: '🛡️', name: 'Atlas' },
     pulse: { icon: '⚡', name: 'Pulse' },
-    nova: { icon: '💡', name: 'Nova' },
-    vanguard: { icon: '🔒', name: 'Vanguard' }
+    nova: { icon: '🤝', name: 'Nova' },
+    vanguard: { icon: '🔬', name: 'Vanguard' }
   }[personaId] || { icon: '✨', name: 'Auto' };
 
   if (iconEl) iconEl.textContent = meta.icon;
@@ -164,9 +175,10 @@ function setupComposerPillEvents() {
       if (!targetId) return;
 
       try {
-        const updated = await invoke('persona_set_active', { personaId: targetId, persona_id: targetId });
+        const updated = await invoke('persona_set_active', { personaId: targetId });
         cachedState = updated;
         updateComposerPillUI(targetId);
+        setupPersonaSettingsUI();
         const nameMap = { auto: 'Auto (Adaptive)', atlas: 'Atlas (Strategic)', pulse: 'Pulse (Minimalist)', nova: 'Nova (Pair Dev)', vanguard: 'Vanguard (Auditor)' };
         showToast(`Personality set to ${nameMap[targetId] || targetId}`, 'info', 2200);
       } catch (err) {
@@ -214,6 +226,11 @@ export function openCalibrationModal(isDeep = false) {
   modal.style.display = 'flex';
   modal.setAttribute('data-mode', isDeep ? 'deep' : 'standard');
 
+  if (!calibFocusTrap) {
+    calibFocusTrap = new FocusTrap(modal, { onClose: closeCalibrationModal });
+  }
+  calibFocusTrap.activate();
+
   const streak = cachedState?.auto_profile?.consecutive_descriptive_count || 0;
   const streakBadge = document.getElementById('calibration-streak-badge');
   if (streakBadge) {
@@ -232,6 +249,7 @@ export function openCalibrationModal(isDeep = false) {
 }
 
 export function closeCalibrationModal() {
+  calibFocusTrap?.deactivate();
   const modal = document.getElementById('modal-persona-calibration');
   if (modal) {
     modal.style.display = 'none';
@@ -244,13 +262,13 @@ function createCalibrationModalDOM() {
   modal.className = 'modal-backdrop persona-calibration-backdrop';
   modal.style.display = 'none';
   modal.innerHTML = `
-    <div class="modal-container persona-calibration-container" role="dialog" aria-modal="true" aria-label="Auto Mode Personality Calibration">
+    <div class="modal-container persona-calibration-container" role="dialog" aria-modal="true" aria-labelledby="calib-modal-title">
       <!-- Header -->
       <div class="modal-header persona-calib-header">
         <div class="calib-header-left">
-          <span class="calib-header-icon">✨</span>
+          <span class="calib-header-icon">${PERSONA_SVGS.auto}</span>
           <div>
-            <div class="calib-header-title">Auto Mode Calibration Studio</div>
+            <div class="calib-header-title" id="calib-modal-title">Auto Mode Calibration Studio</div>
             <div class="calib-header-subtitle">Aligning AI behavior directly with how you code</div>
           </div>
           <span class="calib-streak-pill" id="calibration-streak-badge">Streak: 0/3</span>
@@ -392,8 +410,7 @@ async function submitCalibrationData(descriptiveNote) {
   try {
     const updated = await invoke('persona_submit_survey', {
       answers: surveyAnswers,
-      descriptiveNote: descriptiveNote,
-      descriptive_note: descriptiveNote
+      descriptiveNote: descriptiveNote
     });
     cachedState = updated;
     closeCalibrationModal();
@@ -544,9 +561,7 @@ async function finishDeepSynthesis() {
     try {
       const updated = await invoke('persona_synthesize_deep_profile', {
         interviewLog: deepInterviewTurns,
-        interview_log: deepInterviewTurns,
-        userNotes: deepInterviewTurns.map(t => `${t.question}: ${t.answer}`).join('\n'),
-        user_notes: deepInterviewTurns.map(t => `${t.question}: ${t.answer}`).join('\n')
+        userNotes: deepInterviewTurns.map(t => `${t.question}: ${t.answer}`).join('\n')
       });
       cachedState = updated;
       showToast('✨ Auto-Persona synthesized and locked in! Your unique Behavioral Constitution is now active.', 'success', 4500);
@@ -560,8 +575,56 @@ async function finishDeepSynthesis() {
 }
 
 // ==========================================================================
-// SETTINGS PANEL INTEGRATION (DEEP PERSONA INSPECTOR)
+// SETTINGS PANEL INTEGRATION (APPLE HIG PERSONA STUDIO)
 // ==========================================================================
+
+const PERSONA_CONFIGS = [
+  {
+    id: 'auto',
+    name: 'Auto Mode',
+    badge: 'Adaptive AI',
+    badgeClass: 'adaptive',
+    emoji: '✨',
+    avatarClass: 'auto',
+    desc: 'Learns and refines coding style, detail level, and tone from your ongoing feedback reactions.'
+  },
+  {
+    id: 'atlas',
+    name: 'Atlas',
+    badge: 'Strategic',
+    badgeClass: 'strategic',
+    emoji: '🛡️',
+    avatarClass: 'atlas',
+    desc: 'Chief-of-staff delivery: 1-sentence executive summaries, clean execution, and proactive edge cases.'
+  },
+  {
+    id: 'pulse',
+    name: 'Pulse',
+    badge: 'Minimalist',
+    badgeClass: 'minimal',
+    emoji: '⚡',
+    avatarClass: 'pulse',
+    desc: 'Zero conversational filler. Strictly exact code, unified diffs, and surgical root causes.'
+  },
+  {
+    id: 'nova',
+    name: 'Nova',
+    badge: 'Pair Dev',
+    badgeClass: 'pair',
+    emoji: '🤝',
+    avatarClass: 'nova',
+    desc: 'Warm, collaborative mentor explaining architectural rationale with clear mental models.'
+  },
+  {
+    id: 'vanguard',
+    name: 'Vanguard',
+    badge: 'Auditor',
+    badgeClass: 'auditor',
+    emoji: '🔬',
+    avatarClass: 'vanguard',
+    desc: 'Strict kernel auditor assessing memory safety, race conditions, and architectural invariants.'
+  }
+];
 
 export function setupPersonaSettingsUI() {
   const pane = document.getElementById('spane-persona');
@@ -574,163 +637,114 @@ export function setupPersonaSettingsUI() {
     disliked_traits: [],
     surveys_disabled: false,
     consecutive_descriptive_count: 0,
+    total_turns_in_auto: 0,
+    total_calibrations_completed: 0,
     behavioral_constitution: ''
   };
 
   const activeId = autoProfile.active_persona || 'auto';
 
   pane.innerHTML = `
-    <div class="settings-section persona-settings-container">
-      <div class="apple-settings-header">
-        <div class="apple-header-badge">✨ Intelligence Archetypes</div>
-        <h3 class="apple-settings-title">AI Personalities &amp; Behavioral Alignment</h3>
-        <p class="apple-settings-desc">
-          Select an active interaction archetype or use Auto Mode for self-calibrating intelligence tailored to your programming style.
-        </p>
+    <div class="settings-section">
+      <div class="settings-section-header">
+        <div class="settings-section-title">AI Personalities &amp; Archetypes</div>
+        <div class="settings-section-desc">
+          Choose the communication and architectural persona Orbital X uses across your project. In Auto Mode, your feedback dynamically refines tone, detail, and technical conventions.
+        </div>
       </div>
 
-      <!-- Featured Auto Mode Hero Card -->
-      <div class="apple-hero-card ${activeId === 'auto' ? 'is-active' : ''}" data-set-persona="auto" role="button" tabindex="0">
-        <div class="apple-hero-main">
-          <div class="apple-hero-icon-box">✨</div>
-          <div class="apple-hero-info">
-            <div class="apple-hero-title-row">
-              <span class="apple-hero-name">Auto Mode</span>
-              <span class="apple-badge adaptive">Adaptive AI</span>
-              ${activeId === 'auto' ? '<span class="apple-status-pill active"><span class="pill-dot"></span> Active</span>' : ''}
+      <!-- Apple Inset Grouped Persona Selector -->
+      <div class="persona-selection-group" role="radiogroup" aria-label="AI Personality Archetypes">
+        ${PERSONA_CONFIGS.map(p => {
+          const isSelected = activeId === p.id;
+          return `
+            <div class="persona-option-row ${isSelected ? 'is-active' : ''}" data-set-persona="${p.id}" role="radio" aria-checked="${isSelected}" tabindex="0">
+              <div class="persona-option-left">
+                <div class="persona-option-avatar ${p.avatarClass}">${p.emoji}</div>
+                <div class="persona-option-text">
+                  <div class="persona-option-heading">
+                    <span class="persona-option-name">${escapeHtml(p.name)}</span>
+                    <span class="persona-tagline-badge ${p.badgeClass}">${escapeHtml(p.badge)}</span>
+                    ${isSelected ? '<span class="persona-active-indicator"><span class="dot"></span> Active</span>' : ''}
+                  </div>
+                  <div class="persona-option-desc">${escapeHtml(p.desc)}</div>
+                </div>
+              </div>
+              <div class="persona-option-radio ${isSelected ? 'checked' : ''}" aria-hidden="true">
+                ${isSelected ? '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"/></svg>' : ''}
+              </div>
             </div>
-            <div class="apple-hero-tagline">Continuously learns from your coding patterns, prompt cadence, and feedback reactions.</div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Adaptive Intelligence Studio Section -->
+    <div class="settings-section" style="margin-top: 24px;">
+      <div class="settings-section-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap;">
+        <div>
+          <div class="settings-section-title">Adaptive Intelligence Studio</div>
+          <div class="settings-section-desc">
+            Live telemetry and behavioral alignment rules learned during your coding sessions.
           </div>
-          <button class="apple-select-btn ${activeId === 'auto' ? 'selected' : ''}" type="button">
-            ${activeId === 'auto' ? '✓ Selected' : 'Select'}
+        </div>
+        <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center;">
+          <button class="btn btn-primary btn-sm" id="btn-settings-open-calibration" type="button">
+            Calibrate Preferences...
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btn-settings-reset-auto" type="button" title="Reset Auto constitution to factory defaults">
+            Reset Auto
           </button>
         </div>
-        <div class="apple-hero-footer">
-          <div class="apple-stat-item">Calibration Streak: <strong>${autoProfile.consecutive_descriptive_count}/3</strong></div>
-          <div class="apple-stat-divider"></div>
-          <div class="apple-stat-item">Calibrations Completed: <strong>${autoProfile.total_calibrations_completed || 0}</strong></div>
-          <div class="apple-stat-divider"></div>
-          <div class="apple-stat-item">Turns in Auto: <strong>${autoProfile.total_turns_in_auto || 0}</strong></div>
-          <div class="apple-stat-divider"></div>
-          <div class="apple-stat-item">Periodic Surveys: <strong>${autoProfile.surveys_disabled ? 'Disabled' : 'Enabled'}</strong></div>
-        </div>
       </div>
 
-      <!-- Specialized Archetypes Inset Group -->
-      <div class="apple-group-label">Specialized Archetypes</div>
-      <div class="apple-archetypes-grid">
-        <div class="apple-archetype-card ${activeId === 'atlas' ? 'is-active' : ''}" data-set-persona="atlas" role="button" tabindex="0">
-          <div class="apple-card-left">
-            <div class="apple-card-avatar">🛡️</div>
-            <div class="apple-card-text">
-              <div class="apple-card-title-row">
-                <span class="apple-card-name">Atlas</span>
-                <span class="apple-badge">Strategic</span>
-              </div>
-              <div class="apple-card-oneliner">1-sentence executive summaries and proactive downstream edge cases.</div>
-            </div>
-          </div>
-          <div class="apple-radio-indicator ${activeId === 'atlas' ? 'checked' : ''}">
-            ${activeId === 'atlas' ? '✓' : ''}
+      <!-- Telemetry Bar -->
+      <div class="persona-telemetry-bar">
+        <div class="telemetry-pill">Turns in Auto: <strong>${autoProfile.total_turns_in_auto || 0}</strong></div>
+        <div class="telemetry-pill">Calibrations: <strong>${autoProfile.total_calibrations_completed || 0}</strong></div>
+        <div class="telemetry-pill">Calibration Streak: <strong>${autoProfile.consecutive_descriptive_count || 0}/3</strong></div>
+        <label class="telemetry-pill" style="cursor: pointer; user-select: none;">
+          <input type="checkbox" id="persona-toggle-surveys-chk" ${autoProfile.surveys_disabled ? '' : 'checked'} style="margin-right: 6px; cursor: pointer;">
+          Surveys Enabled
+        </label>
+      </div>
+
+      <!-- Traits Grid -->
+      <div class="persona-traits-grid">
+        <div class="persona-traits-box">
+          <div class="traits-box-label">Reinforced Signals (👍 Feedback)</div>
+          <div class="traits-chips-container">
+            ${autoProfile.liked_traits.length ? autoProfile.liked_traits.map(t => `<span class="trait-chip liked">✓ ${escapeHtml(t.replace(/_/g, ' '))}</span>`).join('') : '<span class="trait-empty">No positive signals recorded yet</span>'}
           </div>
         </div>
-
-        <div class="apple-archetype-card ${activeId === 'pulse' ? 'is-active' : ''}" data-set-persona="pulse" role="button" tabindex="0">
-          <div class="apple-card-left">
-            <div class="apple-card-avatar">⚡</div>
-            <div class="apple-card-text">
-              <div class="apple-card-title-row">
-                <span class="apple-card-name">Pulse</span>
-                <span class="apple-badge">Minimalist</span>
-              </div>
-              <div class="apple-card-oneliner">Zero conversational filler. Strictly code, unified diffs, and root causes.</div>
-            </div>
-          </div>
-          <div class="apple-radio-indicator ${activeId === 'pulse' ? 'checked' : ''}">
-            ${activeId === 'pulse' ? '✓' : ''}
-          </div>
-        </div>
-
-        <div class="apple-archetype-card ${activeId === 'nova' ? 'is-active' : ''}" data-set-persona="nova" role="button" tabindex="0">
-          <div class="apple-card-left">
-            <div class="apple-card-avatar">💡</div>
-            <div class="apple-card-text">
-              <div class="apple-card-title-row">
-                <span class="apple-card-name">Nova</span>
-                <span class="apple-badge">Pair Dev</span>
-              </div>
-              <div class="apple-card-oneliner">Warm, encouraging mentor explaining architecture with clear mental models.</div>
-            </div>
-          </div>
-          <div class="apple-radio-indicator ${activeId === 'nova' ? 'checked' : ''}">
-            ${activeId === 'nova' ? '✓' : ''}
-          </div>
-        </div>
-
-        <div class="apple-archetype-card ${activeId === 'vanguard' ? 'is-active' : ''}" data-set-persona="vanguard" role="button" tabindex="0">
-          <div class="apple-card-left">
-            <div class="apple-card-avatar">🔒</div>
-            <div class="apple-card-text">
-              <div class="apple-card-title-row">
-                <span class="apple-card-name">Vanguard</span>
-                <span class="apple-badge">Auditor</span>
-              </div>
-              <div class="apple-card-oneliner">Strict kernel auditor assessing memory safety, race conditions, and invariants.</div>
-            </div>
-          </div>
-          <div class="apple-radio-indicator ${activeId === 'vanguard' ? 'checked' : ''}">
-            ${activeId === 'vanguard' ? '✓' : ''}
+        <div class="persona-traits-box">
+          <div class="traits-box-label">Avoided Constraints (👎 Feedback)</div>
+          <div class="traits-chips-container">
+            ${autoProfile.disliked_traits.length ? autoProfile.disliked_traits.map(t => `<span class="trait-chip disliked">✕ ${escapeHtml(t.replace(/_/g, ' '))}</span>`).join('') : '<span class="trait-empty">No negative constraints recorded yet</span>'}
           </div>
         </div>
       </div>
 
-      <!-- Auto Alignment & Learned Constitution Inset Box -->
-      <div class="apple-alignment-panel">
-        <div class="apple-panel-header">
-          <div>
-            <h4 class="apple-panel-title">Learned Behavior &amp; Alignment Studio</h4>
-            <div class="apple-panel-subtitle">Dynamic signals ingested into the active Auto Behavioral Constitution.</div>
+      <!-- Active Constitution Inset -->
+      <div class="persona-constitution-block">
+        <div class="constitution-toolbar">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="constitution-title">Active Behavioral Constitution</span>
+            <span class="constitution-pill-state">${activeId === 'auto' ? 'Dynamic Auto Profile' : `${activeId.toUpperCase()} (Static Archetype)`}</span>
           </div>
-          <div class="apple-panel-actions">
-            <button class="btn btn-primary btn-sm" id="btn-settings-open-calibration">🚀 Launch Calibration Studio</button>
-            <button class="btn btn-secondary btn-sm" id="btn-settings-reset-auto">↺ Reset Auto Profile</button>
-          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-copy-constitution" type="button" style="font-size: 11px; padding: 2px 8px;">Copy</button>
         </div>
-
-        <div class="apple-signals-row">
-          <div class="apple-signal-group">
-            <div class="signal-title">Reinforced Traits (👍 Like Feedback):</div>
-            <div class="traits-chips-row">
-              ${autoProfile.liked_traits.length ? autoProfile.liked_traits.map(t => `<span class="trait-chip liked">✓ ${escapeHtml(t.replace(/_/g, ' '))}</span>`).join('') : '<span class="trait-empty">No positive signals yet</span>'}
-            </div>
-          </div>
-          <div class="apple-signal-group">
-            <div class="signal-title">Avoided Constraints (👎 Dislike Directives):</div>
-            <div class="traits-chips-row">
-              ${autoProfile.disliked_traits.length ? autoProfile.disliked_traits.map(t => `<span class="trait-chip disliked">✕ ${escapeHtml(t.replace(/_/g, ' '))}</span>`).join('') : '<span class="trait-empty">No dislike constraints recorded</span>'}
-            </div>
-          </div>
-        </div>
-
-        <div class="constitution-container">
-          <div class="constitution-header-row">
-            <span class="signal-title">Active Behavioral Constitution:</span>
-            <span class="constitution-badge">${activeId === 'auto' ? 'Auto Dynamic' : `${activeId.toUpperCase()} (Locked)`}</span>
-          </div>
-          <pre class="constitution-viewer">${escapeHtml(autoProfile.behavioral_constitution)}</pre>
-        </div>
+        <pre class="constitution-code-box" id="persona-constitution-pre">${escapeHtml(autoProfile.behavioral_constitution || 'No active constitution loaded.')}</pre>
       </div>
     </div>
   `;
 
-  // Bind activation clicks on entire cards
-  pane.querySelectorAll('[data-set-persona]').forEach(card => {
-    const id = card.getAttribute('data-set-persona');
-    card.addEventListener('click', async (e) => {
-      // Don't re-trigger if clicking internal action buttons
-      if (e.target.closest('#btn-settings-open-calibration') || e.target.closest('#btn-settings-reset-auto')) return;
+  // Bind activation clicks on persona rows
+  pane.querySelectorAll('[data-set-persona]').forEach(row => {
+    const id = row.getAttribute('data-set-persona');
+    row.addEventListener('click', async () => {
       try {
-        const updated = await invoke('persona_set_active', { personaId: id, persona_id: id });
+        const updated = await invoke('persona_set_active', { personaId: id });
         cachedState = updated;
         updateComposerPillUI(id);
         setupPersonaSettingsUI();
@@ -738,6 +752,13 @@ export function setupPersonaSettingsUI() {
         showToast(`Activated ${nameMap[id] || id} personality`, 'success', 2000);
       } catch (err) {
         showToast(`Failed to activate persona: ${err}`, 'error', 3000);
+      }
+    });
+
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        row.click();
       }
     });
   });
@@ -761,6 +782,28 @@ export function setupPersonaSettingsUI() {
         showToast(`Reset error: ${err}`, 'error', 3000);
       }
     }
+  });
+
+  // Bind Survey Toggle
+  pane.querySelector('#persona-toggle-surveys-chk')?.addEventListener('change', async (e) => {
+    try {
+      const updated = await invoke('persona_toggle_surveys', { enabled: e.target.checked });
+      cachedState = updated;
+      showToast(e.target.checked ? 'Surveys enabled' : 'Surveys disabled', 'info', 2000);
+    } catch (err) {
+      showToast(`Toggle error: ${err}`, 'error', 3000);
+    }
+  });
+
+  // Bind Copy Constitution
+  pane.querySelector('#btn-copy-constitution')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const text = autoProfile.behavioral_constitution || '';
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Constitution copied to clipboard', 'success', 1800);
+    }).catch(() => {
+      showToast('Failed to copy', 'error', 2000);
+    });
   });
 }
 

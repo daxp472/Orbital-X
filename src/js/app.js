@@ -28,6 +28,11 @@ import { initReviewChangesBar } from './services/changed-files.js';
 import { initTimeTravel } from './components/time-travel.js';
 import { checkForUpdatesManually, checkOnStartupOrWorkspace, CURRENT_VERSION } from './components/updater.js';
 import { getAllBindings, comboFromEvent } from './services/keybindings.js';
+import { FocusTrap } from './utils/focus-trap.js';
+
+let shortcutsFocusTrap = null;
+let helpFocusTrap = null;
+let aboutFocusTrap = null;
 
 window.showToast = showToast;
 let ipcCount = 0;
@@ -848,6 +853,14 @@ function initActivityRail() {
       } else {
         sidebar.classList.remove('hidden');
         btn.classList.add('active');
+        // Mutually exclusive drawers below 1024px: opening Left Explorer collapses Right AI Chat
+        if (window.innerWidth <= 1024) {
+          const agent = document.getElementById('agent-panel');
+          if (agent && !agent.classList.contains('hidden')) {
+            agent.classList.add('hidden');
+            document.getElementById('rail-agent')?.classList.remove('active');
+          }
+        }
         const viewElem = document.getElementById(item.view);
         if (viewElem) viewElem.style.display = 'flex';
         if (item.id === 'rail-memory') refreshMemories();
@@ -870,6 +883,14 @@ function initActivityRail() {
     if (panel) {
       panel.classList.toggle('hidden');
       btn?.classList.toggle('active', !panel.classList.contains('hidden'));
+      // Mutually exclusive drawers below 1024px: opening Right AI Chat collapses Left Explorer
+      if (!panel.classList.contains('hidden') && window.innerWidth <= 1024) {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar && !sidebar.classList.contains('hidden')) {
+          sidebar.classList.add('hidden');
+          document.querySelectorAll('.rail-btn:not(#rail-agent)').forEach(b => b.classList.remove('active'));
+        }
+      }
     }
   });
 
@@ -1185,9 +1206,39 @@ export function initResponsiveSplitScreenEngine() {
       b.classList.toggle('active', b.dataset.pane === pane);
     });
 
-    if (pane === 'explorer') {
-      const sidebar = document.getElementById('sidebar');
-      if (sidebar) sidebar.classList.remove('hidden');
+    const sidebar = document.getElementById('sidebar');
+    const agentPanel = document.getElementById('agent-panel');
+    const centerArea = document.querySelector('.center-work-area');
+    const editorContainer = document.getElementById('editor-container');
+
+    // Reset lingering desktop resizer inline styles that cause blank or squished panes in 1/4 screen
+    if (sidebar) {
+      sidebar.style.removeProperty('width');
+      sidebar.style.removeProperty('min-width');
+      sidebar.style.removeProperty('max-width');
+      sidebar.style.removeProperty('flex');
+      sidebar.style.removeProperty('display');
+      if (pane === 'explorer') sidebar.classList.remove('hidden');
+    }
+    if (agentPanel) {
+      agentPanel.style.removeProperty('width');
+      agentPanel.style.removeProperty('min-width');
+      agentPanel.style.removeProperty('max-width');
+      agentPanel.style.removeProperty('flex');
+      agentPanel.style.removeProperty('display');
+      if (pane === 'agent') agentPanel.classList.remove('hidden');
+    }
+    if (centerArea) {
+      centerArea.style.removeProperty('width');
+      centerArea.style.removeProperty('min-width');
+      centerArea.style.removeProperty('flex');
+      centerArea.style.removeProperty('display');
+    }
+    if (editorContainer) {
+      editorContainer.style.removeProperty('width');
+      editorContainer.style.removeProperty('min-width');
+      editorContainer.style.removeProperty('flex');
+      editorContainer.style.removeProperty('display');
     }
 
     if (pane === 'editor') {
@@ -1208,21 +1259,46 @@ export function initResponsiveSplitScreenEngine() {
   function applyResponsiveLayout() {
     const w = window.innerWidth;
     const body = document.body;
+    const sidebar = document.getElementById('sidebar');
+    const agentPanel = document.getElementById('agent-panel');
 
     if (w < 640) {
       body.classList.remove('layout-full-screen', 'layout-half-screen');
       body.classList.add('layout-quarter-screen');
-      if (!body.classList.contains('focus-pane-explorer') &&
-          !body.classList.contains('focus-pane-editor') &&
-          !body.classList.contains('focus-pane-agent')) {
-        setFocusPane(activeFocusPane);
-      }
+      setFocusPane(activeFocusPane);
     } else if (w < 960) {
       body.classList.remove('layout-full-screen', 'layout-quarter-screen', 'focus-pane-explorer', 'focus-pane-editor', 'focus-pane-agent');
       body.classList.add('layout-half-screen');
+      // Clean up quarter-screen inline resets and restore desktop sizing from saved prefs
+      if (sidebar && !sidebar.style.width) {
+        const savedW = localStorage.getItem('orbital_sidebar_width') || '260px';
+        sidebar.style.width = savedW;
+      }
+      if (agentPanel && !agentPanel.style.width) {
+        const savedW = localStorage.getItem('orbital_panel_agent_w') || '380px';
+        agentPanel.style.width = `${savedW}px`;
+      }
+      // Mutually exclusive drawers below 1024px: if both open, close one to preserve Monaco editor width
+      if (sidebar && !sidebar.classList.contains('hidden') && agentPanel && !agentPanel.classList.contains('hidden')) {
+        agentPanel.classList.add('hidden');
+        document.getElementById('rail-agent')?.classList.remove('active');
+      }
     } else {
       body.classList.remove('layout-half-screen', 'layout-quarter-screen', 'focus-pane-explorer', 'focus-pane-editor', 'focus-pane-agent');
       body.classList.add('layout-full-screen');
+      // Graceful restoration for full-screen desktop mode
+      if (sidebar && (!sidebar.style.width || sidebar.style.width === '100%')) {
+        const savedW = localStorage.getItem('orbital_sidebar_width') || '260px';
+        sidebar.style.width = savedW;
+      }
+      if (agentPanel && (!agentPanel.style.width || agentPanel.style.width === '100%')) {
+        const savedW = localStorage.getItem('orbital_panel_agent_w') || '380px';
+        agentPanel.style.width = `${savedW}px`;
+      }
+      const resizerSidebar = document.getElementById('resizer-sidebar');
+      const resizerAgent = document.getElementById('resizer-agent');
+      if (resizerSidebar) resizerSidebar.style.display = '';
+      if (resizerAgent) resizerAgent.style.display = agentPanel?.classList.contains('hidden') ? 'none' : '';
     }
 
     requestAnimationFrame(() => {
@@ -1248,10 +1324,15 @@ export function openShortcutsHelp() {
   const modal = document.getElementById('modal-shortcuts-help');
   if (modal) {
     modal.style.display = 'flex';
+    if (!shortcutsFocusTrap) {
+      shortcutsFocusTrap = new FocusTrap(modal, { onClose: closeShortcutsHelp });
+    }
+    shortcutsFocusTrap.activate();
   }
 }
 
 export function closeShortcutsHelp() {
+  shortcutsFocusTrap?.deactivate();
   const modal = document.getElementById('modal-shortcuts-help');
   if (modal) {
     modal.style.display = 'none';
@@ -1339,9 +1420,21 @@ function initShortcutsHelpOverlay() {
   document.getElementById('btn-check-updates-settings')?.addEventListener('click', checkForUpdatesManually);
 }
 
-function openHelpModal() {
+export function openHelpModal() {
   const modal = document.getElementById('modal-help');
-  if (modal) modal.style.display = 'flex';
+  if (modal) {
+    modal.style.display = 'flex';
+    if (!helpFocusTrap) {
+      helpFocusTrap = new FocusTrap(modal, { onClose: closeHelpModal });
+    }
+    helpFocusTrap.activate();
+  }
+}
+
+export function closeHelpModal() {
+  helpFocusTrap?.deactivate();
+  const modal = document.getElementById('modal-help');
+  if (modal) modal.style.display = 'none';
 }
 
 function initAboutModal() {
@@ -1359,10 +1452,17 @@ function initAboutModal() {
       if (badge) badge.textContent = `Version ${v} • Desktop Release`;
       if (btnAbout) btnAbout.title = `Orbital X — v${v} (Click for About)`;
     } catch (_) {}
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+      modal.style.display = 'flex';
+      if (!aboutFocusTrap) {
+        aboutFocusTrap = new FocusTrap(modal, { onClose: closeAbout });
+      }
+      aboutFocusTrap.activate();
+    }
   };
 
   const closeAbout = () => {
+    aboutFocusTrap?.deactivate();
     if (modal) modal.style.display = 'none';
   };
 
@@ -1474,18 +1574,46 @@ function initActivityCenter() {
     });
   }
 
-  // Modern tabs
-  const tabs = document.querySelectorAll('.notif-tabs .notif-tab');
-  tabs.forEach(tab => {
+  // Modern tabs with ARIA tablist & arrow-key navigation
+  const tabs = Array.from(document.querySelectorAll('.notif-tabs .notif-tab'));
+  tabs.forEach((tab, idx) => {
+    const isActive = tab.classList.contains('active');
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    tab.setAttribute('tabindex', isActive ? '0' : '-1');
+
     tab.addEventListener('click', () => {
       tabs.forEach(t => {
         t.classList.remove('active');
         t.setAttribute('aria-selected', 'false');
+        t.setAttribute('tabindex', '-1');
       });
       tab.classList.add('active');
       tab.setAttribute('aria-selected', 'true');
+      tab.setAttribute('tabindex', '0');
       currentActivityFilter = tab.dataset.filter || 'all';
       renderActivityList(currentActivityFilter);
+    });
+
+    tab.addEventListener('keydown', (e) => {
+      let targetIdx = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        targetIdx = (idx + 1) % tabs.length;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        targetIdx = (idx - 1 + tabs.length) % tabs.length;
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        targetIdx = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        targetIdx = tabs.length - 1;
+      }
+      if (targetIdx >= 0) {
+        tabs[targetIdx].focus();
+        tabs[targetIdx].click();
+      }
     });
   });
 
