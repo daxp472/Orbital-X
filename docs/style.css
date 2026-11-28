@@ -4,24 +4,24 @@
    ========================================================================== */
 
 :root {
-  --bg-dark: #07090e;
-  --bg-card: rgba(13, 18, 28, 0.85);
-  --bg-surface: rgba(22, 28, 42, 0.7);
-  --bg-glass: rgba(8, 10, 16, 0.72);
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-glow: rgba(57, 197, 187, 0.35);
+  --bg-dark: #06080d;
+  --bg-card: rgba(12, 16, 26, 0.88);
+  --bg-surface: rgba(20, 26, 40, 0.76);
+  --bg-glass: rgba(8, 11, 18, 0.78);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(45, 212, 191, 0.42);
 
-  --accent-cyan: #39c5bb;
-  --accent-cyan-glow: rgba(57, 197, 187, 0.4);
-  --accent-purple: #bc8cff;
-  --accent-purple-glow: rgba(188, 140, 255, 0.35);
-  --accent-orange: #ff9f0a;
-  --accent-green: #30d158;
-  --accent-blue: #2997ff;
+  --accent-cyan: #2dd4bf;
+  --accent-cyan-glow: rgba(45, 212, 191, 0.42);
+  --accent-purple: #818cf8;
+  --accent-purple-glow: rgba(129, 140, 248, 0.36);
+  --accent-orange: #fb923c;
+  --accent-green: #34d399;
+  --accent-blue: #38bdf8;
 
-  --text-primary: #f0f6fc;
+  --text-primary: #f8fafc;
   --text-primary-bright: #ffffff;
-  --text-secondary: #9aa5b8;
+  --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;

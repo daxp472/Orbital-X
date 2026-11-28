@@ -1475,14 +1475,93 @@ async function handleSend() {
     }
   }
 
-  // H3: expand slash commands into full prompts
-  if (promptText.startsWith('/')) {
-    const expanded = expandSlashCommand(promptText);
-    if (expanded && !expanded.passthrough) {
-      promptText = expanded.text;
-    } else if (!expanded) {
-      showToast(`Unknown command — try ${SLASH_COMMANDS.slice(0, 3).map(c => c.cmd).join(', ')}…`, 'info', 2600);
+  // H3: expand slash commands & direct skill commands (including `npx skills add ...`)
+  let explicitSkillIds = [];
+  const isNpxSkillsAdd = /^\s*(?:npx\s+)?skills\s+add\s+/i.test(promptText);
+  if (promptText.startsWith('/') || isNpxSkillsAdd) {
+    const trimmedCmd = promptText.trim();
+    const [firstTok, ...restToks] = trimmedCmd.split(/\s+/);
+    const cmdLower = firstTok.toLowerCase();
+
+    if (cmdLower === '/install-skill' || isNpxSkillsAdd) {
+      const targetUrl = isNpxSkillsAdd ? trimmedCmd : restToks.join(' ').trim();
+      if (!targetUrl) {
+        showToast('Usage: /install-skill <github-url, owner/repo, or npx skills add ...>', 'warning', 3000);
+        return;
+      }
+      inputElem.value = '';
+      inputElem.style.height = 'auto';
+      updateTokenEstimate('');
+      appendTimelineCard('user', trimmedCmd, Date.now(), { messageId: newMessageId() });
+      try {
+        showToast('Discovering & fetching SKILL.md from GitHub…', 'info', 2800);
+        const res = await invoke('skills_install_from_url', { url: targetUrl });
+        if (res && res.success !== false) {
+          const { refreshSkills, renderSkillsPanel } = await import('./skills.js');
+          await refreshSkills();
+          renderSkillsPanel();
+
+          const companionNote = res.companionFilesCount > 0
+            ? `\n• Indexed **${res.companionFilesCount}** companion reference/script files for local models.`
+            : '';
+          const moreSkills = Array.isArray(res.discoveredSkills) && res.discoveredSkills.length > 0
+            ? `\n\n**More skills found in this repository:**\n` +
+              res.discoveredSkills.map(s => `• \`${s.id}\` — install with \`/install-skill ${s.url}\``).join('\n')
+            : '';
+
+          appendTimelineCard(
+            'assistant',
+            `✓ Installed skill **${res.name || res.id}** (\`${res.id}\` v${res.version || '1.0.0'}).${companionNote}\n\nRun it anytime with \`/skill ${res.id} <your task>\` or \`@skill:${res.id}\`.${moreSkills}`,
+            Date.now(),
+            { messageId: newMessageId() }
+          );
+          import('../editor/monaco.js').then(m => m.openSkillDocTab(res));
+        } else {
+          appendTimelineCard('assistant', `Failed to install skill: ${res?.error || 'Unknown error'}`, Date.now(), { messageId: newMessageId() });
+        }
+      } catch (e) {
+        appendTimelineCard('assistant', `Skill install error: ${e}`, Date.now(), { messageId: newMessageId() });
+      }
       return;
+    }
+
+    if (cmdLower === '/skill') {
+      const skillArg = (restToks[0] || '').trim();
+      const taskArg = restToks.slice(1).join(' ').trim();
+      if (!skillArg) {
+        showToast('Usage: /skill <skill-id-or-name> [task]', 'warning', 3000);
+        return;
+      }
+      const { getInstalledSkills, refreshSkills } = await import('./skills.js');
+      let installed = getInstalledSkills();
+      if (!installed.length) {
+        await refreshSkills();
+        installed = getInstalledSkills();
+      }
+      const needle = skillArg.toLowerCase();
+      const matched = installed.find(
+        s => String(s.id || '').toLowerCase() === needle || String(s.name || '').toLowerCase() === needle
+      ) || installed.find(
+        s => String(s.id || '').toLowerCase().includes(needle) || String(s.name || '').toLowerCase().includes(needle)
+      );
+      if (!matched) {
+        const available = installed.slice(0, 6).map(s => s.id).join(', ') || 'none';
+        showToast(`Skill "${skillArg}" not found. Installed: ${available}`, 'warning', 4000);
+        return;
+      }
+      explicitSkillIds = [matched.id];
+      promptText = taskArg
+        ? `[Skill: ${matched.name}] ${taskArg}`
+        : `Execute the "${matched.name}" skill protocol on the active file and workspace.`;
+      showToast(`⚡ Activated skill: ${matched.name}`, 'success', 2000);
+    } else {
+      const expanded = expandSlashCommand(promptText);
+      if (expanded && !expanded.passthrough) {
+        promptText = expanded.text;
+      } else if (!expanded) {
+        showToast(`Unknown command — try ${SLASH_COMMANDS.slice(0, 4).map(c => c.cmd).join(', ')}…`, 'info', 2600);
+        return;
+      }
     }
   }
 
@@ -1564,7 +1643,7 @@ async function handleSend() {
     if (isComplexRequest(promptText)) {
       await generateAndPresentPlan(promptText);
     } else {
-      await runAgentLoop(effectivePrompt);
+      await runAgentLoop(effectivePrompt, null, null, explicitSkillIds);
     }
   } catch (err) {
     console.error("Agent error:", err);
@@ -1587,6 +1666,8 @@ async function handleSend() {
 // ==========================================================================
 
 const SLASH_COMMANDS = [
+  { cmd: '/skill', desc: 'Activate & run a skill (e.g. /skill tdd-workflow <task>)' },
+  { cmd: '/install-skill', desc: 'Install a SKILL.md directly from GitHub URL or owner/repo' },
   { cmd: '/plan', desc: 'Generate an implementation plan for a task' },
   { cmd: '/explain', desc: 'Explain the currently open file' },
   { cmd: '/fix', desc: 'Fix errors in the current file' },
@@ -1654,7 +1735,8 @@ function renderComposerDropdown(kind, items, index, inputEl) {
     if (kind === 'slash') {
       el.innerHTML = `<span class="cp-icon">⌘</span><span class="cp-title" style="font-family: var(--font-mono);">${escapeHtml(item.cmd)}</span><span class="cp-group">${escapeHtml(item.desc)}</span>`;
     } else {
-      const icon = item.type === 'git' ? '🌿' :
+      const icon = item.type === 'skill' ? '⚡' :
+                   item.type === 'git' ? '🌿' :
                    item.type === 'terminal' ? '🖥️' :
                    item.type === 'symbol' ? '🔣' :
                    item.type === 'codebase' ? '🌐' : '📄';
@@ -1737,7 +1819,28 @@ async function handleComposerInput(inputEl) {
       } catch (_) {}
     }
 
-    const items = [...systemTokens, ...matchedFiles, ...matchedSymbols].slice(0, 14);
+    // Installed Skills (@skill:<id>)
+    let matchedSkills = [];
+    try {
+      const { getInstalledSkills } = await import('./skills.js');
+      const skillQ = q.startsWith('skill:') ? q.slice(6) : q;
+      if (q.startsWith('skill') || q.length >= 1) {
+        matchedSkills = getInstalledSkills()
+          .filter(s => s.enabled && (
+            q.startsWith('skill') ||
+            String(s.id || '').toLowerCase().includes(skillQ) ||
+            String(s.name || '').toLowerCase().includes(skillQ)
+          ))
+          .slice(0, 5)
+          .map(s => ({
+            type: 'skill',
+            label: `skill:${s.id}`,
+            desc: `${s.name}${s.whenToUse ? ' — ' + s.whenToUse : ''}`
+          }));
+      }
+    } catch (_) {}
+
+    const items = [...matchedSkills, ...systemTokens, ...matchedFiles, ...matchedSymbols].slice(0, 14);
     atState = { open: true, items, index: 0 };
     renderComposerDropdown('at', items, 0, inputEl);
     return;
@@ -2303,7 +2406,7 @@ function updateContextMeter(promptTokens, numCtx, tokensPerSecond) {
 // Agent execution loop
 // ============================================================================
 
-async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null) {
+async function runAgentLoop(initialUserPrompt, activeTask = null, plan = null, explicitSkillIds = []) {
   const evidenceLedger = getActiveEvidenceLedger();
   const turnModifiedFiles = new Map();
   let iteration = 0;
@@ -2338,14 +2441,20 @@ ${recentActions.map(a => `  • ${a}`).join('\n') || '  • Session ready. No pr
 - Anti-Loop Invariant: Completed tasks and files listed above are ALREADY DONE. Never re-write, re-scaffold, or repeat them. Proceed directly to the next pending step.
 - TIER 2: Information Directory (Knowledge Library): Past iteration changelogs, architecture records, and historical library facts are indexed in the library. If you need historical context or past data without wasting your context window, call the tool \`query_information_directory(query="...")\`.`;
 
-  // 1b. Enabled skill packs — a digest so the model knows what exists; the
-  // full skill body is read on demand via the read_skill tool.
+  // 1b. Enabled skill packs — lightweight index digest + high-priority
+  // [ACTIVE SKILL DIRECTIVE] injection for triggered/glob-matched/explicit skills.
   let skillsDigest = '';
+  let activeSkillDirectives = '';
   try {
-    const { getSkillsDigest } = await import('./skills.js');
+    const { getSkillsDigest, resolveActiveSkillDirectives } = await import('./skills.js');
     skillsDigest = getSkillsDigest() || '';
+    activeSkillDirectives = await resolveActiveSkillDirectives(
+      initialUserPrompt,
+      activeTab ? (activeTab.relativePath || activeTab.path || '') : '',
+      explicitSkillIds
+    );
   } catch (e) {
-    console.warn('Skills digest unavailable:', e);
+    console.warn('Skills digest/directives unavailable:', e);
   }
 
   // 1c. Enabled prompt-pack extensions (declarative agent guidance)
@@ -2409,41 +2518,21 @@ IMPORTANT INSTRUCTION: Call update_task_status(task_id="${activeTask.id}", statu
 • Preceding Outcome: ${activeExecutionMemory.lastTurn.assistantSummary}
 CRITICAL GROUNDING DIRECTIVE: When the user asks a follow-up ("add sum function to it", "test that", "do it in python", "change the styling", etc.), THEY ARE DIRECTLY CONTINUING FROM THE PRECEDING TARGET FILE AND OUTCOME ABOVE. You already know the target file and implementation context. Never ask "which file?" or lose previous continuity.` : '';
 
-  const systemPrompt = `You are Orbital X Agent.\nMode: ${state.agentMode.toUpperCase()}. Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${conversationalContinuityBlock}${skillsDigest}${promptPackText}${taskPromptSection}\n\n${modeInstructions}
-
-## IDENTITY & ARCHITECTURE KNOWLEDGE:
-- Name & Purpose: You are Orbital X, an ultra-fast, native desktop AI coding assistant and IDE.
-- Creator & Team: Created and engineered by Dax Patel and the Orbital X Team.
-- Core Architecture:
-  * Native Core: Built with Rust and Tauri v2 backend, running lean at ~95MB idle memory.
-  * Monaco Editor: Code editing with full AST diagnostics, syntax highlighting, minimap, and smart inline completions.
-  * Local-First AI & Zero-Cloud: 100% offline local model inference via Ollama (Qwen2.5-Coder, DeepSeek-Coder, Llama 3, Phi-4). Zero telemetry leaks, zero external API costs, complete user privacy.
-  * Multi-Model Speculative Streaming: Real-time dual-model speculative generation with ultra-fast draft token streams validated in the background by core models.
-  * Tri-Mode Security Confinement: Dev Mode (interactive diff approval), Agent Pro Mode (autonomous safe workspace execution), and User Mode (strict confirmation).
-  * Time-Travel Agent Journal: Visual git-like timeline tracking file mutations with instant 1-click snapshot rollback.
-  * Zero-Allocation Native Telemetry: Real-time native hardware monitoring measuring Tokens/Sec, VRAM allocation, CPU/GPU compute, and system metrics.
-- Conversational & Welcoming Persona:
-  * When users or curious non-programmers ask who you are, who built you, what this app is, how it works under the hood, or just want general conversation, be friendly, welcoming, clear, enthusiastic, and helpful.
-  * Explain your capabilities and guide them on what they can do with Orbital X (coding, exploring files, running terminals, testing, or having offline conversations).
-
-${getFeedbackDirectivesForPrompt()}
-${(() => {
+  // Structured 4-Stage Prompt Pipeline for Local & Cloud Models:
+  // [SYSTEM & PERSONA] -> [ACTIVE SKILL] -> [FOCUSED AST & MEMORY SLICE] -> [USER TASK]
   const pConst = getActivePersonaConstitution();
   const pId = getActivePersonaId() || 'auto';
-  return pConst ? `\n## ACTIVE PERSONALITY CONSTITUTION & BEHAVIORAL PROTOCOL (${pId.toUpperCase()}):\n${pConst}\n` : '';
-})()}
+  const personaBlock = pConst ? `\n\n## [SYSTEM & PERSONA: ${pId.toUpperCase()}]\n${pConst}` : '';
 
-## MANDATORY RULE: NEVER WRITE CODE INTO CHAT RESPONSES — ALWAYS CALL FILE TOOLS
-- When instructed to write, create, generate, modify, or update code or files (e.g. "write code into test.md", "create file", "write 400 lines into file"):
-  * YOU MUST CALL THE \`write_file\` OR \`patch_file\` TOOL DIRECTLY.
-  * DO NOT output the code as a markdown block in the chat response. Putting code in chat does NOT write the file to the user's workspace.
-  * The user's IDE requires the file written directly on disk. Call write_file(path="...", content="...").
-  * In both AGENT_PRO mode and DEV mode, you are required to autonomously write files to disk using tools.
+  const systemPrompt = `You are Orbital X, a fast, local-first Rust/Tauri AI coding IDE engineered by Dax Patel and the Orbital X Team.
+Mode: ${state.agentMode.toUpperCase()} | Workspace: ${state.workspace.rootPath || 'None'}.${activeEditorContext}${personaBlock}${activeSkillDirectives}${skillsDigest}${memoryContext}${completedActionsBlock}${userDecisionsBlock}${conversationalContinuityBlock}${promptPackText}${taskPromptSection}
 
-## REASONING & EVIDENCE VALIDATION ENGINE (SCIENTIFIC CALIBRATION):
-- Verification Metric: ψ = min(ω_logic, ω_evidence). Deductive bound: ψ ≤ min(ω_logic, ω_evidence).
-- ω_logic (Logical Consistency): Proposed actions and assertions must be strictly non-contradictory. Never claim tests passed or builds succeeded unless verifiable exit codes or diagnostics confirmed it.
-- ω_evidence (Empirical Grounding): Always read or inspect files before editing/patching them. Verify changes using validate_changes or terminal commands before declaring success.
+${modeInstructions}
+${getFeedbackDirectivesForPrompt()}
+
+## [STRICT EXECUTION & VERIFICATION INVARIANTS]
+- File Mutations: When asked to create, edit, or update files, ALWAYS call \`write_file\` or \`patch_file\` directly — never leave code only in chat markdown.
+- Empirical Grounding (ψ = min(ω_logic, ω_evidence)): Always read files before patching and verify with \`validate_changes\` or test/build commands before claiming success.
 - Assumption Detection: Distinguish verified facts from unconfirmed leaps. Never state that an unverified assumption is confirmed.
 - Honest Reporting: Calibrated status badges (✓ Verified, ⚡ Partially Grounded, ? Uncertain, ✗ Failed) are attached to your responses. Always maintain calibrated accuracy.
 
@@ -4761,7 +4850,8 @@ export function appendTimelineCard(role, text, timestamp = Date.now(), opts = {}
   if (restoreBtn) {
     restoreBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const ok = confirm('Rollback workspace files to the checkpoint before this turn?');
+      const { showConfirmDialog } = await import('../services/dialogs.js');
+      const ok = await showConfirmDialog('Restore Checkpoint', 'Rollback workspace files to the checkpoint before this turn?', 'Rollback', true);
       if (!ok) return;
       try {
         const { rollbackVfsAll } = await import('../services/tauri.js');

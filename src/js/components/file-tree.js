@@ -5,7 +5,7 @@
 import { state } from '../state/store.js';
 import { invoke } from '../services/tauri.js';
 import { openFileInTab } from '../editor/monaco.js';
-import { showInputDialog, showConfirmDialog } from '../services/dialogs.js';
+import { showInputDialog, showConfirmDialog, showAlertDialog } from '../services/dialogs.js';
 
 // L2/L3: recents + favorites state
 let recentFiles = [];
@@ -418,7 +418,7 @@ export function initFileTreeHeaderActions() {
   // 1. New File Action
   document.getElementById('btn-new-file')?.addEventListener('click', async () => {
     if (!state.workspace.rootPath) {
-      alert("Please open a workspace folder first to create files.");
+      await showAlertDialog("Workspace Required", "Please open a workspace folder first to create files.");
       return;
     }
     const relPath = await showInputDialog("New File", "e.g. script.js or src/module.py");
@@ -437,14 +437,14 @@ export function initFileTreeHeaderActions() {
       }
       openFileInTab(fileData);
     } catch (e) {
-      alert("Failed to create file: " + e);
+      await showAlertDialog("Failed to Create File", String(e));
     }
   });
 
   // 2. New Folder Action
   document.getElementById('btn-new-folder')?.addEventListener('click', async () => {
     if (!state.workspace.rootPath) {
-      alert("Please open a workspace folder first to create folders.");
+      await showAlertDialog("Workspace Required", "Please open a workspace folder first to create folders.");
       return;
     }
     const folderPath = await showInputDialog("New Folder", "e.g. assets or components/ui");
@@ -454,7 +454,7 @@ export function initFileTreeHeaderActions() {
       await invoke('create_directory', { path: folderPath.trim() });
       await refreshFileTree();
     } catch (e) {
-      alert("Failed to create folder: " + e);
+      await showAlertDialog("Failed to Create Folder", String(e));
     }
   });
 
@@ -530,12 +530,12 @@ export function openQuickOpen() {
     try {
       const fileData = await invoke('read_file', { path: file.path });
       if (fileData.is_binary) {
-        alert("Cannot view binary files in code editor.");
+        showToast("Cannot view binary files in code editor.", "warning", 2500);
         return;
       }
       openFileInTab(fileData);
     } catch (e) {
-      alert("Error opening file: " + e);
+      await showAlertDialog("Error Opening File", String(e));
     }
   }
 

@@ -341,7 +341,8 @@ function packCard(ext, { installed }) {
     uninstallBtn.style.cssText = 'padding: 1px 8px; font-size: 10px;';
     uninstallBtn.textContent = 'Uninstall';
     uninstallBtn.addEventListener('click', async () => {
-      if (!confirm(`Uninstall "${ext.name}"? You can reinstall it from the registry or re-import the folder.`)) return;
+      const { showConfirmDialog } = await import('../services/dialogs.js');
+      if (!await showConfirmDialog('Uninstall Extension', `Uninstall "${ext.name}"? You can reinstall it from the registry or re-import the folder.`, 'Uninstall', true)) return;
       try {
         await invoke('uninstall_extension', { id: ext.id });
         await refreshRuntime();

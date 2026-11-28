@@ -783,9 +783,10 @@ function openProfileMenu(e, pane) {
   const custom = document.createElement('div');
   custom.className = 'tree-context-item';
   custom.innerHTML = `<span class="ctx-icon">⚙️</span><span class="ctx-label">Custom…</span>`;
-  custom.addEventListener('click', () => {
+  custom.addEventListener('click', async () => {
     dismissProfileMenu();
-    const path = prompt('Path to the shell executable (e.g. C:\\\\bin\\\\nu.exe):');
+    const { showInputDialog } = await import('../services/dialogs.js');
+    const path = await showInputDialog('Custom Shell Profile', 'Path to the shell executable (e.g. C:\\bin\\nu.exe):');
     if (!path || !path.trim()) return;
     const trimmed = path.trim();
     const label = trimmed.split(/[\\/]/).pop();
@@ -1327,7 +1328,42 @@ async function sendInterruptSignal() {
   }
 }
 
+let ptyPushWired = false;
+let ptyRenderRaf = null;
+
+function wirePtyPushStream() {
+  if (ptyPushWired) return false;
+  const listenFn = window.__TAURI__?.event?.listen;
+  if (typeof listenFn !== 'function') return false;
+  ptyPushWired = true;
+  listenFn('pty-data', (ev) => {
+    const payload = ev?.payload;
+    if (!payload || !payload.sessionId || !payload.data) return;
+    const session = sessions.find(s => s.sessionId === payload.sessionId);
+    if (!session) return;
+    session.buffer += payload.data;
+    capBuffer(session);
+    if (!ptyRenderRaf) {
+      ptyRenderRaf = requestAnimationFrame(() => {
+        ptyRenderRaf = null;
+        for (const pane of ['A', 'B']) {
+          const active = activeInPane(pane);
+          if (active) {
+            renderBufferFor(active, pane);
+            renderCwdBreadcrumb(pane);
+          }
+        }
+      });
+    }
+  }).catch(() => { ptyPushWired = false; });
+  return true;
+}
+
 function startOutputPolling() {
+  if (wirePtyPushStream()) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    return;
+  }
   if (pollTimer) clearInterval(pollTimer);
   pollTimer = setInterval(() => {
     const termContent = document.getElementById('tab-content-terminal');

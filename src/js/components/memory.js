@@ -61,6 +61,36 @@ export function initMemory() {
   document.getElementById('btn-close-memory-manager')?.addEventListener('click', closeMemoryManagerModal);
   document.getElementById('btn-close-memory-modal')?.addEventListener('click', closeMemoryManagerModal);
 
+  // 1-Click Portable USB Backup button in Memory Manager modal header
+  const tabsBar = modal?.querySelector('.memory-manager-tabs');
+  if (tabsBar && !document.getElementById('btn-memory-portable-backup')) {
+    const backupBtn = document.createElement('button');
+    backupBtn.id = 'btn-memory-portable-backup';
+    backupBtn.className = 'btn btn-secondary btn-sm';
+    backupBtn.style.cssText = 'margin-left: auto; font-size: 11px; padding: 4px 10px;';
+    backupBtn.textContent = '💾 Backup to Portable';
+    backupBtn.title = 'Sync workspace .orbital/memory.json & rules to Portable/USB storage';
+    backupBtn.addEventListener('click', async () => {
+      const ws = state.workspace?.rootPath;
+      if (!ws) {
+        showToast('Open a workspace folder first to backup memory.', 'warning', 2500);
+        return;
+      }
+      backupBtn.disabled = true;
+      backupBtn.textContent = 'Syncing…';
+      try {
+        const res = await invoke('sync_project_memory_to_portable', { projectPath: ws, portableRoot: null });
+        showToast(`✓ Backed up ${res?.files_synced ?? 0} workspace memory file(s) to Portable storage`, 'success', 3000);
+      } catch (e) {
+        showToast(`Portable backup failed: ${e}`, 'error', 3500);
+      } finally {
+        backupBtn.disabled = false;
+        backupBtn.textContent = '💾 Backup to Portable';
+      }
+    });
+    tabsBar.appendChild(backupBtn);
+  }
+
   // Backdrop click on modal closes it
   modal?.addEventListener('click', (e) => {
     if (e.target === modal) {

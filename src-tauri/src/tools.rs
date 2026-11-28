@@ -870,7 +870,7 @@ pub fn get_available_tool_schemas() -> serde_json::Value {
             "type": "function",
             "function": {
                 "name": "read_skill",
-                "description": "Read the full instructions of an installed skill by name (from list_skills). Follow the skill's guidance for tasks it covers.",
+                "description": "Read the full [ACTIVE SKILL DIRECTIVE] execution protocol, constraints, allowed_tools, and verification rules of an installed skill by name or id (from list_skills). You MUST follow every step and guardrail returned.",
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -458,66 +458,112 @@ export async function invoke(cmd, args = {}) {
   return inv(cmd, args);
 }
 
+// Async re-entrancy mutex lock preventing stacked OS file/folder dialogs
+let dialogInFlight = false;
+
+function extractDialogPath(res) {
+  if (!res) return null;
+  if (typeof res === 'string' && res.trim()) return res.trim();
+  if (Array.isArray(res) && res.length > 0) {
+    const first = res[0];
+    return typeof first === 'string' ? first.trim() : (first?.path || first?.filePath || null);
+  }
+  if (typeof res === 'object' && res !== null) {
+    return res.path || res.filePath || res.fsPath || null;
+  }
+  return null;
+}
+
 // Native Dialog picker for workspace folder
 export async function pickFolder() {
-  function extractPath(res) {
-    if (!res) return null;
-    if (typeof res === 'string' && res.trim()) return res.trim();
-    if (Array.isArray(res) && res.length > 0) {
-      const first = res[0];
-      return typeof first === 'string' ? first.trim() : (first?.path || first?.filePath || null);
+  if (dialogInFlight) return null;
+  dialogInFlight = true;
+
+  try {
+    // 1. Primary: backend Rust command with native Windows dialog support.
+    // If the command resolves (even with null when the user clicks Cancel),
+    // return immediately — never fall through to another dialog!
+    try {
+      const res = await invoke('open_folder_dialog');
+      return extractDialogPath(res);
+    } catch (e) {
+      console.warn("[pickFolder] open_folder_dialog IPC failed:", e);
     }
-    if (typeof res === 'object' && res !== null) {
-      return res.path || res.filePath || res.fsPath || null;
+
+    // 2. Client-side Tauri dialog plugin fallback (only if IPC failed)
+    try {
+      const dialog = await import('@tauri-apps/plugin-dialog');
+      if (dialog && typeof dialog.open === 'function') {
+        const res = await dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
+        return extractDialogPath(res);
+      }
+    } catch (e) {
+      console.warn("[pickFolder] @tauri-apps/plugin-dialog fallback failed:", e);
     }
+
+    // 3. window.__TAURI__.dialog fallback (only if plugin import failed)
+    try {
+      if (window.__TAURI__?.dialog?.open) {
+        const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
+        return extractDialogPath(res);
+      }
+    } catch (e) {
+      console.warn("[pickFolder] window.__TAURI__.dialog failed:", e);
+    }
+
+    // 4. Pure browser preview fallback only (never in Tauri)
+    if (!window.__TAURI__ && !window.__TAURI_INTERNALS__) {
+      const input = prompt("Enter workspace directory path:", "D:/1work/YT/Orbital X");
+      if (input !== null) {
+        return input.trim() || null;
+      }
+    }
+
     return null;
+  } finally {
+    dialogInFlight = false;
   }
+}
 
-  // 1. Primary: backend Rust command with native Windows dialog support
+// Native Dialog picker for opening a single file (with re-entrancy mutex lock)
+export async function pickFile(options = {}) {
+  if (dialogInFlight) return null;
+  dialogInFlight = true;
+
   try {
-    const res = await invoke('open_folder_dialog');
-    const path = extractPath(res);
-    if (path) {
-      console.log('[pickFolder] Selected path:', path);
-      return path;
+    try {
+      const dialog = await import('@tauri-apps/plugin-dialog');
+      if (dialog && typeof dialog.open === 'function') {
+        const res = await dialog.open({
+          directory: false,
+          multiple: false,
+          title: options.title || 'Open File',
+          filters: options.filters,
+        });
+        return extractDialogPath(res);
+      }
+    } catch (e) {
+      console.warn("[pickFile] @tauri-apps/plugin-dialog failed:", e);
     }
-  } catch (e) {
-    console.warn("[pickFolder] open_folder_dialog IPC failed:", e);
-  }
 
-  // 2. Client-side Tauri dialog plugin fallback
-  try {
-    const dialog = await import('@tauri-apps/plugin-dialog');
-    if (dialog && typeof dialog.open === 'function') {
-      const res = await dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
-      const path = extractPath(res);
-      if (path) return path;
+    try {
+      if (window.__TAURI__?.dialog?.open) {
+        const res = await window.__TAURI__.dialog.open({
+          directory: false,
+          multiple: false,
+          title: options.title || 'Open File',
+          filters: options.filters,
+        });
+        return extractDialogPath(res);
+      }
+    } catch (e) {
+      console.warn("[pickFile] window.__TAURI__.dialog failed:", e);
     }
-  } catch (e) {
-    console.warn("[pickFolder] @tauri-apps/plugin-dialog fallback failed:", e);
-  }
 
-  // 3. window.__TAURI__.dialog fallback
-  try {
-    if (window.__TAURI__?.dialog?.open) {
-      const res = await window.__TAURI__.dialog.open({ directory: true, multiple: false, title: 'Select Workspace Folder' });
-      const path = extractPath(res);
-      if (path) return path;
-    }
-  } catch (e) {
-    console.warn("[pickFolder] window.__TAURI__.dialog failed:", e);
-  }
-
-  // 4. Pure browser preview fallback only (never in Tauri)
-  if (!window.__TAURI__ && !window.__TAURI_INTERNALS__) {
-    const input = prompt("Enter workspace directory path:", "D:/1work/YT/Orbital X");
-    if (input !== null) {
-      return input.trim() || null;
-    }
     return null;
+  } finally {
+    dialogInFlight = false;
   }
-
-  return null;
 }
 
 export async function openInExplorer(path = null) {
@@ -530,33 +576,40 @@ export async function openInExplorer(path = null) {
 
 // Native Dialog picker for saving files
 export async function pickSaveFile(defaultName = 'chat.md', filterName = 'Markdown', filterExtensions = ['md']) {
-  try {
-    const res = await invoke('pick_save_file', {
-      default_name: defaultName,
-      filter_name: filterName,
-      filter_extensions: filterExtensions
-    });
-    if (res !== undefined) {
-      return res; // either path string or null if cancelled
-    }
-  } catch (e) {
-    console.warn("pick_save_file IPC failed, attempting client plugin dialog fallback:", e);
-  }
+  if (dialogInFlight) return null;
+  dialogInFlight = true;
 
   try {
-    const dialog = await import('@tauri-apps/plugin-dialog');
-    if (dialog && dialog.save) {
-      const res = await dialog.save({
-        defaultPath: defaultName,
-        filters: [{ name: filterName, extensions: filterExtensions }]
+    try {
+      const res = await invoke('pick_save_file', {
+        default_name: defaultName,
+        filter_name: filterName,
+        filter_extensions: filterExtensions
       });
-      return res || null;
+      if (res !== undefined) {
+        return res; // either path string or null if cancelled
+      }
+    } catch (e) {
+      console.warn("pick_save_file IPC failed, attempting client plugin dialog fallback:", e);
     }
-  } catch (e) {
-    console.warn("Tauri dialog plugin save not available:", e);
-  }
 
-  return null;
+    try {
+      const dialog = await import('@tauri-apps/plugin-dialog');
+      if (dialog && dialog.save) {
+        const res = await dialog.save({
+          defaultPath: defaultName,
+          filters: [{ name: filterName, extensions: filterExtensions }]
+        });
+        return res || null;
+      }
+    } catch (e) {
+      console.warn("Tauri dialog plugin save not available:", e);
+    }
+
+    return null;
+  } finally {
+    dialogInFlight = false;
+  }
 }
 
 // ============================================================================

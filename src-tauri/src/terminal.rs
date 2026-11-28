@@ -61,6 +61,17 @@ impl InteractiveTerminalManager {
         cwd: Option<String>,
         shell_override: Option<String>,
     ) -> Result<InteractiveSessionInfo, String> {
+        self.create_session_with_app(session_id_opt, name, cwd, shell_override, None).await
+    }
+
+    pub async fn create_session_with_app(
+        &self,
+        session_id_opt: Option<String>,
+        name: Option<String>,
+        cwd: Option<String>,
+        shell_override: Option<String>,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<InteractiveSessionInfo, String> {
         let session_id = session_id_opt.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         #[cfg(target_os = "windows")]
         let default_shell_name = "cmd".to_string();
@@ -106,13 +117,24 @@ impl InteractiveTerminalManager {
         if let Some(mut stream) = stdout {
             let buf = Arc::clone(&output_buffer);
             let alive = Arc::clone(&is_alive);
+            let app_opt = app_handle.clone();
+            let sid = session_id.clone();
             tokio::spawn(async move {
-                let mut temp = [0u8; 1024];
+                use tauri::Emitter;
+                let mut temp = [0u8; 4096];
                 while alive.load(Ordering::Relaxed) {
                     match stream.read(&mut temp).await {
                         Ok(n) if n > 0 => {
-                            let mut lock = buf.lock().await;
-                            lock.extend_from_slice(&temp[..n]);
+                            if let Some(ref app) = app_opt {
+                                let text = String::from_utf8_lossy(&temp[..n]).to_string();
+                                let _ = app.emit("pty-data", serde_json::json!({
+                                    "sessionId": sid,
+                                    "data": text,
+                                }));
+                            } else {
+                                let mut lock = buf.lock().await;
+                                lock.extend_from_slice(&temp[..n]);
+                            }
                         }
                         _ => break,
                     }
@@ -124,13 +146,24 @@ impl InteractiveTerminalManager {
         if let Some(mut stream) = stderr {
             let buf = Arc::clone(&output_buffer);
             let alive = Arc::clone(&is_alive);
+            let app_opt = app_handle.clone();
+            let sid = session_id.clone();
             tokio::spawn(async move {
-                let mut temp = [0u8; 1024];
+                use tauri::Emitter;
+                let mut temp = [0u8; 4096];
                 while alive.load(Ordering::Relaxed) {
                     match stream.read(&mut temp).await {
                         Ok(n) if n > 0 => {
-                            let mut lock = buf.lock().await;
-                            lock.extend_from_slice(&temp[..n]);
+                            if let Some(ref app) = app_opt {
+                                let text = String::from_utf8_lossy(&temp[..n]).to_string();
+                                let _ = app.emit("pty-data", serde_json::json!({
+                                    "sessionId": sid,
+                                    "data": text,
+                                }));
+                            } else {
+                                let mut lock = buf.lock().await;
+                                lock.extend_from_slice(&temp[..n]);
+                            }
                         }
                         _ => break,
                     }

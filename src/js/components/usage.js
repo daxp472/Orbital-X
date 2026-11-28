@@ -22,7 +22,8 @@ export function initUsageDashboard() {
   closeBtn?.addEventListener('click', () => hideUsageModal());
   refreshBtn?.addEventListener('click', () => loadAndRenderUsage(true));
   clearBtn?.addEventListener('click', async () => {
-    if (confirm("Reset all recorded token usage history? This action cannot be undone.")) {
+    const { showConfirmDialog } = await import('../services/dialogs.js');
+    if (await showConfirmDialog("Reset Usage History", "Reset all recorded token usage history? This action cannot be undone.", "Reset", true)) {
       await invoke('clear_token_usage');
       await loadAndRenderUsage(true);
     }
@@ -33,7 +34,8 @@ export function initUsageDashboard() {
   const settingsClearBtn = document.getElementById('btn-clear-settings-usage');
   settingsRefreshBtn?.addEventListener('click', () => loadAndRenderUsage(true));
   settingsClearBtn?.addEventListener('click', async () => {
-    if (confirm("Reset all recorded token usage history? This action cannot be undone.")) {
+    const { showConfirmDialog } = await import('../services/dialogs.js');
+    if (await showConfirmDialog("Reset Usage History", "Reset all recorded token usage history? This action cannot be undone.", "Reset", true)) {
       await invoke('clear_token_usage');
       await loadAndRenderUsage(true);
     }

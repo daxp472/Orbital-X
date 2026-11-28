@@ -124,7 +124,7 @@ function wirePanel() {
     const doImportUrl = async () => {
       const url = (inputUrl?.value || '').trim();
       if (!url) {
-        showToast('Please enter a GitHub raw URL to a SKILL.md file.', 'warning');
+        showToast('Enter any GitHub URL, owner/repo, or raw SKILL.md link.', 'warning');
         return;
       }
       importUrlBtn.disabled = true;
@@ -366,7 +366,8 @@ function renderInstalledTab(container) {
       deleteBtn.textContent = 'Delete';
       deleteBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirm(`Delete skill "${skill.name}"? The agent will no longer see it.`)) return;
+        const { showConfirmDialog } = await import('../services/dialogs.js');
+        if (!await showConfirmDialog('Delete Skill', `Delete skill "${skill.name}"? The agent will no longer see it.`, 'Delete', true)) return;
         try {
           await invoke('delete_skill', { id: skill.id });
           await renderSkillsPanel();
@@ -577,6 +578,170 @@ async function importSkill() {
   }
 }
 
+export function getInstalledSkills() {
+  return skillsCache || [];
+}
+
+/**
+ * Strips YAML frontmatter (`--- ... ---`) from SKILL.md content and returns
+ * `{ frontmatter, body }` so viewers and directives never leak raw `---` clutter.
+ */
+export function parseSkillMarkdown(rawContent = '') {
+  const text = String(rawContent || '');
+  const trimmed = text.trimStart();
+  if (!trimmed.startsWith('---')) {
+    return { frontmatter: {}, body: text };
+  }
+  const rest = trimmed.slice(3);
+  const endIdx = rest.indexOf('\n---');
+  if (endIdx === -1) {
+    return { frontmatter: {}, body: text };
+  }
+  const fmBlock = rest.slice(0, endIdx);
+  const body = rest.slice(endIdx + 4).replace(/^-+\s*/, '').trimStart();
+
+  const frontmatter = {};
+  let activeListKey = null;
+  let activeList = [];
+
+  const flushList = () => {
+    if (activeListKey) {
+      frontmatter[activeListKey] = activeList.slice();
+      activeListKey = null;
+      activeList = [];
+    }
+  };
+
+  for (const rawLine of fmBlock.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.startsWith('- ') || line.startsWith('-\t')) {
+      const val = line.slice(2).trim().replace(/^["']|["']$/g, '');
+      if (val && activeListKey) activeList.push(val);
+      continue;
+    }
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      flushList();
+      const key = line.slice(0, colonIdx).trim();
+      const rawVal = line.slice(colonIdx + 1).trim();
+      if (!rawVal) {
+        activeListKey = key;
+      } else if (rawVal.startsWith('[') && rawVal.endsWith(']')) {
+        frontmatter[key] = rawVal
+          .slice(1, -1)
+          .split(',')
+          .map(s => s.trim().replace(/^["']|["']$/g, ''))
+          .filter(Boolean);
+      } else {
+        frontmatter[key] = rawVal.replace(/^["']|["']$/g, '');
+      }
+    }
+  }
+  flushList();
+
+  return { frontmatter, body };
+}
+
+function globMatchesPath(globPattern, filePath) {
+  if (!globPattern || !filePath) return false;
+  const normPath = String(filePath).replace(/\\/g, '/');
+  const normGlob = String(globPattern).trim().replace(/\\/g, '/');
+  if (!normGlob) return false;
+  const regexStr = normGlob
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*\*\//g, '(?:.*/)?')
+    .replace(/\*\*/g, '.*')
+    .replace(/\*/g, '[^/]*')
+    .replace(/\?/g, '.');
+  try {
+    return new RegExp(`^${regexStr}$`, 'i').test(normPath) || new RegExp(`${regexStr}$`, 'i').test(normPath);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves triggered, glob-matched, or explicitly invoked skills and returns
+ * high-priority `[ACTIVE SKILL DIRECTIVE]` blocks for the LLM system prompt.
+ */
+export async function resolveActiveSkillDirectives(promptText = '', activeFilePath = '', explicitSkillIds = []) {
+  if (!skillsCache || skillsCache.length === 0) {
+    await refreshSkills();
+  }
+  const enabled = (skillsCache || []).filter(s => s.enabled);
+  if (enabled.length === 0) return '';
+
+  const lowerPrompt = String(promptText || '').toLowerCase();
+  const explicitSet = new Set((explicitSkillIds || []).map(id => String(id).toLowerCase()));
+
+  // Also detect inline @skill:<id> mentions
+  const inlineMatches = String(promptText || '').match(/@skill:([a-zA-Z0-9_-]+)/gi) || [];
+  for (const m of inlineMatches) {
+    explicitSet.add(m.slice(7).toLowerCase());
+  }
+
+  const scored = [];
+  for (const skill of enabled) {
+    const idLower = String(skill.id || '').toLowerCase();
+    const nameLower = String(skill.name || '').toLowerCase();
+    const isExplicit = explicitSet.has(idLower) || explicitSet.has(nameLower);
+
+    const triggers = Array.isArray(skill.triggers) ? skill.triggers : [];
+    const triggerHit = triggers.some(t => t && lowerPrompt.includes(String(t).toLowerCase()));
+
+    const globs = Array.isArray(skill.globs) ? skill.globs : [];
+    const globHit = activeFilePath ? globs.some(g => globMatchesPath(g, activeFilePath)) : false;
+
+    if (isExplicit || triggerHit || globHit) {
+      const priority = Number(skill.priority) || 50;
+      scored.push({
+        skill,
+        isExplicit,
+        score: (isExplicit ? 1000 : 0) + (triggerHit ? 200 : 0) + (globHit ? 100 : 0) + priority,
+      });
+    }
+  }
+
+  if (scored.length === 0) return '';
+  scored.sort((a, b) => b.score - a.score);
+
+  // Keep all explicit skills + up to 2 auto-matched skills to avoid context bloat
+  const selected = [];
+  let autoCount = 0;
+  for (const entry of scored) {
+    if (entry.isExplicit) {
+      selected.push(entry.skill);
+    } else if (autoCount < 2) {
+      selected.push(entry.skill);
+      autoCount++;
+    }
+  }
+
+  const blocks = [];
+  for (const skill of selected) {
+    try {
+      const res = await invoke('read_skill', { id: skill.id });
+      const rawContent = res?.content || '';
+      const { body } = parseSkillMarkdown(rawContent);
+      if (!body.trim()) continue;
+      const toolsList = Array.isArray(skill.allowedTools) && skill.allowedTools.length > 0
+        ? skill.allowedTools.join(', ')
+        : 'All workspace tools';
+      blocks.push(
+        `\n\n## [ACTIVE SKILL DIRECTIVE: ${skill.name} (v${skill.version || '1.0.0'})]\n` +
+        `- Scope: ${skill.scope || 'global'} | Priority: ${skill.priority || 50} | Allowed Tools: ${toolsList}\n` +
+        `- STRICT EXECUTION REQUIREMENT: Follow every step, constraint, and verification rule below before concluding.\n\n` +
+        body.trim()
+      );
+    } catch (e) {
+      console.warn(`[resolveActiveSkillDirectives] Failed to read skill ${skill.id}:`, e);
+    }
+  }
+
+  return blocks.join('\n');
+}
+
 /**
  * Enabled-skill digest for local-model system prompts (called by agent.js).
  * Formats a lightweight index digest (< 300 tokens) so models like Qwen or Llama
@@ -590,7 +755,7 @@ export function getSkillsDigest() {
     const scopeTag = s.scope === 'workspace' ? '[workspace]' : '[global]';
     const trig = s.whenToUse ? ` — trigger: ${s.whenToUse}` : '';
     const desc = String(s.description || '').slice(0, 120);
-    return `• ${scopeTag} ${s.name}${trig}: ${desc}`;
+    return `• ${scopeTag} ${s.name} (${s.id})${trig}: ${desc}`;
   });
 
   return `\n\n## MODULAR SKILLS & AGENT RULES INDEX:

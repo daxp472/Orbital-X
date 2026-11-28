@@ -189,7 +189,8 @@ async function replaceAll() {
   if (searchState.results.length === 0) { runSearch(); return; }
   const replaceWith = document.getElementById('sf-replace')?.value ?? '';
   const total = searchState.total;
-  const confirmed = confirm(`Replace ${total} match${total === 1 ? '' : 'es'} across ${searchState.files} file${searchState.files === 1 ? '' : 's'} with "${replaceWith}"?`);
+  const { showConfirmDialog } = await import('../services/dialogs.js');
+  const confirmed = await showConfirmDialog('Replace All Matches', `Replace ${total} match${total === 1 ? '' : 'es'} across ${searchState.files} file${searchState.files === 1 ? '' : 's'} with "${replaceWith}"?`, 'Replace All', true);
   if (!confirmed) return;
 
   // Build the JS matcher with the same semantics as the Rust matcher

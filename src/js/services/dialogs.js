@@ -110,6 +110,52 @@ export function showConfirmDialog(title, message, confirmLabel = 'Confirm', dang
   });
 }
 
+/**
+ * Styled alert dialog (replaces native alert()).
+ * Returns a Promise<void>.
+ */
+export function showAlertDialog(title, message = '', okLabel = 'OK') {
+  return new Promise((resolve) => {
+    if (dialogActive) { resolve(); return; }
+    dialogActive = true;
+
+    document.getElementById('orbital-alert-dialog')?.remove();
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.id = 'orbital-alert-dialog';
+    backdrop.style.cssText = 'display: flex; align-items: center; justify-content: center; z-index: 9000;';
+    backdrop.innerHTML = `
+      <div class="modal-container" style="width: 380px; max-width: 92vw; padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">${escapeHtml(title)}</div>
+        ${message ? `<div style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; white-space: pre-wrap;">${escapeHtml(message)}</div>` : ''}
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn btn-primary btn-sm" id="orbital-dialog-ok">${escapeHtml(okLabel)}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+
+    const okBtn = backdrop.querySelector('#orbital-dialog-ok');
+    const finish = () => {
+      dialogActive = false;
+      backdrop.remove();
+      resolve();
+    };
+
+    okBtn.addEventListener('click', finish);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) finish(); });
+    window.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        e.preventDefault();
+        finish();
+        window.removeEventListener('keydown', escHandler);
+      }
+    });
+
+    setTimeout(() => okBtn.focus(), 30);
+  });
+}
+
 function escapeHtml(s) {
   return String(s ?? '')
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

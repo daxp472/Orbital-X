@@ -1926,125 +1926,220 @@ export function toggleMarkdownPreview(forceState = null) {
   renderMarkdownPreview();
 }
 
-export function renderSkillDocView(tab, container) {
+export async function renderSkillDocView(tab, container) {
   if (!container) container = document.getElementById('editor-markdown-preview');
   if (!container) return;
 
   const skill = tab.skillData || {};
   const isWs = skill.scope === 'workspace';
   const isInstalled = Boolean(skill.installed || skill.scope === 'workspace' || skill.scope === 'global');
-  const author = skill.author || (isWs ? 'Workspace Rules' : 'Community');
-  const tags = Array.isArray(skill.tags) ? skill.tags : [];
-  const skillName = skill.name || tab.name.replace(/^📖\s*/, '');
 
-  import('../components/agent.js').then(({ formatMarkdown }) => {
-    container.innerHTML = `
-      <div class="skill-doc-view-container">
-        <div class="skill-doc-header">
-          <div class="skill-doc-header-top">
-            <div class="skill-doc-title-row">
-              <span class="skill-doc-icon">📖</span>
-              <h2 class="skill-doc-title">${escapeHtml(skillName)}</h2>
-              <span class="pack-scope-badge ${isWs ? 'workspace' : 'global'}" style="font-size: 10px; padding: 2px 7px;">
-                ${isWs ? 'Workspace' : 'Global'}
-              </span>
-            </div>
-            <div class="skill-doc-actions">
-              ${!isInstalled ? `
-                <button class="btn btn-primary btn-sm" id="btn-doc-install" style="font-size: 11px; padding: 3px 12px; font-weight: 600;">
-                  ✓ Install Skill
-                </button>
-              ` : `
-                <button class="btn btn-secondary btn-sm" id="btn-doc-toggle-enable" style="font-size: 11px; padding: 3px 10px;">
-                  ${skill.enabled ? '✓ Enabled' : 'Disabled'}
-                </button>
-                ${skill.id !== 'workspace-agent-instructions' ? `
-                  <button class="btn btn-danger btn-sm" id="btn-doc-uninstall" style="font-size: 11px; padding: 3px 8px;">
-                    Uninstall
-                  </button>
-                ` : ''}
-              `}
-              <button class="btn btn-secondary btn-sm" id="btn-doc-toggle-raw" style="font-size: 11px; padding: 3px 10px;">
-                Open Raw Source
-              </button>
-            </div>
+  const [{ formatMarkdown }, { parseSkillMarkdown }] = await Promise.all([
+    import('../components/agent.js'),
+    import('../components/skills.js'),
+  ]).catch(e => {
+    console.warn("Could not load skill doc dependencies:", e);
+    return [{ formatMarkdown: s => escapeHtml(s) }, { parseSkillMarkdown: s => ({ frontmatter: {}, body: s }) }];
+  });
+
+  const { frontmatter, body } = parseSkillMarkdown(tab.content || '');
+  const toList = (val) => Array.isArray(val) ? val : (typeof val === 'string' && val.trim() ? val.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+  const skillName = skill.name || frontmatter.name || tab.name.replace(/^📖\s*/, '');
+  const author = skill.author || frontmatter.author || (isWs ? 'Workspace Rules' : 'Community');
+  const version = skill.version || frontmatter.version || '1.0.0';
+  const priority = skill.priority ?? frontmatter.priority ?? 50;
+  const whenToUse = skill.whenToUse || frontmatter.whenToUse || frontmatter.when_to_use || '';
+  const triggers = toList(skill.triggers?.length ? skill.triggers : frontmatter.triggers);
+  const globs = toList(skill.globs?.length ? skill.globs : frontmatter.globs);
+  const allowedTools = toList(skill.allowedTools?.length ? skill.allowedTools : (frontmatter.allowed_tools || frontmatter.allowedTools));
+  const tags = toList(skill.tags?.length ? skill.tags : frontmatter.tags);
+  const sourceUrl = skill.sourceUrl || frontmatter.sourceUrl || frontmatter.source_url || '';
+
+  let renderedBody = formatMarkdown(body || '(Empty skill documentation)');
+  renderedBody = renderedBody
+    .replace(/<li>\s*\[ \]\s*/gi, '<li class="skill-checklist-item"><span class="skill-checkbox" aria-hidden="true">☐</span> ')
+    .replace(/<li>\s*\[x\]\s*/gi, '<li class="skill-checklist-item checked"><span class="skill-checkbox checked" aria-hidden="true">☑</span> ');
+
+  container.innerHTML = `
+    <div class="skill-doc-view-container">
+      <div class="skill-doc-header">
+        <div class="skill-doc-header-top">
+          <div class="skill-doc-title-row">
+            <span class="skill-doc-icon" aria-hidden="true">⚡</span>
+            <h2 class="skill-doc-title">${escapeHtml(skillName)}</h2>
+            <span class="pack-scope-badge ${isWs ? 'workspace' : 'global'}">
+              ${isWs ? 'Workspace' : 'Global'}
+            </span>
+            <span class="skill-version-pill">v${escapeHtml(String(version))}</span>
+            <span class="skill-priority-pill" title="Skill Priority">P${escapeHtml(String(priority))}</span>
           </div>
-          <div class="skill-doc-meta-bar">
-            <span class="skill-meta-item"><strong>Author:</strong> ${escapeHtml(author)}</span>
-            <span class="skill-meta-item"><strong>Version:</strong> 1.0.0</span>
-            <span class="skill-meta-item"><strong>Scope:</strong> ${isWs ? 'Workspace (~/.orbital/agent.md)' : 'Global (~/.orbital/skills)'}</span>
-            ${skill.whenToUse ? `<span class="skill-meta-item"><strong>Trigger:</strong> ${escapeHtml(skill.whenToUse)}</span>` : ''}
-            ${tags.length > 0 ? `
-              <div class="skill-doc-tags">
-                ${tags.map(t => `<span class="skill-tag-pill">#${escapeHtml(t)}</span>`).join('')}
-              </div>
-            ` : ''}
+          <div class="skill-doc-actions">
+            ${isInstalled ? `
+              <button class="btn btn-primary btn-sm" id="btn-doc-run-skill" title="Activate and run this skill in AI Chat">
+                ▶ Run Skill in Chat
+              </button>
+              <button class="btn btn-secondary btn-sm" id="btn-doc-toggle-enable">
+                ${skill.enabled ? '✓ Enabled' : 'Disabled'}
+              </button>
+              ${sourceUrl ? `
+                <button class="btn btn-secondary btn-sm" id="btn-doc-update-github" title="Re-fetch latest SKILL.md from ${escapeHtml(sourceUrl)}">
+                  ↻ Update from GitHub
+                </button>
+              ` : ''}
+              ${skill.id !== 'workspace-agent-instructions' ? `
+                <button class="btn btn-danger btn-sm" id="btn-doc-uninstall">
+                  Uninstall
+                </button>
+              ` : ''}
+            ` : `
+              <button class="btn btn-primary btn-sm" id="btn-doc-install">
+                ✓ Install Skill
+              </button>
+            `}
+            <button class="btn btn-ghost btn-sm" id="btn-doc-toggle-raw" title="Inspect raw SKILL.md source">
+              Raw Source
+            </button>
           </div>
         </div>
-        <div class="skill-doc-body">
-          ${formatMarkdown(tab.content || '(Empty skill documentation)')}
+
+        <div class="skill-doc-meta-grid">
+          <div class="skill-meta-row">
+            <span class="skill-meta-item"><strong>Author:</strong> ${escapeHtml(author)}</span>
+            <span class="skill-meta-item"><strong>Scope:</strong> ${isWs ? 'Workspace (.orbital)' : 'Global (~/.orbital/skills)'}</span>
+            ${whenToUse ? `<span class="skill-meta-item"><strong>When to Use:</strong> ${escapeHtml(whenToUse)}</span>` : ''}
+          </div>
+          ${triggers.length > 0 ? `
+            <div class="skill-meta-pills-row">
+              <span class="skill-meta-label">Triggers</span>
+              ${triggers.map(t => `<span class="skill-pill trigger">${escapeHtml(t)}</span>`).join('')}
+            </div>
+          ` : ''}
+          ${globs.length > 0 ? `
+            <div class="skill-meta-pills-row">
+              <span class="skill-meta-label">Globs</span>
+              ${globs.map(g => `<span class="skill-pill glob">${escapeHtml(g)}</span>`).join('')}
+            </div>
+          ` : ''}
+          ${allowedTools.length > 0 ? `
+            <div class="skill-meta-pills-row">
+              <span class="skill-meta-label">Allowed Tools</span>
+              ${allowedTools.map(t => `<span class="skill-pill tool">${escapeHtml(t)}</span>`).join('')}
+            </div>
+          ` : ''}
+          ${tags.length > 0 ? `
+            <div class="skill-meta-pills-row">
+              <span class="skill-meta-label">Tags</span>
+              ${tags.map(t => `<span class="skill-tag-pill">#${escapeHtml(t)}</span>`).join('')}
+            </div>
+          ` : ''}
         </div>
       </div>
-    `;
+      <div class="skill-doc-body">
+        ${renderedBody}
+      </div>
+    </div>
+  `;
 
-    document.getElementById('btn-doc-install')?.addEventListener('click', async () => {
-      const btn = document.getElementById('btn-doc-install');
-      if (btn) { btn.disabled = true; btn.textContent = 'Installing…'; }
-      try {
-        const res = await invoke('install_community_skill', { packId: skill.id });
-        if (res && res.success !== false) {
-          showToast(`✓ Skill "${skillName}" installed globally!`, 'success', 2500);
-          skill.installed = true;
-          skill.enabled = true;
-          const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
-          await refreshSkills();
-          renderSkillsPanel();
-          renderSkillDocView(tab, container);
-        } else {
-          showToast(`Install failed: ${res?.error || 'Unknown error'}`, 'error');
-          if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
-        }
-      } catch (e) {
-        showToast(`Install error: ${e}`, 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
-      }
-    });
+  document.getElementById('btn-doc-run-skill')?.addEventListener('click', () => {
+    const agentPanel = document.getElementById('agent-panel');
+    const btnToggleAgent = document.getElementById('btn-toggle-agent');
+    const resizerAgent = document.getElementById('resizer-agent');
+    if (agentPanel?.classList.contains('hidden')) {
+      agentPanel.classList.remove('hidden');
+      btnToggleAgent?.classList.add('active');
+      if (resizerAgent) resizerAgent.style.display = '';
+    }
+    const input = document.getElementById('agent-input');
+    if (input) {
+      input.value = `/skill ${skill.id} `;
+      input.focus();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    showToast(`Skill "${skillName}" ready in chat — describe your task and press Enter.`, 'info', 2600);
+  });
 
-    document.getElementById('btn-doc-toggle-enable')?.addEventListener('click', async () => {
-      try {
-        const nextState = !skill.enabled;
-        await invoke('set_skill_enabled', { id: skill.id, enabled: nextState });
-        skill.enabled = nextState;
-        showToast(`Skill "${skillName}" ${nextState ? 'enabled' : 'disabled'}`, 'success', 2000);
+  document.getElementById('btn-doc-update-github')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-doc-update-github');
+    if (!sourceUrl) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Updating…'; }
+    try {
+      const res = await invoke('skills_install_from_url', { url: sourceUrl });
+      if (res && res.success !== false) {
+        showToast(`✓ Updated "${skillName}" from GitHub`, 'success', 2500);
+        const readRes = await invoke('read_skill', { id: skill.id }).catch(() => null);
+        if (readRes?.content) tab.content = readRes.content;
+        tab.skillData = { ...skill, ...res };
         const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
         await refreshSkills();
         renderSkillsPanel();
         renderSkillDocView(tab, container);
-      } catch (e) {
-        showToast(`Toggle failed: ${e}`, 'error');
+      } else {
+        showToast(`Update failed: ${res?.error || 'Unknown error'}`, 'error', 3500);
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Update from GitHub'; }
       }
-    });
+    } catch (e) {
+      showToast(`Update error: ${e}`, 'error', 3500);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Update from GitHub'; }
+    }
+  });
 
-    document.getElementById('btn-doc-uninstall')?.addEventListener('click', async () => {
-      if (!confirm(`Uninstall skill "${skillName}"?`)) return;
-      try {
-        await invoke('delete_skill', { id: skill.id });
-        showToast(`Uninstalled skill "${skillName}"`, 'success', 2500);
+  document.getElementById('btn-doc-install')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-doc-install');
+    if (btn) { btn.disabled = true; btn.textContent = 'Installing…'; }
+    try {
+      const res = await invoke('install_community_skill', { packId: skill.id });
+      if (res && res.success !== false) {
+        showToast(`✓ Skill "${skillName}" installed globally!`, 'success', 2500);
+        skill.installed = true;
+        skill.enabled = true;
         const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
         await refreshSkills();
         renderSkillsPanel();
-        closeTab(tab.id, 'left');
-      } catch (e) {
-        showToast(`Uninstall failed: ${e}`, 'error');
+        renderSkillDocView(tab, container);
+      } else {
+        showToast(`Install failed: ${res?.error || 'Unknown error'}`, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
       }
-    });
+    } catch (e) {
+      showToast(`Install error: ${e}`, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Install Skill'; }
+    }
+  });
 
-    document.getElementById('btn-doc-toggle-raw')?.addEventListener('click', () => {
-      tab.rawSourceMode = true;
-      renderMarkdownPreview();
-    });
-  }).catch(e => {
-    console.warn("Could not render skill doc preview:", e);
+  document.getElementById('btn-doc-toggle-enable')?.addEventListener('click', async () => {
+    try {
+      const nextState = !skill.enabled;
+      await invoke('set_skill_enabled', { id: skill.id, enabled: nextState });
+      skill.enabled = nextState;
+      showToast(`Skill "${skillName}" ${nextState ? 'enabled' : 'disabled'}`, 'success', 2000);
+      const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
+      await refreshSkills();
+      renderSkillsPanel();
+      renderSkillDocView(tab, container);
+    } catch (e) {
+      showToast(`Toggle failed: ${e}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-doc-uninstall')?.addEventListener('click', async () => {
+    const { showConfirmDialog } = await import('../services/dialogs.js');
+    if (!await showConfirmDialog('Uninstall Skill', `Uninstall skill "${skillName}"?`, 'Uninstall', true)) return;
+    try {
+      await invoke('delete_skill', { id: skill.id });
+      showToast(`Uninstalled skill "${skillName}"`, 'success', 2500);
+      const { refreshSkills, renderSkillsPanel } = await import('../components/skills.js');
+      await refreshSkills();
+      renderSkillsPanel();
+      closeTab(tab.id, 'left');
+    } catch (e) {
+      showToast(`Uninstall failed: ${e}`, 'error');
+    }
+  });
+
+  document.getElementById('btn-doc-toggle-raw')?.addEventListener('click', () => {
+    tab.rawSourceMode = true;
+    renderMarkdownPreview();
   });
 }
 
@@ -2233,15 +2328,15 @@ export function closeTab(tabId, panel = 'left') {
   closeTabInternal(tabId, panel);
 }
 
-function closeTabInternal(tabId, panel = 'left', opts = {}) {
+async function closeTabInternal(tabId, panel = 'left', opts = {}) {
   const p = panelState(panel);
   const index = p.tabs.findIndex(t => t.id === tabId);
   if (index === -1) return;
 
   const tab = p.tabs[index];
-  // TODO(v2.3): Replace with custom glassmorphic modal
   if (tab.isDirty && !opts.force) {
-    if (!confirm(`Save changes to ${tab.name} before closing?`)) {
+    const { showConfirmDialog } = await import('../services/dialogs.js');
+    if (!await showConfirmDialog('Unsaved Changes', `Save changes to ${tab.name} before closing?`, 'Save & Close')) {
       return;
     }
     saveTab(tab, panel);
@@ -2675,7 +2770,7 @@ export async function saveTab(tab, panel = 'left') {
     window.dispatchEvent(new CustomEvent('orbital:file-written', { detail: { path: tab.path } }));
     console.log('File saved successfully:', tab.path, diff);
   } catch (e) {
-    alert('Error saving file: ' + e);
+    import('../services/dialogs.js').then(({ showAlertDialog }) => showAlertDialog('Error Saving File', String(e)));
   }
 }
 
@@ -2917,8 +3012,48 @@ export function updateFontSize(size) {
   applyEditorSettings();
 }
 
+export function syncMonacoThemeFromCss(themeName) {
+  const isLight = themeName === 'nebula-light' || document.body.classList.contains('theme-light');
+  const cs = getComputedStyle(document.body);
+  const pick = (v, fb) => {
+    const val = cs.getPropertyValue(v).trim();
+    return /^#[0-9a-fA-F]{3,8}$/.test(val) ? val : fb;
+  };
+
+  const bgEditor = pick('--bg-editor', isLight ? '#ffffff' : '#181b24');
+  const fgPrimary = pick('--text-primary', isLight ? '#24292f' : '#e6edf3');
+  const accent = pick('--accent-primary', pick('--accent-cyan', isLight ? '#059669' : '#39c5bb'));
+  const bgLine = pick('--bg-surface', isLight ? '#f6f8fa' : '#1d212b');
+  const fgMuted = pick('--text-muted', isLight ? '#8c959f' : '#6e7681');
+
+  const id = isLight ? 'orbital-light-theme' : 'orbital-dark-theme';
+  monaco.editor.defineTheme(id, {
+    base: isLight ? 'vs' : 'vs-dark',
+    inherit: true,
+    rules: [
+      { token: 'comment', foreground: fgMuted.replace('#', ''), fontStyle: 'italic' },
+      { token: 'keyword', foreground: isLight ? '8250df' : 'bc8cff', fontStyle: 'bold' },
+      { token: 'string', foreground: accent.replace('#', '') },
+      { token: 'number', foreground: isLight ? 'bc4c00' : 'f0883e' },
+      { token: 'type', foreground: isLight ? '0066b8' : '58a6ff' },
+      { token: 'function', foreground: isLight ? '0066b8' : '58a6ff' },
+    ],
+    colors: {
+      'editor.background': bgEditor,
+      'editor.foreground': fgPrimary,
+      'editorCursor.foreground': accent,
+      'editor.lineHighlightBackground': bgLine,
+      'editorLineNumber.foreground': fgMuted,
+      'editorLineNumber.activeForeground': accent,
+      'editor.selectionBackground': isLight ? '#b6e3ff' : '#264f78',
+      'editor.inactiveSelectionBackground': isLight ? '#d0e8ff' : '#1e3852',
+    }
+  });
+  return id;
+}
+
 export function updateTheme(themeName) {
-  const chosen = themeName === 'nebula-light' ? 'orbital-light-theme' : 'orbital-dark-theme';
+  const chosen = syncMonacoThemeFromCss(themeName);
   monaco.editor.setTheme(chosen);
   if (editors.right) editors.right.updateOptions({ theme: chosen });
 }

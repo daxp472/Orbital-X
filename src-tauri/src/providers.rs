@@ -1297,21 +1297,26 @@ pub fn build_ollama_payload(
         .collect();
 
     let mut gen_options = serde_json::json!({});
-    if let Some(nc) = options.num_ctx {
-        gen_options["num_ctx"] = serde_json::json!(nc);
-    }
+    // Dynamic num_ctx: default to 8192 to keep KV cache inside GPU VRAM (avoiding slow CPU RAM spillover)
+    let effective_ctx = options.num_ctx.unwrap_or(8192);
+    gen_options["num_ctx"] = serde_json::json!(effective_ctx);
+
     if let Some(t) = options.temperature {
         gen_options["temperature"] = serde_json::json!(t);
     }
     if let Some(tp) = options.top_p {
         gen_options["top_p"] = serde_json::json!(tp);
     }
-    // Task 1: Ensure agent can write long, full files without cutoff (default 8192)
+    // Ensure agent can write full files without cutoff (default 8192)
     let np = options.num_predict.unwrap_or(8192);
     gen_options["num_predict"] = serde_json::json!(np);
 
-    // Task 4: Keep generation speed high (>20 tok/sec) with dedicated threads
-    gen_options["num_thread"] = serde_json::json!(8);
+    // High-throughput prompt-eval batching & balanced CPU thread count for 30+ tok/s streaming
+    gen_options["num_batch"] = serde_json::json!(512);
+    let optimal_threads = std::thread::available_parallelism()
+        .map(|n| n.get().clamp(4, 12))
+        .unwrap_or(8);
+    gen_options["num_thread"] = serde_json::json!(optimal_threads);
 
     let mut payload = serde_json::json!({
         "model": if model.is_empty() { "llama3" } else { model },

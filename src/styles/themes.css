@@ -31,10 +31,16 @@ body.theme-dark, [data-theme="theme-dark"], [data-theme="orbit-dark"], :root {
 
   --accent-blue: #2997ff;
   --accent-cyan: #39c5bb;
+  --accent-primary: #39c5bb;
+  --accent-primary-fg: #061214;
   --accent-purple: #bc8cff;
   --accent-orange: #ff9f0a;
   --accent-green: #30d158;
   --accent-red: #ff453a;
+
+  --bg-statusbar: #12141a;
+  --text-statusbar: #a0a0a5;
+  --bg-code: #14161e;
 
   --agent-pro-color: #bc8cff;
   --agent-dev-color: #39c5bb;
@@ -89,10 +95,16 @@ body.theme-light, [data-theme="theme-light"], [data-theme="nebula-light"] {
 
   --accent-blue: #0969da;
   --accent-cyan: #059669;
+  --accent-primary: #059669;
+  --accent-primary-fg: #ffffff;
   --accent-purple: #8250df;
   --accent-orange: #bc4c00;
   --accent-green: #1a7f37;
   --accent-red: #cf222e;
+
+  --bg-statusbar: #0969da;
+  --text-statusbar: #ffffff;
+  --bg-code: #f6f8fa;
 
   --agent-pro-color: #8250df;
   --agent-dev-color: #059669;

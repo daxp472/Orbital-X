@@ -16,7 +16,7 @@ import { initPersonaEngine } from './components/persona-calibration.js';
 import { initChatSessions } from './components/chat-sessions.js';
 import { initUsageDashboard } from './components/usage.js';
 import { pickFolder, invoke } from './services/tauri.js';
-import { showInputDialog, showConfirmDialog } from './services/dialogs.js';
+import { showInputDialog, showConfirmDialog, showAlertDialog } from './services/dialogs.js';
 import { showToast, loadActivityHistory, markAllActivityRead, markActivityRead, dismissActivity, clearActivity, recordActivity, notifyNative, isWindowHidden, getFilteredActivities, getNotificationPersona, setNotificationPersona, updateUnreadBadge } from './services/notifications.js';
 import { restorePlanState } from './services/orchestrator.js';
 import { initUnifiedContextMenu } from './services/context-menu.js';
@@ -301,16 +301,52 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-open-settings')?.click();
   });
 
-  // 5. Workspace Folder & Dialog Triggers (Bound immediately before any async restoration)
-  document.getElementById('btn-open-workspace')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-welcome-open-folder')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-open-folder-inline')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('sidebar-root-header')?.addEventListener('click', handleOpenFolder);
-  document.getElementById('btn-explorer-open-folder')?.addEventListener('click', handleOpenFolder);
+  // 5. Workspace Folder & Dialog Triggers (Bound once immediately before any async restoration)
+  const bindOpenFolderTrigger = (id) => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.openFolderBound) {
+      el.dataset.openFolderBound = '1';
+      el.addEventListener('click', handleOpenFolder);
+    }
+  };
+  [
+    'btn-open-workspace',
+    'welcome-open-folder-btn',
+    'btn-welcome-open-folder',
+    'btn-open-folder-inline',
+    'sidebar-root-header',
+    'btn-explorer-open-folder',
+  ].forEach(bindOpenFolderTrigger);
   document.getElementById('btn-open-in-explorer')?.addEventListener('click', () => {
     invoke('open_in_explorer', {}).catch(e => console.warn(e));
   });
+
+  // 6. Real-Time External File Watcher Listener
+  if (window.__TAURI__?.event?.listen) {
+    let fsDebounce = null;
+    window.__TAURI__.event.listen('workspace-files-changed', () => {
+      if (fsDebounce) clearTimeout(fsDebounce);
+      fsDebounce = setTimeout(async () => {
+        try {
+          await refreshFileTree();
+          const activeTab = state.editor.tabs.find(t => t.id === state.editor.activeTabId);
+          if (activeTab && !activeTab.isDirty && activeTab.path && !activeTab.isSkillDoc && !activeTab.path.startsWith('untitled:')) {
+            const fresh = await invoke('read_file', { path: activeTab.relativePath || activeTab.path }).catch(() => null);
+            if (fresh && typeof fresh.content === 'string' && fresh.content !== activeTab.content) {
+              activeTab.content = fresh.content;
+              activeTab.originalContent = fresh.content;
+              const { getActiveEditor } = await import('./editor/monaco.js');
+              const ed = getActiveEditor();
+              if (ed && ed.getValue() !== fresh.content) {
+                ed.setValue(fresh.content);
+                activeTab.isDirty = false;
+              }
+            }
+          }
+        } catch (_) {}
+      }, 700);
+    }).catch(() => {});
+  }
 
   // Theme toggle button in titlebar
   document.getElementById('btn-theme-toggle')?.addEventListener('click', cycleTheme);
@@ -756,7 +792,7 @@ export async function showVfsDiffsModal(diffs, status) {
   });
 
   modal.querySelector('#vfs-rollback-all-btn').onclick = async () => {
-    if (!confirm('Are you sure you want to discard all pending Virtual File System changes?')) return;
+    if (!await showConfirmDialog('Discard VFS Changes', 'Are you sure you want to discard all pending Virtual File System changes?', 'Discard All', true)) return;
     const { rollbackVfsAll } = await import('./services/tauri.js');
     await rollbackVfsAll();
     close();
@@ -776,7 +812,7 @@ export async function showVfsDiffsModal(diffs, status) {
 export async function showCallersImpactModal(initialSymbol = '') {
   let symbol = initialSymbol;
   if (!symbol) {
-    symbol = window.prompt('Enter function, method, struct, or class name to inspect:');
+    symbol = await showInputDialog('Inspect Symbol Impact', 'Enter function, method, struct, or class name to inspect:');
   }
   if (!symbol || !symbol.trim()) return;
   symbol = symbol.trim();
@@ -1987,8 +2023,12 @@ export function openWelcomeScreen() {
     if (e.target === modal) modal.style.display = 'none';
   };
 
-  // Action buttons
-  document.getElementById('welcome-open-folder-btn')?.addEventListener('click', handleOpenFolder);
+  // Action buttons (ensure single binding even when welcome modal is reopened)
+  const welcomeOpenBtn = document.getElementById('welcome-open-folder-btn');
+  if (welcomeOpenBtn && !welcomeOpenBtn.dataset.openFolderBound) {
+    welcomeOpenBtn.dataset.openFolderBound = '1';
+    welcomeOpenBtn.addEventListener('click', handleOpenFolder);
+  }
   document.getElementById('welcome-new-file-btn')?.addEventListener('click', () => {
     modal.style.display = 'none';
     import('./components/file-tree.js').then(m => { if (m.promptNewFile) m.promptNewFile(null); });
@@ -2047,11 +2087,10 @@ function isWorkspaceTrusted(rootPath) {
 }
 
 async function promptWorkspaceTrust(rootPath) {
-  // TODO(v2.3): Replace with custom glassmorphic modal
-  const trust = confirm(
-    'Do you trust the authors of this workspace?\n\n' +
-    'Trusting allows the agent to execute code and commands in this directory.\n' +
-    'Choose OK to Trust Workspace, or Cancel to open in Restricted Mode (User mode, no command execution).'
+  const trust = await showConfirmDialog(
+    'Trust Workspace Authors?',
+    'Trusting allows the agent to execute code and commands in this directory.\nChoose Trust Workspace, or Cancel to open in Restricted Mode (no command execution).',
+    'Trust Workspace'
   );
   try {
     const map = JSON.parse(localStorage.getItem(TRUST_KEY) || '{}');

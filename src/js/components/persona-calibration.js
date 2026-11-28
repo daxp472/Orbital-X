@@ -772,7 +772,8 @@ export function setupPersonaSettingsUI() {
   // Bind Reset Auto Profile
   pane.querySelector('#btn-settings-reset-auto')?.addEventListener('click', async (e) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to reset your learned Auto Mode profile to defaults?')) {
+    const { showConfirmDialog } = await import('../services/dialogs.js');
+    if (await showConfirmDialog('Reset Auto Mode Profile', 'Are you sure you want to reset your learned Auto Mode profile to defaults?', 'Reset', true)) {
       try {
         const updated = await invoke('persona_reset_auto');
         cachedState = updated;

@@ -188,7 +188,8 @@ export function importSessionFromMarkdown() {
       import('./agent.js').then(m => m.renderFullTimeline(messages));
       showToast(`Imported "${title}" (${messages.length} messages)`, 'success', 3200);
     } catch (err) {
-      alert(`Import failed: ${err.message}`);
+      const { showAlertDialog } = await import('../services/dialogs.js');
+      await showAlertDialog('Import Failed', err.message);
     }
   };
   input.click();

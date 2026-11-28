@@ -5,7 +5,7 @@
 import { state, persistState, notify, setActiveModel, subscribe } from '../state/store.js';
 import { invoke, makeEventChannel } from '../services/tauri.js';
 import { updateTheme } from '../editor/monaco.js';
-import { showConfirmDialog } from '../services/dialogs.js';
+import { showConfirmDialog, showAlertDialog } from '../services/dialogs.js';
 import { showToast, getNotificationPersona, setNotificationPersona } from '../services/notifications.js';
 import { FocusTrap } from '../utils/focus-trap.js';
 
@@ -477,7 +477,7 @@ async function loadOllamaModelsList() {
     });
 
     row.querySelector('.btn-model-delete')?.addEventListener('click', async (e) => {
-      const confirmed = confirm(`Delete model "${name}" from Ollama? This frees disk space and cannot be undone (you can re-pull it later).`);
+      const confirmed = await showConfirmDialog('Delete Model', `Delete model "${name}" from Ollama? This frees disk space and cannot be undone (you can re-pull it later).`, 'Delete', true);
       if (!confirmed) return;
       const btn = e.target;
       btn.disabled = true;
@@ -488,12 +488,12 @@ async function loadOllamaModelsList() {
           showToast(`🗑️ Deleted model ${name}`, 'success', 3000);
           loadOllamaModelsList();
         } else {
-          alert(`Delete failed: ${(res && res.error) || 'unknown error'}`);
+          await showAlertDialog('Delete Failed', `${(res && res.error) || 'unknown error'}`);
           btn.disabled = false;
           btn.textContent = 'Delete';
         }
       } catch (err) {
-        alert(`Delete failed: ${err}`);
+        await showAlertDialog('Delete Failed', String(err));
         btn.disabled = false;
         btn.textContent = 'Delete';
       }
@@ -1289,12 +1289,12 @@ async function testConnection(provider) {
       }, 3500);
     }
 
-    alert(res.message);
+    await showAlertDialog('Connection Test', res.message);
   } catch (err) {
     if (btn) {
       btn.innerHTML = 'Test Connection';
     }
-    alert("Connection test error: " + err);
+    await showAlertDialog('Connection Test Error', String(err));
   }
 }
 
@@ -1338,10 +1338,10 @@ function importSettings() {
         if (imported.endpoint) state.ai.endpoint = imported.endpoint;
 
         persistState();
-        alert("Settings successfully imported!");
+        showToast("Settings successfully imported!", "success", 2800);
         closeSettings();
       } catch (err) {
-        alert("Malformed settings file: " + err);
+        showAlertDialog("Import Failed", "Malformed settings file: " + err);
       }
     };
     reader.readAsText(file);
@@ -1620,13 +1620,13 @@ function enhanceImportExport() {
           const hasKnown = ['theme', 'agentMode', 'editor', 'terminal', 'defaultModels', 'endpoint', 'inlineComplete', 'autoSave']
             .some(k => k in parsed);
           if (!hasKnown) throw new Error('no recognized Orbital X settings keys found');
-          if (!confirm(`Import settings from "${file.name}"? Current matching settings will be overwritten (API keys are never imported).`)) return;
+          if (!await showConfirmDialog('Import Settings', `Import settings from "${file.name}"? Current matching settings will be overwritten (API keys are never imported).`, 'Import')) return;
           await applyImportedSettings(parsed);
           showToast('Settings imported & applied', 'success', 2800);
           markSettingsModified();
           closeSettings();
         } catch (err) {
-          alert(`Import failed — invalid settings file: ${err.message}`);
+          await showAlertDialog('Import Failed', `Invalid settings file: ${err.message}`);
         }
       };
       input.click();

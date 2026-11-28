@@ -47,6 +47,7 @@ pub struct AppState {
     pub diagnostics_service: Mutex<Option<diagnostics::DiagnosticService>>,
     pub vfs: Mutex<Option<vfs::VfsEngine>>,
     pub agent_working_dir: Mutex<Option<PathBuf>>,
+    pub workspace_watcher_abort: Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 fn cancelled_response() -> ProviderResponse {
@@ -96,7 +97,7 @@ fn tool_path_arg<'a>(arguments: &'a serde_json::Value, tool: &str) -> Result<&'a
 }
 
 #[tauri::command]
-async fn set_workspace(path: String, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
+async fn set_workspace(path: String, app: AppHandle, state: State<'_, AppState>) -> Result<WorkspaceMeta, String> {
     let meta = {
         let mut ws = state.workspace.lock().map_err(|e| e.to_string())?;
         ws.set_root(&path)?
@@ -119,6 +120,59 @@ async fn set_workspace(path: String, state: State<'_, AppState>) -> Result<Works
     if let Ok(mut vfs_guard) = state.vfs.lock() {
         *vfs_guard = Some(vfs::VfsEngine::new(PathBuf::from(&path)));
     }
+
+    // Background external file-change watcher (git pull, npm install, external editors)
+    if let Ok(mut guard) = state.workspace_watcher_abort.lock() {
+        if let Some(prev) = guard.take() {
+            prev.abort();
+        }
+        let watch_root = PathBuf::from(&path);
+        let app_clone = app.clone();
+        let handle = tokio::spawn(async move {
+            use std::time::SystemTime;
+            fn sample_tree_mtime(root: &Path) -> u64 {
+                let mut acc: u64 = 0;
+                for entry in walkdir::WalkDir::new(root)
+                    .max_depth(3)
+                    .into_iter()
+                    .filter_entry(|e| {
+                        let name = e.file_name().to_string_lossy();
+                        name != ".git" && name != "node_modules" && name != "target" && name != "dist"
+                    })
+                    .filter_map(|e| e.ok())
+                    .take(250)
+                {
+                    if let Ok(m) = entry.metadata() {
+                        if let Ok(t) = m.modified() {
+                            if let Ok(dur) = t.duration_since(SystemTime::UNIX_EPOCH) {
+                                acc = acc.wrapping_add(dur.as_secs()).wrapping_add(m.len());
+                            }
+                        }
+                    }
+                }
+                acc
+            }
+
+            let mut last_sig = sample_tree_mtime(&watch_root);
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(2));
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                let root_copy = watch_root.clone();
+                let next_sig = tokio::task::spawn_blocking(move || sample_tree_mtime(&root_copy))
+                    .await
+                    .unwrap_or(last_sig);
+                if next_sig != last_sig {
+                    last_sig = next_sig;
+                    let _ = app_clone.emit("workspace-files-changed", serde_json::json!({
+                        "root": watch_root.to_string_lossy()
+                    }));
+                }
+            }
+        });
+        *guard = Some(handle.abort_handle());
+    }
+
     Ok(meta)
 }
 
@@ -873,6 +927,7 @@ async fn create_interactive_terminal(
     name: Option<String>,
     cwd: Option<String>,
     shell: Option<String>,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<InteractiveSessionInfo, String> {
     let effective_cwd = match cwd {
@@ -885,7 +940,7 @@ async fn create_interactive_terminal(
             }
         }
     };
-    state.terminal_mgr.create_session(session_id, name, Some(effective_cwd), shell).await
+    state.terminal_mgr.create_session_with_app(session_id, name, Some(effective_cwd), shell, Some(app)).await
 }
 
 #[tauri::command]
@@ -935,38 +990,64 @@ fn clear_token_usage() -> Result<(), String> {
     UsageService::clear_usage()
 }
 
+static DIALOG_IN_FLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+struct DialogInFlightGuard;
+
+impl Drop for DialogInFlightGuard {
+    fn drop(&mut self) {
+        DIALOG_IN_FLIGHT.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+fn try_acquire_dialog_guard() -> Option<DialogInFlightGuard> {
+    if DIALOG_IN_FLIGHT
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        )
+        .is_ok()
+    {
+        Some(DialogInFlightGuard)
+    } else {
+        None
+    }
+}
+
 #[tauri::command]
 async fn open_folder_dialog(app: AppHandle) -> Result<Option<String>, String> {
+    let Some(_guard) = try_acquire_dialog_guard() else {
+        return Ok(None);
+    };
+
     let app_clone = app.clone();
     let result = tokio::task::spawn_blocking(move || -> Option<String> {
+        let _keep_guard = _guard;
         use tauri_plugin_dialog::DialogExt;
-        // 1. Try with WebviewWindow handle
-        if let Some(win) = app_clone.get_webview_window("main") {
-            if let Some(file_path) = win.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
-                if let Ok(pb) = file_path.into_path() {
-                    let clean = workspace::strip_verbatim_prefix(&pb);
-                    if clean.is_dir() {
-                        return Some(clean.to_string_lossy().to_string());
-                    }
-                }
-            }
-        }
 
-        // 2. Fallback to app-level dialog
-        if let Some(file_path) = app_clone.dialog().file().set_title("Select Workspace Folder").blocking_pick_folder() {
+        // Open exactly one native folder picker. Returning None means the user cancelled;
+        // never fall through to another dialog implementation on Cancel.
+        let picked = if let Some(win) = app_clone.get_webview_window("main") {
+            win.dialog()
+                .file()
+                .set_title("Select Workspace Folder")
+                .blocking_pick_folder()
+        } else {
+            app_clone
+                .dialog()
+                .file()
+                .set_title("Select Workspace Folder")
+                .blocking_pick_folder()
+        };
+
+        if let Some(file_path) = picked {
             if let Ok(pb) = file_path.into_path() {
                 let clean = workspace::strip_verbatim_prefix(&pb);
                 if clean.is_dir() {
                     return Some(clean.to_string_lossy().to_string());
                 }
-            }
-        }
-
-        // 3. Fallback to native rfd
-        if let Some(path_buf) = rfd::FileDialog::new().set_title("Select Workspace Folder").pick_folder() {
-            let clean = workspace::strip_verbatim_prefix(&path_buf);
-            if clean.is_dir() {
-                return Some(clean.to_string_lossy().to_string());
             }
         }
 
@@ -1045,8 +1126,14 @@ async fn pick_save_file(
     filter_name: Option<String>,
     filter_extensions: Option<Vec<String>>,
 ) -> Result<Option<String>, String> {
+    let Some(_guard) = try_acquire_dialog_guard() else {
+        return Ok(None);
+    };
+
     let result = tokio::task::spawn_blocking(move || -> Result<Option<String>, String> {
-        // First try native rfd dialog
+        let _keep_guard = _guard;
+        // Open exactly one native save dialog. Returning None means the user cancelled;
+        // never fall through to another dialog implementation on Cancel.
         let mut dialog = rfd::FileDialog::new();
         if let Some(name) = &default_name {
             dialog = dialog.set_file_name(name);
@@ -1059,24 +1146,7 @@ async fn pick_save_file(
             let clean = workspace::strip_verbatim_prefix(&path_buf);
             return Ok(Some(clean.to_string_lossy().to_string()));
         }
-
-        // Secondary fallback to tauri_plugin_dialog
-        use tauri_plugin_dialog::DialogExt;
-        let mut tdialog = app.dialog().file();
-        if let Some(name) = default_name {
-            tdialog = tdialog.set_file_name(&name);
-        }
-        if let (Some(fname), Some(exts)) = (filter_name, filter_extensions) {
-            let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
-            tdialog = tdialog.add_filter(fname, &ext_refs);
-        }
-        if let Some(chosen) = tdialog.blocking_save_file() {
-            if let Ok(p_buf) = chosen.into_path() {
-                let clean = workspace::strip_verbatim_prefix(&p_buf);
-                return Ok(Some(clean.to_string_lossy().to_string()));
-            }
-        }
-
+        let _ = app;
         Ok(None)
     })
     .await
@@ -3317,6 +3387,7 @@ pub fn run() {
         diagnostics_service: Mutex::new(None),
         vfs: Mutex::new(None),
         agent_working_dir: Mutex::new(None),
+        workspace_watcher_abort: Mutex::new(None),
     };
 
     // P1: catch Rust panics into portable/user storage so a crash leaves a trace

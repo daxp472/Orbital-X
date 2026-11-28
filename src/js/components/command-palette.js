@@ -144,7 +144,8 @@ async function toggleWordWrap() {
 }
 
 async function gitCommitFlow() {
-  const message = prompt('Commit message (stages all changes first):');
+  const { showInputDialog } = await import('../services/dialogs.js');
+  const message = await showInputDialog('Git Commit', 'Commit message (stages all changes first):');
   if (!message || !message.trim()) return;
   try {
     const out = await invoke('git_stage_and_commit', { message: message.trim() });
